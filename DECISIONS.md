@@ -249,3 +249,6 @@ Each of these came from watching the real town:
   from their name, a sly brow for the scheming), and headless Chromium makes the PNG. `--post`
   sends it to Telegram (`ASAPVILLE_TELEGRAM_TOKEN`, `ASAPVILLE_TELEGRAM_CHAT`). Chapters go
   to `manga/`.
+  Portraits: `asapville portraits` asks Gemini (`ASAPVILLE_GEMINI_KEY`) for a manga portrait of
+  every citizen without one, from their own appearance, into `manga/faces/<id>.png`; `comic`
+  draws newcomers' portraits first. Five portraits so far came from Canva.

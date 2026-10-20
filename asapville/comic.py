@@ -15,6 +15,7 @@ import json
 import os
 import re
 import subprocess
+import urllib.error
 import urllib.request
 from pathlib import Path
 from typing import Any
@@ -260,6 +261,61 @@ def _trim(png: Path, margin: int = 24) -> None:
     box = ImageOps.invert(im).getbbox()
     if box:
         im.crop((0, 0, im.width, min(im.height, box[3] + margin))).save(png)
+
+
+GEMINI_MODELS = [m for m in (os.environ.get("ASAPVILLE_GEMINI_IMAGE_MODEL"), "gemini-3.1-flash-image",
+                               "gemini-2.5-flash-image") if m]
+PORTRAIT_STYLE = ("Black-and-white Japanese manga character portrait, head and shoulders, clean ink lines, "
+                  "screentone shading, plain white background, seinen manga style, no text, no lettering.")
+
+
+def portrait_prompt(agent: Agent) -> str:
+    p = Personality.model_validate(agent.personality)
+    a = p.appearance
+    age = (agent.seed_card or {}).get("age")
+    return (f"{PORTRAIT_STYLE} {a.self_description} {f'About {age} years old. ' if age else ''}"
+            f"Hair: {a.hair}. Build: {a.build}. Clothing: {a.clothing}. Always with: {a.signature_item}.")
+
+
+def has_portrait(agent: Agent) -> bool:
+    return any((FACES / f"{agent.id}.{ext}").exists() for ext in ("jpg", "png"))
+
+
+def draw_portrait(agent: Agent, *, key: str) -> Path:
+    """Ask Gemini for this citizen's portrait and keep it in manga/faces/<id>.png."""
+    import base64
+
+    body = json.dumps({"contents": [{"parts": [{"text": portrait_prompt(agent)}]}],
+                       "generationConfig": {"responseModalities": ["IMAGE"]}}).encode()
+    last = ""
+    for model in GEMINI_MODELS:
+        req = urllib.request.Request(
+            f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent",
+            data=body, headers={"Content-Type": "application/json", "x-goog-api-key": key})
+        try:
+            with urllib.request.urlopen(req, timeout=120) as resp:
+                data = json.loads(resp.read())
+        except urllib.error.HTTPError as exc:
+            last = f"{model}: {exc.code} {exc.read()[:200]!r}"
+            continue
+        for part in (data.get("candidates") or [{}])[0].get("content", {}).get("parts", []):
+            inline = part.get("inlineData") or part.get("inline_data")
+            if inline and inline.get("data"):
+                FACES.mkdir(parents=True, exist_ok=True)
+                out = FACES / f"{agent.id}.png"
+                out.write_bytes(base64.b64decode(inline["data"]))
+                return out
+        last = f"{model}: no image in the reply"
+    raise RuntimeError(f"Gemini drew nothing for {agent.name} ({last})")
+
+
+def draw_missing_portraits(session: Session, *, key: str) -> list[str]:
+    done = []
+    for a in session.scalars(select(Agent).where(Agent.alive.is_(True)).order_by(Agent.id)):
+        if not has_portrait(a):
+            draw_portrait(a, key=key)
+            done.append(a.name)
+    return done
 
 
 def post_telegram(png: Path, caption: str, *, token: str, chat: str) -> dict[str, Any]:

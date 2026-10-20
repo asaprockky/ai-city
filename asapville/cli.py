@@ -352,6 +352,8 @@ def main(argv: list[str] | None = None) -> int:
     p_arr.add_argument("--advance", type=float, default=40.0, help="asaps the patron already paid them")
     p_exp = sub.add_parser("export", help="write a self-contained replay page of the town")
     p_exp.add_argument("--out", default="asapville.html")
+    p_por = sub.add_parser("portraits", help="draw manga portraits (Gemini) for citizens who have none")
+    p_por.add_argument("--redo", type=int, help="redraw this citizen's portrait (their id)")
     p_com = sub.add_parser("comic", help="draw the last hours as a manga page (and post it to Telegram)")
     p_com.add_argument("--hours", type=int, default=24, help="how many past hours the chapter covers")
     p_com.add_argument("--out", default="asapville-manga.png")
@@ -404,12 +406,32 @@ def main(argv: list[str] | None = None) -> int:
                                    works_for=args.works_for, advance_cents=round(args.advance * 100)))
         print(f"{agent.name} arrived in {settings.world.name}")
         return 0
+    if args.cmd == "portraits":
+        import os
+
+        from asapville import comic
+
+        key = os.environ.get("ASAPVILLE_GEMINI_KEY")
+        if not key:
+            raise SystemExit("set ASAPVILLE_GEMINI_KEY (a Gemini API key) to draw portraits")
+        with sessions() as s:
+            if args.redo:
+                print(comic.draw_portrait(s.get(Agent, args.redo), key=key))
+            else:
+                print("drew:", ", ".join(comic.draw_missing_portraits(s, key=key)) or "nobody (all done)")
+        return 0
     if args.cmd == "comic":
         import os
         from pathlib import Path
 
         from asapville import comic
 
+        if key := os.environ.get("ASAPVILLE_GEMINI_KEY"):
+            with sessions() as s:
+                try:
+                    comic.draw_missing_portraits(s, key=key)  # newcomers get a face before their debut
+                except Exception as exc:  # a missing portrait only means an ink bust this chapter
+                    print(f"portraits: {exc}")
         with sessions() as s:
             tick = get_world_state(s).tick
             if args.script:

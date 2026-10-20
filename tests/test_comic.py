@@ -19,3 +19,10 @@ async def test_a_manga_page_from_the_towns_events(world, sessions, fake):
     with sessions() as s:
         a = s.scalar(comic.select(comic.Agent))
         assert comic.face_svg(a) == comic.face_svg(a)
+
+
+async def test_a_portrait_prompt_is_built_from_the_citizens_own_looks(world, sessions):
+    with sessions() as s:
+        a = s.scalar(comic.select(comic.Agent))
+        text = comic.portrait_prompt(a)
+    assert "manga" in text and "Hair:" in text and "no text" in text
