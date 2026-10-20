@@ -268,3 +268,5 @@ async def test_no_buyers_no_work_no_wage(world, sessions, settings):
         assert a.money_cents == money
         ev = s.scalar(select(Event).where(Event.kind == "work", Event.agent_id == a.id))
         assert ev.data["missing"] == "demand" and "nobody is buying" in ev.summary
+        assert "NO PAID WORK NOW: the shelves are full of unsold stone" in render_perception(
+            build_perception(ctx, a))

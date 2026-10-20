@@ -167,7 +167,8 @@ def build_perception(ctx: TickContext, agent: Agent) -> Perception:
                         + ", ".join(parts) + "; change them with hire / set_price, dismiss with fire")
     jobs_here = [JobHere(job=name, wage_cents=economy.wage_of(s, cfg, name),
                          workers=len(economy.workers_in(s, name)),
-                         active=economy.active_workers(s, name, ctx.tick - 24))
+                         active=economy.active_workers(s, name, ctx.tick - 24),
+                         no_demand=economy.unsold(s, cfg, name))
                  for name, job in economy.jobs_at(cfg, here.key).items()]
     my_job = cfg.economy.jobs.get(agent.role)
     notices = []
@@ -225,6 +226,7 @@ def build_perception(ctx: TickContext, agent: Agent) -> Perception:
         wage_cents=economy.wage_of(s, cfg, agent.role) if my_job else None,
         job_output_cents=(sum((economy.price_of(cfg, item, s, at=my_job.workplace) or 0) * qty
                               for item, qty in my_job.makes.items()) if my_job else None),
+        job_unsold=economy.unsold(s, cfg, agent.role) if my_job else [],
         employer=(boss.name if (boss := economy.owned_job(s, cfg, agent.role)) and boss.id != agent.id
                   else None),
         shop=shop,
@@ -282,6 +284,9 @@ def render_perception(p: Perception) -> str:
         boss = f" for {p.employer}, who owns it" if p.employer else ""
         lines.append(f"Your job: {p.job} at {p.workplace}{boss}, {(p.wage_cents or 0) / 100:.2f} asaps per "
                      f"hour worked (choose 'work' while you are there).")
+        if p.job_unsold:
+            lines.append(f"But nobody is buying: the shelves are full of unsold {', '.join(p.job_unsold)}, "
+                         "so your job pays nothing until they sell. Find other work, or make something else.")
         if p.job_output_cents and p.wage_cents is not None and p.job_output_cents >= 2 * p.wage_cents:
             seller = p.employer or "the town"
             how = (f"{p.employer} sets your wage: bargain with them, or work elsewhere." if p.employer else
@@ -311,6 +316,8 @@ def render_perception(p: Perception) -> str:
             f"{j.job} ({j.wage_cents / 100:.2f}/h, {j.workers} on the books"
             + (f", {j.active} turned up in the last day"
                if j.active is not None and j.active < j.workers else "")
+            + (f"; NO PAID WORK NOW: the shelves are full of unsold {', '.join(j.no_demand)}"
+               if j.no_demand else "")
             + (", this is YOUR job: choose 'work' to do a shift)" if j.job == p.job else ")")
             for j in p.jobs_here) + (". Use 'apply' to take another." if others else "."))
     lines.append("Places you can walk to (key: name, hours on foot):")

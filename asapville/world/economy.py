@@ -122,6 +122,18 @@ def tax(session: Session, cents: int, rate: float) -> int:
     return t
 
 
+def unsold(session: Session, settings: Settings, job_name: str) -> list[str]:
+    """The job's outputs, if every one of them sits on a full shelf (then the job pays nothing)."""
+    job = settings.economy.jobs.get(job_name)
+    if job is None or not job.makes:
+        return []
+    keys = {loc.key: loc for loc in session.scalars(select(Location))}
+    full = [i for i in job.makes
+            if (dest := keys.get(job.deliver.get(i, job.workplace))) is not None
+            and stock_qty(session, dest.id, i) >= settings.economy.shelf_cap]
+    return full if len(full) == len(job.makes) else []
+
+
 def owned_job(session: Session, settings: Settings, job: str) -> Agent | None:
     """The citizen who owns the workplace of a job, if any (they set its wage)."""
     spec = settings.economy.jobs.get(job)

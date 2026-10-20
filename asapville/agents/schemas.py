@@ -168,6 +168,7 @@ class JobHere(BaseModel):
     wage_cents: int
     workers: int
     active: int | None = None  # of those, how many turned up in the last day
+    no_demand: list[str] = Field(default_factory=list)  # its goods are piled up unsold: no paid work now
 
 
 class Notice(BaseModel):
@@ -203,6 +204,7 @@ class Perception(BaseModel):
     wage_cents: int | None = None
     job_output_cents: int | None = None  # shelf value of what one hour of that job makes
     employer: str | None = None  # the citizen who owns the workplace, if any
+    job_unsold: list[str] = Field(default_factory=list)  # their job's goods pile up unsold: no pay now
     bank: str | None = None  # their AsapBank account, in words
     bank_offer: str | None = None  # at the bank: what it will do for them
     kitchen: str | None = None  # what they could cook, and where
