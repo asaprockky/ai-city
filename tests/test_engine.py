@@ -146,3 +146,19 @@ async def test_a_capped_citizen_still_eats_what_they_carry(world, sessions, gate
     with sessions() as s:
         a = s.get(Agent, 1)
         assert a.inventory == {"bread": 1} and a.hunger < 95
+
+
+async def test_a_capped_citizen_with_money_buys_a_meal_where_they_stand(world, sessions, gateway):
+    from asapville.db.models import Location
+
+    with sessions() as s:
+        a = s.get(Agent, 1)
+        tavern = s.scalar(select(Location).where(Location.key == "tavern"))
+        a.location_id, a.destination_id, a.travel_ticks_left = tavern.id, None, 0
+        a.hunger, a.inventory, a.bedtime_hour, a.energy, a.money_cents = 100, {}, 22, 80, 2000
+        s.commit()
+    gateway.guard.spent_by_agent[1] = 999.0
+    await world.step()
+    with sessions() as s:
+        a = s.get(Agent, 1)
+        assert a.money_cents == 1500 and a.hunger < 100

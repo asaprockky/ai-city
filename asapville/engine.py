@@ -105,9 +105,28 @@ class World:
             return (tick + agent.id) % n == 0
         return True
 
-    def _continue(self, agent: Agent) -> Decision:
-        """Reflex, then habit, when there is no LLM turn: a hungry body eats what it carries, an
-        exhausted one rests; otherwise keep doing a continuable action, or idle. No LLM call."""
+    def _food_for_sale_here(self, ctx: TickContext, agent: Agent) -> str | None:
+        """The most filling food the town shop where the agent stands sells, has and they can pay for."""
+        cfg = self.settings
+        here = ctx.locations.get(agent.location_id) if agent.location_id else None
+        if here is None:
+            return None
+        best: tuple[float, str] | None = None
+        for item in cfg.economy.shops.get(here.key, []):
+            spec = cfg.food.get(item)
+            price = economy.price_of(cfg, item, ctx.session)
+            if spec is None or spec.nutrition <= 0 or price is None or price > agent.money_cents:
+                continue
+            if item not in cfg.economy.unlimited and economy.stock_qty(ctx.session, here.id, item) <= 0:
+                continue
+            if best is None or spec.nutrition > best[0]:
+                best = (spec.nutrition, item)
+        return best[1] if best else None
+
+    def _continue(self, agent: Agent, ctx: TickContext | None = None) -> Decision:
+        """Reflex, then habit, when there is no LLM turn: a hungry body eats what it carries (or
+        buys food where it stands), an exhausted one rests; otherwise keep doing a continuable
+        action, or idle. No LLM call."""
         food = self.settings.food
         carried = [(food[k].nutrition, k) for k, v in (agent.inventory or {}).items()
                    if v > 0 and k in food and food[k].nutrition > 0]
@@ -115,6 +134,11 @@ class World:
             item = max(carried)[1]
             return Decision(thought="(hunger takes over)", action=ActionName.EAT,
                             action_args={"item": item}, mood=agent.mood_label)
+        if agent.hunger >= REFLEX_HUNGER and ctx is not None:
+            item = self._food_for_sale_here(ctx, agent)
+            if item is not None:
+                return Decision(thought="(hunger takes over)", action=ActionName.BUY,
+                                action_args={"item": item}, mood=agent.mood_label)
         if agent.energy <= REFLEX_ENERGY:
             return Decision(thought="(too tired to think)", action=ActionName.REST, mood=agent.mood_label)
         try:
@@ -183,7 +207,7 @@ class World:
 
         async def one(a: Agent) -> tuple[int, DecideOutcome]:
             if not self._gets_llm_turn(a, ctx.tick, mode):
-                return a.id, DecideOutcome(self._continue(a))
+                return a.id, DecideOutcome(self._continue(a, ctx))
             out = await decide(
                 gateway=self.gateway, agent_id=a.id, tier=a.tier,
                 model=model_for(a, cfg.models), effort=effort_for(a, cfg.effort),
