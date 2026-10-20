@@ -136,7 +136,7 @@ async def test_wages_follow_the_labour_market(world, sessions, settings):
         for a in agents[:4]:
             a.role = "baker"
         changed = economy.adjust_wages(s, settings)
-        assert changed["farmer"] == (250, 312) and changed["baker"] == (300, 270)
+        assert changed["farmer"] == (250, 375) and changed["baker"] == (300, 270)  # vacant: +50%
         assert "quarryman" in changed and "miller" in changed
         for _ in range(20):
             economy.adjust_wages(s, settings)

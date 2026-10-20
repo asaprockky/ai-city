@@ -195,6 +195,7 @@ def stall_payload(s: Stall) -> dict[str, Any]:
 
 # The labour market: each midnight a job nobody holds pays more, a crowded one pays less.
 WAGE_UP, WAGE_DOWN, CROWDED = 1.25, 0.9, 3
+VACANT_UP, IDLE_DOWN = 1.5, 0.8  # nobody holds a needed job / a crowd stood mostly idle
 SHORT_HOURS = 3  # idle hours downstream, in a day, that count as a shortage of this job's output
 WAGE_MIN, WAGE_MAX = 0.5, 3.0  # bounds, as multiples of the base wage in config
 
@@ -205,18 +206,14 @@ def wage_of(session: Session, settings: Settings, job: str) -> int:
     return int((ws.wages or {}).get(job, base)) if ws is not None else base
 
 
-def shortages(session: Session, settings: Settings, since_tick: int) -> dict[str, int]:
-    """Per job, how many hours others could not work for want of what this job makes.
-
-    The blame walks up the chain: bakers idle for flour count against the miller only if the
-    millers themselves were working; if the millers stood idle for grain, it is the farmer's
-    shortage (more millers would not bake a single loaf).
-    """
+def _work_log(session: Session, settings: Settings,
+              since_tick: int) -> tuple[dict[str, int], dict[str, dict[str, int]]]:
+    """(hours worked per job, hours blocked per job and missing item) since `since_tick`."""
     from asapville.db.models import Event
 
-    makers = {item: name for name, job in settings.economy.jobs.items() for item in job.makes}
+    makers = {item for job in settings.economy.jobs.values() for item in job.makes}
     worked: dict[str, int] = {}
-    blocked_on: dict[str, dict[str, int]] = {}  # job -> missing item -> hours
+    blocked_on: dict[str, dict[str, int]] = {}
     for e in session.scalars(select(Event).where(Event.kind == "work", Event.tick >= since_tick)):
         d = e.data or {}
         job = d.get("job")
@@ -225,6 +222,18 @@ def shortages(session: Session, settings: Settings, since_tick: int) -> dict[str
         elif d.get("missing") in makers:
             blocked_on.setdefault(job, {})
             blocked_on[job][d["missing"]] = blocked_on[job].get(d["missing"], 0) + 1
+    return worked, blocked_on
+
+
+def shortages(session: Session, settings: Settings, since_tick: int) -> dict[str, int]:
+    """Per job, how many hours others could not work for want of what this job makes.
+
+    The blame walks up the chain: bakers idle for flour count against the miller only if the
+    millers themselves were working; if the millers stood idle for grain, it is the farmer's
+    shortage (more millers would not bake a single loaf).
+    """
+    makers = {item: name for name, job in settings.economy.jobs.items() for item in job.makes}
+    worked, blocked_on = _work_log(session, settings, since_tick)
     out: dict[str, int] = {}
     for job, missing in blocked_on.items():
         for item, hours in missing.items():
@@ -243,19 +252,28 @@ def adjust_wages(session: Session, settings: Settings, *,
                  tick: int | None = None) -> dict[str, tuple[int, int]]:
     """Move every wage one step toward what the town needs. Returns {job: (old, new)} for changes.
 
-    A job pays more when nobody holds it, or when others stood idle waiting for what it makes
-    (a miller who doesn't mill raises the miller's wage); it pays less when crowded and not short.
+    A job pays more when nobody holds it (a lot more), or when others stood idle waiting for what
+    it makes; it pays less when crowded and not short, faster if that crowd itself stood idle.
     """
     ws = session.get(WorldState, 1)
     assert ws is not None
     wages = dict(ws.wages or {})
-    short = shortages(session, settings, (tick if tick is not None else ws.tick) - 24)
+    since = (tick if tick is not None else ws.tick) - 24
+    short = shortages(session, settings, since)
+    worked, blocked_on = _work_log(session, settings, since)
     changed = {}
     for name, job in settings.economy.jobs.items():
         old = int(wages.get(name, job.wage_cents))
         n = len(workers_in(session, name))
-        needed = n == 0 or short.get(name, 0) >= SHORT_HOURS
-        factor = WAGE_UP if needed else WAGE_DOWN if n > CROWDED else 1.0
+        idle = sum(blocked_on.get(name, {}).values()) > worked.get(name, 0)
+        if n == 0:
+            factor = VACANT_UP
+        elif short.get(name, 0) >= SHORT_HOURS:
+            factor = WAGE_UP
+        elif n > CROWDED:
+            factor = IDLE_DOWN if idle else WAGE_DOWN
+        else:
+            factor = 1.0
         new = round(min(job.wage_cents * WAGE_MAX, max(job.wage_cents * WAGE_MIN, old * factor)))
         wages[name] = new
         if new != old:
