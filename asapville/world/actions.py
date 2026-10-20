@@ -417,6 +417,18 @@ class Buy:
 
         here = _here(ctx, agent)
         item = str(d.action_args.get("item", "")).strip().lower()
+        stall = economy.stall_for(ctx.session, here, item, d.action_args.get("from"), buyer=agent) \
+            if here is not None else None
+        if isinstance(stall, str):
+            return stall
+        if stall is not None:
+            qty = _qty(d)
+            if stall.qty < qty:
+                return f"{stall.name} has only {stall.qty} {item} left."
+            if agent.money_cents < stall.price_cents * qty:
+                return (f"{qty} {item} at {stall.name} costs {stall.price_cents * qty / 100:.2f} asaps; "
+                        f"you have {agent.money_cents / 100:.2f}.")
+            return None
         if here is None or item not in economy.shop_items(ctx.settings, here.key):
             sellers = [ctx.by_key[k].name for k, items in ctx.settings.economy.shops.items()
                        if item in items and k in ctx.by_key]
@@ -442,6 +454,9 @@ class Buy:
         assert here is not None
         item = str(d.action_args["item"]).strip().lower()
         qty = _qty(d)
+        stall = economy.stall_for(ctx.session, here, item, d.action_args.get("from"), buyer=agent)
+        if stall is not None and not isinstance(stall, str):
+            return _buy_from_stall(ctx, agent, stall, qty)
         price = economy.price_of(ctx.settings, item) or 0
         ws = ctx.session.get(WorldState, 1)
         assert ws is not None
@@ -465,6 +480,139 @@ class Buy:
              summary=f"{agent.name} {what} for {price * qty / 100:.2f}",
              data={"item": item, "qty": qty, "cents": price * qty}, actor_memory=mem,
              witness_memory=f"{{actor}} bought some {item}.", importance=2)
+        return ActionResult(ok=True)
+
+
+def _buy_from_stall(ctx: TickContext, agent: Agent, stall, qty: int) -> ActionResult:
+    from asapville.world.events import remember
+
+    owner = ctx.session.get(Agent, stall.owner_id)
+    cents = stall.price_cents * qty
+    agent.money_cents -= cents
+    if owner is not None:
+        owner.money_cents += cents
+    stall.qty -= qty
+    stall.sold += qty
+    inv = dict(agent.inventory or {})
+    inv[stall.item] = inv.get(stall.item, 0) + qty
+    agent.inventory = inv
+    ev = emit(ctx.session, tick=ctx.tick, kind="buy", actor=agent, target=owner,
+              location_id=stall.location_id,
+              summary=f"{agent.name} bought {qty} {stall.item} from {stall.name} for {cents / 100:.2f}",
+              data={"item": stall.item, "qty": qty, "cents": cents, "stall": stall.name,
+                    "stall_id": stall.id, "owner_id": stall.owner_id},
+              actor_memory=f"I bought {qty} {stall.item} from {stall.name} for {cents / 100:.2f} asaps.",
+              witness_memory=f"{{actor}} bought {stall.item} from {stall.name}.", importance=2)
+    if owner is not None and owner.id != agent.id:
+        from asapville.world.social import describe
+
+        remember(ctx.session, owner.id, ctx.tick, "outcome",
+                 f"{stall.name} sold {qty} {stall.item} to {describe(ctx.session, owner.id, agent)} "
+                 f"for {cents / 100:.2f} asaps ({stall.qty} left).", importance=3, event_id=ev.id)
+    return ActionResult(ok=True)
+
+
+OPEN_USAGE = ('open_stall {"name": "<your business name>", "item": "<what you sell>", "price": 2.5}'
+              '  -- start your own business right here; you set the price, the money is yours')
+
+
+@register(ActionName.OPEN_STALL, OPEN_USAGE)
+class OpenStall:
+    @staticmethod
+    def validate(ctx: TickContext, agent: Agent, d: Decision, perceived: set[int]) -> str | None:
+        from asapville.world import economy
+
+        here = _here(ctx, agent)
+        if here is None:
+            return "You need to stand somewhere to open a business."
+        if here.kind == "home" and here.id != agent.home_id:
+            return "You can't open a business in someone else's home."
+        name = str(d.action_args.get("name", "")).strip()
+        item = economy.clean_item(d.action_args.get("item", ""))
+        if len(name) < 2 or not item:
+            return "Name your business and what it sells."
+        try:
+            price = round(float(d.action_args.get("price", 0)) * 100)
+        except (TypeError, ValueError):
+            return "Give a price in asaps, like 2.5."
+        if not 10 <= price <= 100_000:
+            return "Set a price between 0.10 and 1000 asaps."
+        return economy.can_open_stall(ctx.session, agent, here, name, item)
+
+    @staticmethod
+    def execute(ctx: TickContext, agent: Agent, d: Decision) -> ActionResult:
+        from asapville.world import economy
+
+        here = _here(ctx, agent)
+        assert here is not None
+        stall = economy.open_stall(ctx.session, agent, here, str(d.action_args["name"]).strip()[:60],
+                                   economy.clean_item(d.action_args["item"]),
+                                   round(float(d.action_args["price"]) * 100), ctx.tick)
+        emit(ctx.session, tick=ctx.tick, kind="open_stall", actor=agent, location_id=here.id,
+             visibility="public", summary=f"{agent.name} opened {stall.name} at {here.name}, "
+                                          f"selling {stall.item} at {stall.price_cents / 100:.2f}",
+             data={"stall": stall.name, "stall_id": stall.id, "item": stall.item, "price": stall.price_cents},
+             actor_memory=f"I opened my own business, {stall.name}, at {here.name}: {stall.item} at "
+                          f"{stall.price_cents / 100:.2f} asaps. I stock it with 'stock_stall' here.",
+             witness_memory=f"{{actor}} set up a business here: {stall.name}, selling {stall.item}.",
+             importance=6)
+        return ActionResult(ok=True)
+
+
+STOCK_USAGE = ('stock_stall {"item": "<item>", "qty": 3, "price": 2.5}  -- put goods from your bag '
+               'on your own stall here (price optional: change it any time)')
+
+
+@register(ActionName.STOCK_STALL, STOCK_USAGE)
+class StockStall:
+    @staticmethod
+    def validate(ctx: TickContext, agent: Agent, d: Decision, perceived: set[int]) -> str | None:
+        from asapville.world import economy
+
+        here = _here(ctx, agent)
+        item = economy.clean_item(d.action_args.get("item", ""))
+        stall = economy.own_stall(ctx.session, agent, here, item) if here is not None else None
+        if stall is None:
+            return f"You have no stall selling {item or 'that'} here. Open one with open_stall."
+        qty = int(d.action_args.get("qty", 0) or 0)
+        if qty < 0 or (agent.inventory or {}).get(item, 0) < qty:
+            return f"You don't have {qty} {item}."
+        if qty == 0 and "price" not in d.action_args:
+            return "Stock something (qty) or change the price."
+        if "price" in d.action_args:
+            try:
+                price = round(float(d.action_args["price"]) * 100)
+            except (TypeError, ValueError):
+                return "Give a price in asaps, like 2.5."
+            if not 10 <= price <= 100_000:
+                return "Set a price between 0.10 and 1000 asaps."
+        return None
+
+    @staticmethod
+    def execute(ctx: TickContext, agent: Agent, d: Decision) -> ActionResult:
+        from asapville.world import economy
+
+        here = _here(ctx, agent)
+        item = economy.clean_item(d.action_args["item"])
+        stall = economy.own_stall(ctx.session, agent, here, item)
+        assert stall is not None and here is not None
+        qty = int(d.action_args.get("qty", 0) or 0)
+        if qty:
+            inv = dict(agent.inventory or {})
+            inv[item] -= qty
+            if inv[item] <= 0:
+                del inv[item]
+            agent.inventory = inv
+            stall.qty += qty
+        if "price" in d.action_args:
+            stall.price_cents = round(float(d.action_args["price"]) * 100)
+        offer = f"{stall.qty} {item} at {stall.price_cents / 100:.2f}"
+        emit(ctx.session, tick=ctx.tick, kind="stock_stall", actor=agent, location_id=here.id,
+             summary=f"{agent.name} stocked {stall.name}: {offer}",
+             data={"stall": stall.name, "stall_id": stall.id, "item": item, "added": qty,
+                   "qty": stall.qty, "price": stall.price_cents},
+             actor_memory=f"I stocked {stall.name}: {offer} asaps.",
+             witness_memory=f"{{actor}} laid out {item} at {stall.name}.", importance=2)
         return ActionResult(ok=True)
 
 

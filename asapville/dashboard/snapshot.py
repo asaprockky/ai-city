@@ -23,6 +23,7 @@ from asapville.db.models import (
     Intervention,
     LLMCall,
     Location,
+    Stall,
     WorldState,
     WorldTick,
 )
@@ -124,6 +125,7 @@ def economy_payload(session: Session, settings: Settings) -> dict[str, Any]:
         "treasury": ws.treasury_cents,
         "stocks": econ.stocks_by_location(session, locations),
         "prices": e.prices, "shops": e.shops, "served": e.served, "unlimited": e.unlimited,
+        "stalls": [econ.stall_payload(st) for st in session.scalars(select(Stall).order_by(Stall.id))],
         "jobs": {name: {"workplace": j.workplace, "wage_cents": j.wage_cents, "uses": j.uses,
                         "makes": j.makes, "workers": [a.id for a in econ.workers_in(session, name)]}
                  for name, j in e.jobs.items()},

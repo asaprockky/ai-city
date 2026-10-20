@@ -17,7 +17,7 @@ from pydantic import BaseModel, Field, ValidationError
 from sqlalchemy import select
 
 from asapville.config import Settings
-from asapville.db.models import Agent, Anomaly, Intervention, WorldState
+from asapville.db.models import Agent, Anomaly, Intervention, Stall, WorldState
 from asapville.llm.budget import BudgetExceeded
 from asapville.llm.client import LLMGateway
 from asapville.llm.routing import ANGEL, AngelTask, effort_for, model_for
@@ -110,10 +110,11 @@ def town_status(ctx: TickContext, agents: list[Agent]) -> str:
         if loc is None:
             continue
         goods = ", ".join(f"{k} {v}" for k, v in sorted(stocks.get(key, {}).items())
-                          if k not in cfg.economy.unlimited) or "empty"
+                          if k not in cfg.economy.unlimited)
         always = [k for k in cfg.economy.shops.get(key, []) if k in cfg.economy.unlimited]
         if always:
-            goods += "; always available: " + ", ".join(always)
+            goods = (goods + "; " if goods else "") + "always available: " + ", ".join(always)
+        goods = goods or "empty"
         sells = cfg.economy.shops.get(key)
         tail = f" (sells {', '.join(sells)})" if sells else ""
         lines.append(f"  - {key} ({loc.name}): {goods}{tail}")
@@ -122,6 +123,11 @@ def town_status(ctx: TickContext, agents: list[Agent]) -> str:
     for name, job in cfg.economy.jobs.items():
         who = ", ".join(a.name for a in economy.workers_in(s, name)) or "nobody"
         lines.append(f"  - {name}: {job.workplace}, {job.wage_cents / 100:.2f}, {who}")
+    stalls = list(s.scalars(select(Stall).order_by(Stall.id)))
+    if stalls:
+        lines.append("Citizens' own businesses: " + "; ".join(
+            f'"{st.name}" ({s.get(Agent, st.owner_id).name}) at {ctx.locations[st.location_id].key}: '
+            f"{st.item} {st.price_cents / 100:.2f}, {st.qty} left" for st in stalls))
     lines.append("Citizens (id, name, job, where, hunger/energy/health, money, carrying, mood, thought):")
     for a in agents:
         if not a.alive:

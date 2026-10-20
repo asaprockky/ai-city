@@ -92,6 +92,24 @@ class Stock(Base):
     qty: Mapped[int] = mapped_column(Integer, default=0)
 
 
+class Stall(Base):
+    """A citizen's own business: one good, the owner's price, the owner's till."""
+
+    __tablename__ = "stalls"
+    __table_args__ = (UniqueConstraint("owner_id", "location_id", "item", name="uq_stalls_triple"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    owner_id: Mapped[int] = mapped_column(ForeignKey("agents.id"), index=True)
+    brand_id: Mapped[int | None] = mapped_column(ForeignKey("brands.id"), nullable=True)
+    location_id: Mapped[int] = mapped_column(ForeignKey("locations.id"), index=True)
+    name: Mapped[str] = mapped_column(Unicode(128))
+    item: Mapped[str] = mapped_column(String(32))
+    price_cents: Mapped[int] = mapped_column(Integer, default=100)
+    qty: Mapped[int] = mapped_column(Integer, default=0)
+    sold: Mapped[int] = mapped_column(Integer, default=0)
+    opened_tick: Mapped[int] = mapped_column(Integer, default=0)
+
+
 class WorldTick(Base):
     """Per-tick snapshot of the town's shelves and fund (dashboard timeline)."""
 

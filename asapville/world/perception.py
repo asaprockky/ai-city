@@ -6,7 +6,7 @@ from __future__ import annotations
 from sqlalchemy import select
 
 from asapville.agents.schemas import Destination, JobHere, Notice, Perception, SeenAgent, ShopItem
-from asapville.db.models import Agent, Event, Memory
+from asapville.db.models import Agent, Event, Memory, Stall
 from asapville.world import economy
 from asapville.world.actions import TickContext, available_usages
 from asapville.world.map import travel_ticks
@@ -21,6 +21,7 @@ _DOING = {
 }
 
 RECENT_TICKS = 3
+PLAN_DAY_START = 5  # hours after midnight when a new day of plans begins
 
 
 def todays_plan(ctx: TickContext, agent: Agent) -> str | None:
@@ -29,9 +30,11 @@ def todays_plan(ctx: TickContext, agent: Agent) -> str | None:
 
     m = ctx.session.scalar(select(Memory).where(Memory.agent_id == agent.id, Memory.kind == "plan")
                            .order_by(Memory.created_at_tick.desc(), Memory.id.desc()).limit(1))
-    if m is None or Clock(ctx.settings.clock).at(m.created_at_tick).day != ctx.time.day:
+    if m is None:
         return None
-    return m.content
+    # a "day" for plans starts at 05:00, so night owls don't plan tomorrow at midnight
+    shift = lambda t: Clock(ctx.settings.clock).at(t - PLAN_DAY_START).day  # noqa: E731
+    return m.content if shift(m.created_at_tick) == shift(ctx.tick) else None
 
 
 def build_perception(ctx: TickContext, agent: Agent) -> Perception:
@@ -54,13 +57,28 @@ def build_perception(ctx: TickContext, agent: Agent) -> Perception:
     dests = [
         Destination(key=loc.key, name=loc.name, kind=loc.kind,
                     travel_hours=travel_ticks(here, loc, cfg.map.cells_per_tick, ctx.travel_slowdown),
-                    sells=economy.shop_items(cfg, loc.key), jobs=list(economy.jobs_at(cfg, loc.key)))
+                    sells=economy.shop_items(cfg, loc.key) + sorted(
+                        {st.item for st in economy.stalls_at(s, loc.id)
+                         if st.qty > 0 and st.owner_id != agent.id}),
+                    jobs=list(economy.jobs_at(cfg, loc.key)))
         for loc in sorted(ctx.locations.values(), key=lambda x: x.id)
         if loc.id != here.id and (loc.kind != "home" or loc.id == agent.home_id)
     ]
     shop = [ShopItem(item=item, price_cents=economy.price_of(cfg, item) or 0,
                      qty=None if item in cfg.economy.unlimited else economy.stock_qty(s, here.id, item))
             for item in economy.shop_items(cfg, here.key)]
+    for st in economy.stalls_at(s, here.id):
+        if st.owner_id == agent.id:
+            continue
+        owner = s.get(Agent, st.owner_id)
+        who = describe(s, agent.id, owner) if owner else "someone"
+        shop.append(ShopItem(item=st.item, price_cents=st.price_cents, qty=st.qty,
+                             seller=f'"{st.name}", run by {who}'))
+    mine = []
+    for st in s.scalars(select(Stall).where(Stall.owner_id == agent.id).order_by(Stall.id)):
+        place = ctx.locations[st.location_id].name
+        mine.append(f'"{st.name}" at {place}: {st.item} at {st.price_cents / 100:.2f} asaps, '
+                    f'{st.qty} on the stall, {st.sold} sold so far')
     jobs_here = [JobHere(job=name, wage_cents=job.wage_cents, workers=len(economy.workers_in(s, name)))
                  for name, job in economy.jobs_at(cfg, here.key).items()]
     my_job = cfg.economy.jobs.get(agent.role)
@@ -105,6 +123,7 @@ def build_perception(ctx: TickContext, agent: Agent) -> Perception:
         shop=shop,
         jobs_here=jobs_here,
         plan=plan,
+        businesses=mine,
         recent_dialogue=[m.content for m in recent if m.kind == "dialogue"][-8:],
         recent_events=[m.content for m in recent if m.kind in ("observation", "outcome", "action")][-8:],
         available_actions=available_usages(),
@@ -135,11 +154,19 @@ def render_perception(p: Perception) -> str:
                      f"worked (choose 'work' while you are there).")
     else:
         lines.append("You have no job.")
-    if p.shop:
+    town = [x for x in p.shop if x.seller is None]
+    stalls = [x for x in p.shop if x.seller is not None]
+    if town:
         goods = ", ".join(f"{x.item} {x.price_cents / 100:.2f} asaps"
                           + (" (always available)" if x.qty is None else f" ({x.qty} left)")
-                          for x in p.shop)
+                          for x in town)
         lines.append(f"For sale here: {goods}.")
+    if stalls:
+        lines.append("Citizens' stalls here: " + "; ".join(
+            f"{x.item} {x.price_cents / 100:.2f} asaps ({x.qty} left) at {x.seller}" for x in stalls)
+            + '. Add "from": "<stall name>" to buy from one.')
+    if p.businesses:
+        lines.append("Your own businesses: " + "; ".join(p.businesses) + ".")
     if p.jobs_here:
         lines.append("Jobs here: " + "; ".join(
             f"{j.job} ({j.wage_cents / 100:.2f}/h, {j.workers} working)" for j in p.jobs_here)

@@ -135,6 +135,8 @@ class World:
 
     async def _plan_mornings(self, ctx: TickContext, deciders: list[Agent], mode: str) -> int:
         """Each citizen's first waking turn of a day starts with their own plan for it."""
+        if 0 <= ctx.time.hour < 5:
+            return 0  # plans are made in the morning
         todo = [a for a in deciders if todays_plan(ctx, a) is None and self._gets_llm_turn(a, ctx.tick, mode)]
         if not todo:
             return 0

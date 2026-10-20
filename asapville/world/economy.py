@@ -7,13 +7,14 @@ wages. Goods are conserved too: nothing lands on a shelf unless a worker made it
 
 from __future__ import annotations
 
+import re
 from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from asapville.config import JobCfg, Settings
-from asapville.db.models import Agent, Location, Stock, WorldState, WorldTick
+from asapville.db.models import Agent, Brand, Location, Stall, Stock, WorldState, WorldTick
 from asapville.world.events import emit
 
 
@@ -113,3 +114,71 @@ def record_world_tick(session: Session, tick: int, ws: WorldState,
 
 def world_tick_payload(row: WorldTick) -> dict[str, Any]:
     return {"treasury": row.treasury_cents, "stocks": row.stocks or {}}
+
+
+MAX_STALLS = 3
+_ITEM = re.compile(r"[^a-z' -]+")
+
+
+def clean_item(name: object) -> str:
+    return re.sub(r"\s+", " ", _ITEM.sub("", str(name).lower())).strip()[:32]
+
+
+def stalls_at(session: Session, location_id: int) -> list[Stall]:
+    return list(session.scalars(select(Stall).where(Stall.location_id == location_id).order_by(Stall.id)))
+
+
+def own_stall(session: Session, agent: Agent, here: Location | None, item: str) -> Stall | None:
+    if here is None:
+        return None
+    return session.scalar(select(Stall).where(Stall.owner_id == agent.id, Stall.location_id == here.id,
+                                              Stall.item == item))
+
+
+def stall_for(session: Session, here: Location | None, item: str, name: object, *,
+              buyer: Agent) -> Stall | str | None:
+    """The citizen stall a purchase goes to: the one named in `from`, else the cheapest with stock.
+
+    None means "no stall here sells it" (the town shop may); a string explains a failed `from`.
+    """
+    if here is None:
+        return None
+    options = [s for s in stalls_at(session, here.id) if s.item == item and s.owner_id != buyer.id]
+    if name:
+        wanted = str(name).strip().lower()
+        named = [s for s in options if s.name.lower() == wanted]
+        if not named:
+            return f"There's no stall called '{name}' selling {item} here."
+        return named[0]
+    stocked = [s for s in options if s.qty > 0]
+    return min(stocked, key=lambda s: s.price_cents) if stocked else None
+
+
+def can_open_stall(session: Session, agent: Agent, here: Location, name: str, item: str) -> str | None:
+    if own_stall(session, agent, here, item) is not None:
+        return f"You already sell {item} here."
+    if len(list(session.scalars(select(Stall).where(Stall.owner_id == agent.id)))) >= MAX_STALLS:
+        return f"You already run {MAX_STALLS} businesses."
+    taken = session.scalar(select(Brand).where(Brand.name == name[:60]))
+    if taken is not None and taken.owner_id != agent.id:
+        return f"'{name}' is already somebody's business name."
+    return None
+
+
+def open_stall(session: Session, agent: Agent, here: Location, name: str, item: str,
+               price_cents: int, tick: int) -> Stall:
+    brand = session.scalar(select(Brand).where(Brand.name == name))
+    if brand is None:
+        brand = Brand(name=name, category="stall", owner_id=agent.id, founded_tick=tick, reputation=0.0)
+        session.add(brand)
+        session.flush()
+    stall = Stall(owner_id=agent.id, brand_id=brand.id, location_id=here.id, name=name, item=item,
+                  price_cents=price_cents, qty=0, sold=0, opened_tick=tick)
+    session.add(stall)
+    session.flush()
+    return stall
+
+
+def stall_payload(s: Stall) -> dict[str, Any]:
+    return {"id": s.id, "owner_id": s.owner_id, "location_id": s.location_id, "name": s.name,
+            "item": s.item, "price": s.price_cents, "qty": s.qty, "sold": s.sold, "opened": s.opened_tick}

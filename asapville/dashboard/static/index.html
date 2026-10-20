@@ -401,10 +401,10 @@ td.num, th.num { text-align: right; }
     talk: '💬', depart: '🚶', arrive: '📍', turned_away: '🚪', sleep: '🌙', wake: '☀️', eat: '🍞',
     forage: '🌿', collapse: '💫', death: '✝', invalid_action: '✗', budget_paused: '⏸', buy: '🛒',
     sell: '💰', work: '🔨', hired: '📋', quit: '🚪', notice: '📜', angel: '👁', relief: '🎁',
-    delivery: '🛻', give: '🤝', improvise: '✨', plan: '📝',
+    delivery: '🛻', give: '🤝', improvise: '✨', plan: '📝', open_stall: '🏪', stock_stall: '📦',
   };
   const FILTERS = {
-    all: null, talk: ['talk'], deeds: ['plan', 'improvise', 'give', 'buy', 'sell', 'work', 'hired', 'quit', 'notice'],
+    all: null, talk: ['talk'], deeds: ['plan', 'improvise', 'open_stall', 'stock_stall', 'give', 'buy', 'sell', 'work', 'hired', 'quit', 'notice'],
     trouble: ['collapse', 'death', 'invalid_action', 'turned_away', 'budget_paused'],
     angels: ['angel', 'relief', 'delivery'],
   };
@@ -450,7 +450,7 @@ td.num, th.num { text-align: right; }
       onRoad: (p) => `в пути → ${p}`, at: (p) => p, deadOf: (c) => `погиб: ${c}`,
       story: { empty: 'Пока ничего. Первый час ещё идёт.', hourAt: (d, h, p) => `день ${d} · ${h} · ${p}`, convoAt: (p) => `💬 ${p}`, show: 'показать на карте' },
       town: { fund: 'асапов в казне', loaves: 'хлеба на полках', employed: 'жителей с работой', shelves: 'Полки · в этот час',
-        jobs: 'Работа · зарплату платит казна', spend: 'Расходы на ИИ', spent: 'потрачено', calls: 'вызовов модели', perCall: 'за вызов',
+        jobs: 'Работа · зарплату платит казна', biz: 'Дела жителей · своя цена, свои деньги', noBiz: 'Пока никто не открыл своё дело.', bizRow: (q, s) => `на прилавке ${q} · продано ${s}`, spend: 'Расходы на ИИ', spent: 'потрачено', calls: 'вызовов модели', perCall: 'за вызов',
         hours: 'часов прожито', cap: (c) => `Дневной лимит $${c} · показан весь расход`, uses: 'берёт', makes: 'даёт', nobody: 'никого',
         modelsNote: 'Рабочие думают на Haiku, ангелы на Sonnet (и Opus, когда под угрозой жизнь). Спящие не тратят ничего.',
         th: ['уровень', 'модель', 'вызовы', 'вход', 'выход', 'кэш', '$'], none: 'Пока нет вызовов', always: '∞', empty: 'пусто', soldOut: 'распродано' },
@@ -489,6 +489,9 @@ td.num, th.num { text-align: right; }
         delivery: (q, i, p) => `Телега привезла ${q} × ${i} в ${p}`, collapse: (a) => `${a} падает без сил`, death: (a, c) => `${a} умирает (${c})`,
         turned: (a, p) => `${a}: ${p} переполнено`, invalid: (a, x, e) => `${a} пытается ${x}, но: ${e}`,
         plan: (a, p) => `${a} задумал на день: <q>${p}</q>`,
+        openStall: (a, n, i, c, p) => `${a} открывает своё дело «${n}» (${p}): ${i} по ${c}`,
+        stockStall: (a, n, q, i, c) => `${a} выкладывает товар в «${n}»: ${q} × ${i} по ${c}`,
+        buyStall: (a, q, i, n, c) => `${a} покупает ${q} × ${i} в «${n}» за ${c}`,
         give: (a, t, w) => `${a} даёт ${t}: ${w}`, angel: (t) => `Исправитель: <q>${t}</q>`, forageOk: (a, q, i) => `${a} находит ${q} × ${i}`, forageNo: (a, p) => `${a} ищет еду (${p}), но ничего не находит`,
         to: '→',
       },
@@ -530,7 +533,7 @@ td.num, th.num { text-align: right; }
       onRoad: (p) => `on the road to ${p}`, at: (p) => p, deadOf: (c) => `died: ${c}`,
       story: { empty: 'Nothing yet. The first hour is being lived.', hourAt: (d, h, p) => `day ${d} · ${h} · ${p}`, convoAt: (p) => `💬 ${p}`, show: 'show on map' },
       town: { fund: 'asaps in the town fund', loaves: 'loaves on shelves', employed: 'citizens with a job', shelves: 'Shelves · this hour',
-        jobs: 'Jobs · the fund pays wages', spend: 'AI spend', spent: 'spent', calls: 'model calls', perCall: 'per call',
+        jobs: 'Jobs · the fund pays wages', biz: 'Citizens\' businesses · their price, their money', noBiz: 'Nobody has opened a business yet.', bizRow: (q, s) => `${q} on the stall · ${s} sold`, spend: 'AI spend', spent: 'spent', calls: 'model calls', perCall: 'per call',
         hours: 'hours lived', cap: (c) => `Daily cap $${c} · all-time spend shown`, uses: 'uses', makes: 'makes', nobody: 'nobody',
         modelsNote: 'Workers think with Haiku, angels with Sonnet (Opus when a life is at risk). Sleepers cost nothing.',
         th: ['tier', 'model', 'calls', 'in', 'out', 'cache', '$'], none: 'No calls yet', always: '∞', empty: 'empty', soldOut: 'sold out' },
@@ -559,6 +562,9 @@ td.num, th.num { text-align: right; }
         delivery: (q, i, p) => `A cart brings ${q} ${i} to ${p}`, collapse: (a) => `${a} collapses from exhaustion`, death: (a, c) => `${a} dies (${c})`,
         turned: (a, p) => `${a} finds ${p} full`, invalid: (a, x, e) => `${a} tries to ${x}, but: ${e}`,
         plan: (a, p) => `${a} plans the day: <q>${p}</q>`,
+        openStall: (a, n, i, c, p) => `${a} opens a business, “${n}” (${p}): ${i} at ${c}`,
+        stockStall: (a, n, q, i, c) => `${a} stocks “${n}”: ${q} ${i} at ${c}`,
+        buyStall: (a, q, i, n, c) => `${a} buys ${q} ${i} from “${n}” for ${c}`,
         give: (a, t, w) => `${a} gives ${t} ${w}`, angel: (t) => `The Fixer: <q>${t}</q>`, forageOk: (a, q, i) => `${a} finds ${q} ${i}`, forageNo: (a, p) => `${a} forages at ${p} and finds nothing`,
         to: '→',
       },
@@ -677,7 +683,9 @@ td.num, th.num { text-align: right; }
       case 'sleep': return w.sleep(A);
       case 'wake': return w.wake(A);
       case 'eat': { const m = /ate (.+)$/.exec(e.summary); return w.eat(A, esc(item(m ? m[1] : '?'))); }
-      case 'buy': return w.buy(A, d.qty, esc(item(d.item)), money(d.cents || 0));
+      case 'buy': return d.stall ? w.buyStall(A, d.qty, esc(item(d.item)), esc(d.stall), money(d.cents || 0)) : w.buy(A, d.qty, esc(item(d.item)), money(d.cents || 0));
+      case 'open_stall': return w.openStall(A, esc(d.stall), esc(item(d.item)), money(d.price || 0), place);
+      case 'stock_stall': return w.stockStall(A, esc(d.stall), d.qty, esc(item(d.item)), money(d.price || 0));
       case 'sell': return w.sell(A, d.qty, esc(item(d.item)), money(d.cents || 0));
       case 'work': return d.success ? w.workOk(A, esc(jobName(d.job)), esc(Object.entries(d.made || {}).map(([k, v]) => `${v} ${item(k)}`).join(', ')), money(d.wage_cents || 0))
         : w.workNo(A, esc(jobName(d.job)), esc(d.missing === 'wages' ? (LANG === 'ru' ? 'денег в казне' : 'money in the fund') : tr('itemGen', d.missing)));
@@ -703,7 +711,7 @@ td.num, th.num { text-align: right; }
       default: return esc(e.summary);
     }
   }
-  const evClass = (e) => e.kind === 'improvise' || e.kind === 'plan' ? 'idea' : FILTERS.trouble.includes(e.kind) ? 'trouble' : FILTERS.angels.includes(e.kind) || (e.kind === 'notice' && !e.agent_id) ? 'angel' : '';
+  const evClass = (e) => ['improvise', 'plan', 'open_stall'].includes(e.kind) ? 'idea' : FILTERS.trouble.includes(e.kind) ? 'trouble' : FILTERS.angels.includes(e.kind) || (e.kind === 'notice' && !e.agent_id) ? 'angel' : '';
   const evLine = (e, cls) => `<div class="ev ${evClass(e)} ${cls || ''}"><span class="ic">${ICON[e.kind] || '•'}</span><span>${evText(e)}</span></div>`;
 
   // ---------------------------------------------------------------- map
@@ -951,7 +959,7 @@ td.num, th.num { text-align: right; }
       const fr = frameAt(t); const list = byTick.get(t);
       const convos = new Map(); const rest = [];
       for (const e of list) { if (e.kind === 'talk') { const k = e.location_id ?? 0; if (!convos.has(k)) convos.set(k, []); convos.get(k).push(e); } else rest.push(e); }
-      const order = { death: 0, improvise: 1, plan: 2, angel: 3, notice: 4, give: 5 };
+      const order = { death: 0, open_stall: 1, improvise: 2, plan: 3, angel: 4, notice: 5, give: 6 };
       rest.sort((a, b) => (order[a.kind] ?? 9) - (order[b.kind] ?? 9));
       const convoHTML = [...convos.entries()].map(([loc, lines]) => `<div class="convo"><div class="where">${esc(T.story.convoAt(locName(loc)))}</div>${lines.map((e) =>
         `<div class="line ${e.id > S.seenEvent ? 'new' : ''}">${face(e.agent_id)}<div><span class="who">${esc(S.agents.get(e.agent_id)?.name || '?')} <span class="to">${T.ev.to} ${esc(S.agents.get(e.target_id)?.name || '')}</span></span><q>${esc(e.data?.line || '')}</q></div></div>`).join('')}</div>`).join('');
@@ -1023,6 +1031,8 @@ td.num, th.num { text-align: right; }
       </div>
       <div class="eyebrow" style="margin:8px 0 6px">${esc(T.shelves)}</div>
       <div class="shelves">${shelves}</div>
+      <div class="eyebrow" style="margin:14px 0 6px">${esc(T.biz)}</div>
+      ${(e.stalls || []).length ? `<div class="shelves">${e.stalls.map((st) => `<div class="shelf"><div class="nm">🏪 ${esc(st.name)}</div><div class="it"><span>${pbtn(st.owner_id)} · ${esc(locName(st.location_id))}</span></div><div class="it"><span>${esc(item(st.item))} <span class="num muted">${money(st.price)}</span></span><span class="num ${st.qty ? '' : 'zero'}">${st.qty}</span></div><div class="it muted" style="font-size:12px"><span>${esc(T.bizRow(st.qty, st.sold))}</span></div></div>`).join('')}</div>` : `<p class="note">${esc(T.noBiz)}</p>`}
       <div class="eyebrow" style="margin:14px 0 6px">${esc(T.jobs)}</div>
       <div style="overflow-x:auto"><table><tbody>${jobs}</tbody></table></div>
       <div class="eyebrow" style="margin:16px 0 6px">${esc(T.spend)}</div>

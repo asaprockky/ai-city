@@ -107,6 +107,8 @@ class ActionName(StrEnum):
     FOUND_BUSINESS = "found_business"
     BORROW = "borrow"
     IMPROVISE = "improvise"
+    OPEN_STALL = "open_stall"
+    STOCK_STALL = "stock_stall"
     IDLE = "idle"
 
 
@@ -151,6 +153,7 @@ class ShopItem(BaseModel):
     item: str
     price_cents: int
     qty: int | None = None  # None = never runs out
+    seller: str | None = None  # a citizen's stall: its name and who runs it; None = the town shop
 
 
 class JobHere(BaseModel):
@@ -192,6 +195,7 @@ class Perception(BaseModel):
     shop: list[ShopItem] = Field(default_factory=list)  # for sale where the agent stands
     jobs_here: list[JobHere] = Field(default_factory=list)
     plan: str | None = None  # the citizen's own plan for today, in their words
+    businesses: list[str] = Field(default_factory=list)  # the citizen's own stalls, in words
     recent_dialogue: list[str] = Field(default_factory=list)
     recent_events: list[str] = Field(default_factory=list)
     available_actions: list[str] = Field(default_factory=list)
