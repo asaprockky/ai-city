@@ -409,11 +409,13 @@ def main(argv: list[str] | None = None) -> int:
     if args.cmd == "portraits":
         import os
 
-        from asapville import comic
+        from asapville import comic, images
 
         key = (os.environ.get("ASAPVILLE_GEMINI_KEY") or os.environ.get("GEMINI_API"))
-        if not key:
-            raise SystemExit("set ASAPVILLE_GEMINI_KEY (a Gemini API key) to draw portraits")
+        if images.available() is not None:
+            key = None  # a working image service beats an unpaid Gemini key
+        elif not key:
+            raise SystemExit("set CLOUDFLARE_ACCOUNT_ID + CLOUDFLARE_API_TOKEN, FAL_KEY or OPENAI_API_KEY")
         with sessions() as s:
             if args.redo:
                 print(comic.draw_portrait(s.get(Agent, args.redo), key=key))
@@ -424,12 +426,12 @@ def main(argv: list[str] | None = None) -> int:
         import os
         from pathlib import Path
 
-        from asapville import comic
+        from asapville import comic, images
 
-        if key := (os.environ.get("ASAPVILLE_GEMINI_KEY") or os.environ.get("GEMINI_API")):
+        if images.available() is not None:
             with sessions() as s:
                 try:
-                    comic.draw_missing_portraits(s, key=key)  # newcomers get a face before their debut
+                    comic.draw_missing_portraits(s)  # newcomers get a face before their debut
                 except Exception as exc:  # a missing portrait only means an ink bust this chapter
                     print(f"portraits: {exc}")
         with sessions() as s:
@@ -442,7 +444,8 @@ def main(argv: list[str] | None = None) -> int:
                 Path(args.out).with_suffix(".json").write_text(script.model_dump_json(indent=1),
                                                                 encoding="utf-8")
             day = Clock(settings.clock).at(tick).day
-            page = comic.render_html(s, script, chapter=f"· ДЕНЬ {day}")
+            art = comic.draw_panels(s, script, Path(args.out).with_suffix(""))
+            page = comic.render_html(s, script, chapter=f"· ДЕНЬ {day}", art=art)
         out = comic.render_png(page, Path(args.out))
         print(f"wrote {out}: {script.title}")
         if args.post:

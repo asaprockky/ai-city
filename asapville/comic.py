@@ -49,7 +49,9 @@ Reply with ONLY a JSON object:
     "setting": "<where, one or two words>",
     "characters": ["<exact citizen name>", ...  at most 3],
     "bubbles": [{"who": "<exact citizen name>", "text": "<what they say, at most 90 characters>"}],
-    "sfx": "<a sound effect in Russian, or empty>"}
+    "sfx": "<a sound effect in Russian, or empty>",
+    "scene": "<in English, for the illustrator: what the camera sees, who does what, where, the
+              mood and framing, one or two sentences, no dialogue>"}
  ]}
 Use 4 to 6 panels and at most 2 bubbles per panel. The last panel should leave the reader \
 wanting the next chapter."""
@@ -66,6 +68,7 @@ class Panel(BaseModel):
     characters: list[str] = Field(default_factory=list)
     bubbles: list[Bubble] = Field(default_factory=list)
     sfx: str = ""
+    scene: str = ""  # for the illustrator, in English
 
 
 class Script(BaseModel):
@@ -211,7 +214,52 @@ body{background:#fff;width:1080px;font-family:'DejaVu Sans',sans-serif;color:#11
 """
 
 
-def render_html(session: Session, script: Script, *, chapter: str = "") -> str:
+SCENE_STYLE = ("Black-and-white Japanese seinen manga panel, clean ink lines, screentone shading, "
+               "dramatic composition, detailed background, small 19th-century-style town, "
+               "no text, no speech bubbles, no lettering.")
+
+
+def looks(agent: Agent) -> str:
+    """A citizen's look in one line, the same in every panel prompt so they stay recognisable."""
+    p = Personality.model_validate(agent.personality)
+    a = p.appearance
+    age = (agent.seed_card or {}).get("age")
+    return (f"{agent.name.split()[0]}: {f'{age}-year-old, ' if age else ''}{a.hair}; {a.build}; "
+            f"{a.clothing}; {a.signature_item}")
+
+
+def panel_prompt(session: Session, panel: Panel) -> str:
+    by_first = {a.name.split()[0]: a for a in session.scalars(select(Agent))}
+    cast = [by_first[c.split()[0]] for c in panel.characters[:3] if c and c.split()[0] in by_first]
+    people = " Characters: " + " | ".join(looks(a) for a in cast) + "." if cast else ""
+    return f"{SCENE_STYLE} Scene at the {panel.setting or 'town'}: {panel.scene or panel.caption}.{people}"
+
+
+def draw_panels(session: Session, script: Script, folder: Path) -> dict[int, Path]:
+    """Ask the image service for each panel's picture; keep what it drew in `folder`."""
+    from asapville import images
+
+    if images.available() is None:
+        return {}
+    folder.mkdir(parents=True, exist_ok=True)
+    out: dict[int, Path] = {}
+    for i, p in enumerate(script.panels):
+        f = folder / f"panel-{i + 1}.png"
+        if not f.exists():
+            try:
+                f.write_bytes(images.draw(panel_prompt(session, p)))
+                from PIL import Image
+
+                Image.open(f).convert("L").save(f)  # manga is ink on paper, whatever the model drew
+            except Exception as exc:  # one failed panel falls back to the portraits
+                print(f"panel {i + 1}: {exc}")
+                continue
+        out[i] = f
+    return out
+
+
+def render_html(session: Session, script: Script, *, chapter: str = "",
+                art: dict[int, Path] | None = None) -> str:
     by_name = {a.name: a for a in session.scalars(select(Agent))}
     first = {a.name.split()[0]: a for a in by_name.values()}
 
@@ -225,11 +273,20 @@ def render_html(session: Session, script: Script, *, chapter: str = "") -> str:
         cast = [a for a in (find(c) for c in p.characters[:3]) if a is not None]
         faces = "".join(f'<div class="who">{portrait(a, 170 if len(cast) < 3 else 135)}'
                         f'<br><span>{html.escape(a.name.split()[0])}</span></div>' for a in cast)
+        pic = (art or {}).get(i)
+        if pic is not None:
+            import base64
+
+            faces = ""
+            bg = (f' style="background:url(data:image/png;base64,'
+                  f'{base64.b64encode(pic.read_bytes()).decode()}) center/cover"')
+        else:
+            bg = ""
         bubbles = "".join(
             f'<div class="b"><small>{html.escape((find(b.who).name.split()[0]) if find(b.who) else b.who)}'
             f'</small>{html.escape(b.text)}</div>' for b in p.bubbles[:2])
         panels.append(
-            f'<div class="panel{" wide" if wide else ""}">'
+            f'<div class="panel{" wide" if wide else ""}"{bg}>'
             + f'<div>{(f"<div class=cap>{html.escape(p.caption)}</div>" if p.caption else "")}'
             + f'<div class="bubbles">{bubbles}</div></div>'
             + (f'<div class="sfx">{html.escape(p.sfx)}</div>' if p.sfx and len(p.bubbles) < 2 else "")
@@ -282,9 +339,17 @@ def has_portrait(agent: Agent) -> bool:
     return any((FACES / f"{agent.id}.{ext}").exists() for ext in ("jpg", "png"))
 
 
-def draw_portrait(agent: Agent, *, key: str) -> Path:
-    """Ask Gemini for this citizen's portrait and keep it in manga/faces/<id>.png."""
+def draw_portrait(agent: Agent, *, key: str | None = None) -> Path:
+    """Draw this citizen's portrait (Gemini if given a key, else the image service) into manga/faces."""
     import base64
+
+    if not key:
+        from asapville import images
+
+        FACES.mkdir(parents=True, exist_ok=True)
+        out = FACES / f"{agent.id}.png"
+        out.write_bytes(images.draw(portrait_prompt(agent), square=True))
+        return out
 
     body = json.dumps({"contents": [{"parts": [{"text": portrait_prompt(agent)}]}],
                        "generationConfig": {"responseModalities": ["IMAGE"]}}).encode()
@@ -310,7 +375,7 @@ def draw_portrait(agent: Agent, *, key: str) -> Path:
     raise RuntimeError(f"Gemini drew nothing for {agent.name} ({last})")
 
 
-def draw_missing_portraits(session: Session, *, key: str) -> list[str]:
+def draw_missing_portraits(session: Session, *, key: str | None = None) -> list[str]:
     done = []
     for a in session.scalars(select(Agent).where(Agent.alive.is_(True)).order_by(Agent.id)):
         if not has_portrait(a):

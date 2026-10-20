@@ -252,3 +252,8 @@ Each of these came from watching the real town:
   Portraits: `asapville portraits` asks Gemini (`ASAPVILLE_GEMINI_KEY`) for a manga portrait of
   every citizen without one, from their own appearance, into `manga/faces/<id>.png`; `comic`
   draws newcomers' portraits first. Five portraits so far came from Canva.
+  Panel art: the script gives every panel a `scene` for the illustrator; with an image service
+  key in the environment (Cloudflare Workers AI `CLOUDFLARE_ACCOUNT_ID`+`CLOUDFLARE_API_TOKEN`,
+  `FAL_KEY` or `OPENAI_API_KEY`) each panel is drawn from the scene plus every character's fixed
+  look (from their card), turned to greyscale, and used as the panel's background under the
+  code-set captions and bubbles. Without a key, panels show the portraits.

@@ -26,3 +26,31 @@ async def test_a_portrait_prompt_is_built_from_the_citizens_own_looks(world, ses
         a = s.scalar(comic.select(comic.Agent))
         text = comic.portrait_prompt(a)
     assert "manga" in text and "Hair:" in text and "no text" in text
+
+
+async def test_panels_get_drawn_art_with_the_cast_described(world, sessions, tmp_path, monkeypatch):
+    import io
+
+    from PIL import Image
+
+    from asapville import images
+
+    prompts = []
+
+    def fake_draw(prompt, square=False):
+        prompts.append(prompt)
+        buf = io.BytesIO()
+        Image.new("RGB", (64, 48), (200, 30, 30)).save(buf, format="PNG")
+        return buf.getvalue()
+
+    monkeypatch.setattr(images, "available", lambda: "fake")
+    monkeypatch.setattr(images, "draw", fake_draw)
+    with sessions() as s:
+        a = s.scalar(comic.select(comic.Agent))
+        script = comic.Script(title="T", panels=[comic.Panel(setting="bakery", characters=[a.name],
+                                                             scene="He counts the loaves.")])
+        art = comic.draw_panels(s, script, tmp_path / "ch")
+        page = comic.render_html(s, script, art=art)
+    assert "counts the loaves" in prompts[0] and a.name.split()[0] + ":" in prompts[0]
+    assert "no text" in prompts[0] and "background:url(data:image/png" in page
+    assert Image.open(art[0]).mode == "L"  # ink, not colour
