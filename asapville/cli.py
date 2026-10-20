@@ -222,6 +222,43 @@ async def serve(settings: Settings, sessions: sessionmaker[Session], gateway: LL
         await asyncio.gather(end_task, return_exceptions=True)
 
 
+async def arrive(settings: Settings, sessions: sessionmaker[Session], gateway: LLMGateway, *,
+                 preset: str | None = None) -> Agent:
+    """A newcomer is born (seed card rolled, or a preset), gets a free house if any, and arrives."""
+    from asapville.agents.birth import roll_seed_card
+    from asapville.agents.presets import PRESETS
+    from asapville.world.events import emit, remember
+
+    if preset is not None and preset not in PRESETS:
+        raise SystemExit(f"unknown preset {preset!r}; known: {', '.join(PRESETS)}")
+    with sessions() as s:
+        gateway.guard.load(s)
+        ws = get_world_state(s)
+        rng = random.Random(f"{settings.world.seed}:arrive:{ws.tick}")
+        seed = PRESETS[preset].model_copy() if preset else roll_seed_card(rng, settings)
+        homes = s.scalars(select(Location).where(Location.kind == "home").order_by(Location.id))
+        home = next((loc for loc in homes if loc.owner_id is None), None)
+        n = s.scalar(select(func.count(Agent.id))) or 0
+        agent = await birth_agent(s, gateway, settings, rng, seed_index=n, home=home, tick=ws.tick,
+                                  seed=seed)
+        if home is not None:
+            home.owner_id = agent.id
+        emit(s, tick=ws.tick, kind="arrival", actor=agent, location_id=agent.location_id,
+             visibility="public",
+             summary=f"A newcomer moved to {settings.world.name}: {agent.name}",
+             data={"preset": preset, "home": home.name if home else None},
+             actor_memory=f"Today I moved to {settings.world.name}"
+                          + (f" and took {home.name} as my home." if home
+                             else ", with no home of my own yet."),
+             importance=6)
+        for other in s.scalars(select(Agent).where(Agent.alive.is_(True), Agent.id != agent.id)):
+            remember(s, other.id, ws.tick, "observation",
+                     "Word is going round that a newcomer has moved to town.", importance=3)
+        gateway.flush(s)
+        s.commit()
+        return agent
+
+
 def _live_writer(settings: Settings, sessions: sessionmaker[Session], live_dir: str):
     """after_step hook: write `t<tick>.json` (atomically) for whoever relays the live feed."""
     import json
@@ -278,6 +315,8 @@ def main(argv: list[str] | None = None) -> int:
     p_serve.add_argument("--fast", action="store_true", help="don't wait between ticks")
     p_serve.add_argument("--view-only", action="store_true",
                          help="don't run the world here; just show the database (live if `run` is on)")
+    p_arr = sub.add_parser("arrive", help="a newcomer moves to town (their own model writes who they are)")
+    p_arr.add_argument("--preset", help="a seed card from asapville/agents/presets.py, e.g. demagogue")
     p_exp = sub.add_parser("export", help="write a self-contained replay page of the town")
     p_exp.add_argument("--out", default="asapville.html")
     args = parser.parse_args(argv)
@@ -319,6 +358,11 @@ def main(argv: list[str] | None = None) -> int:
                 print(f"wrote {args.out}")
             else:
                 print(persona_cards(s))
+        return 0
+    if args.cmd == "arrive":
+        upgrade_to_head(settings.db_url)
+        agent = asyncio.run(arrive(settings, sessions, gateway, preset=args.preset))
+        print(f"{agent.name} arrived in {settings.world.name}")
         return 0
     if args.cmd == "export":
         from pathlib import Path

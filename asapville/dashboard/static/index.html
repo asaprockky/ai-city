@@ -401,7 +401,7 @@ td.num, th.num { text-align: right; }
     talk: '💬', depart: '🚶', arrive: '📍', turned_away: '🚪', sleep: '🌙', wake: '☀️', eat: '🍞',
     forage: '🌿', collapse: '💫', death: '✝', invalid_action: '✗', budget_paused: '⏸', buy: '🛒',
     sell: '💰', work: '🔨', hired: '📋', quit: '🚪', notice: '📜', angel: '👁', relief: '🎁',
-    delivery: '🛻', give: '🤝', improvise: '✨', plan: '📝', open_stall: '🏪', stock_stall: '📦', wages: '⚖', proposal: '🗳', vote: '✋', law: '🏛',
+    delivery: '🛻', give: '🤝', improvise: '✨', plan: '📝', open_stall: '🏪', stock_stall: '📦', wages: '⚖', proposal: '🗳', vote: '✋', law: '🏛', arrival: '🧳',
   };
   const FILTERS = {
     all: null, talk: ['talk'], deeds: ['plan', 'proposal', 'vote', 'law', 'improvise', 'open_stall', 'stock_stall', 'wages', 'give', 'buy', 'sell', 'work', 'hired', 'quit', 'notice'],
@@ -490,6 +490,7 @@ td.num, th.num { text-align: right; }
         turned: (a, p) => `${a}: ${p} переполнено`, invalid: (a, x, e) => `${a} пытается ${x}, но: ${e}`,
         plan: (a, p) => `${a} задумал на день: <q>${p}</q>`,
         wages: (t) => `Новые зарплаты: ${t}`,
+        arrival: (a, h) => `В город приехал новый житель: ${a}${h ? ` (поселился: ${h})` : ''}`,
         proposal: (a, n, t, c) => `${a} выносит на голосование №${n}: <q>${t}</q>${c}`,
         vote: (a, n, y, t) => `${a} голосует ${y ? 'ЗА' : 'ПРОТИВ'} №${n} (сейчас ${t[0]}–${t[1]})`,
         law: (n, t, y, no, ok) => `Город проголосовал по №${n} <q>${t}</q>: ${y}–${no}, ${ok ? 'ПРИНЯТО' : 'не принято'}`,
@@ -568,6 +569,7 @@ td.num, th.num { text-align: right; }
         turned: (a, p) => `${a} finds ${p} full`, invalid: (a, x, e) => `${a} tries to ${x}, but: ${e}`,
         plan: (a, p) => `${a} plans the day: <q>${p}</q>`,
         wages: (t) => `New wages: ${t}`,
+        arrival: (a, h) => `A newcomer moved to town: ${a}${h ? ` (lives at ${h})` : ''}`,
         proposal: (a, n, t, c) => `${a} puts #${n} to a vote: <q>${t}</q>${c}`,
         vote: (a, n, y, t) => `${a} votes ${y ? 'YES' : 'NO'} on #${n} (now ${t[0]}–${t[1]})`,
         law: (n, t, y, no, ok) => `The town voted on #${n} <q>${t}</q>: ${y}–${no}, ${ok ? 'PASSED' : 'not passed'}`,
@@ -695,6 +697,7 @@ td.num, th.num { text-align: right; }
       case 'eat': { const m = /ate (.+)$/.exec(e.summary); return w.eat(A, esc(item(m ? m[1] : '?'))); }
       case 'buy': return d.stall ? w.buyStall(A, d.qty, esc(item(d.item)), esc(d.stall), money(d.cents || 0)) : w.buy(A, d.qty, esc(item(d.item)), money(d.cents || 0));
       case 'wages': return w.wages(esc(Object.entries(d.changes || {}).map(([j, [o, n]]) => `${jobName(j)} ${money(n)} (${n > o ? '↑' : '↓'} ${money(o)})`).join(' · ')));
+      case 'arrival': return w.arrival(A, place);
       case 'proposal': return w.proposal(A, d.proposal, esc(d.text), d.kind === 'wage' ? w.changeWage(esc(jobName(d.target)), money(d.value)) : d.kind === 'price' ? w.changePrice(esc(item(d.target)), money(d.value)) : '');
       case 'vote': return w.vote(A, d.proposal, d.yes, d.tally || [0, 0]);
       case 'law': return w.law(d.proposal, esc(d.text), d.yes, d.no, d.passed);
@@ -725,7 +728,7 @@ td.num, th.num { text-align: right; }
       default: return esc(e.summary);
     }
   }
-  const evClass = (e) => ['improvise', 'plan', 'open_stall', 'proposal', 'law'].includes(e.kind) ? 'idea' : FILTERS.trouble.includes(e.kind) ? 'trouble' : FILTERS.angels.includes(e.kind) || (e.kind === 'notice' && !e.agent_id) ? 'angel' : '';
+  const evClass = (e) => ['improvise', 'plan', 'open_stall', 'proposal', 'law', 'arrival'].includes(e.kind) ? 'idea' : FILTERS.trouble.includes(e.kind) ? 'trouble' : FILTERS.angels.includes(e.kind) || (e.kind === 'notice' && !e.agent_id) ? 'angel' : '';
   const evLine = (e, cls) => `<div class="ev ${evClass(e)} ${cls || ''}"><span class="ic">${ICON[e.kind] || '•'}</span><span>${evText(e)}</span></div>`;
 
   // ---------------------------------------------------------------- map

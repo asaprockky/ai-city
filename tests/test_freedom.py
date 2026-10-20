@@ -162,3 +162,19 @@ async def test_the_fixer_cannot_assign_jobs(world, sessions, fake):
         iv = s.scalar(select(Intervention))
         assert iv.applied is False and "themselves" in iv.reason
         assert s.get(Agent, 1).role != "farmer"
+
+
+async def test_a_newcomer_arrives_from_a_preset(world, sessions, settings, gateway):
+    from asapville.agents.schemas import Personality
+    from asapville.cli import arrive
+    from asapville.db.models import Location
+
+    agent = await arrive(settings, sessions, gateway, preset="demagogue")
+    with sessions() as s:
+        a = s.get(Agent, agent.id)
+        p = Personality.model_validate(a.personality)
+        assert p.moral_alignment == "selfish" and p.dark_traits.machiavellianism == 0.93
+        assert a.home_id is not None and s.get(Location, a.home_id).owner_id == a.id
+        ev = s.scalar(select(Event).where(Event.kind == "arrival"))
+        assert ev.visibility == "public" and ev.data["preset"] == "demagogue"
+        assert len(list(s.scalars(select(Agent)))) == 6
