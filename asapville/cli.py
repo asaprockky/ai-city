@@ -369,6 +369,10 @@ def main(argv: list[str] | None = None) -> int:
     p_chk.add_argument("--hours", type=int, default=12)
     p_chk.add_argument("--note", default="", help="a line from the builder: what was fixed or changed")
     p_chk.add_argument("--post", action="store_true")
+    p_cast = sub.add_parser("cast", help="the who-is-who page of every citizen (post and pin it)")
+    p_cast.add_argument("--out", default="kto-est-kto.html")
+    p_cast.add_argument("--redo", action="store_true", help="rewrite every citizen's profile")
+    p_cast.add_argument("--post", action="store_true", help="send it to the channel and pin it")
     p_news = sub.add_parser("news", help="breaking-news posts for the big moments since the last run")
     p_news.add_argument("--max", type=int, default=4, help="at most this many posts per run")
     p_news.add_argument("--mark", default=".asapville-news", help="file remembering the last event posted")
@@ -471,6 +475,28 @@ def main(argv: list[str] | None = None) -> int:
                 raise SystemExit("set ASAPVILLE_TELEGRAM_TOKEN and ASAPVILLE_TELEGRAM_CHAT to post")
             res = comic.post_telegram(out, f"Асапвиль, день {day}: {script.title}", token=token, chat=chat)
             print("posted" if res.get("ok") else f"telegram said: {res}")
+        return 0
+    if args.cmd == "cast":
+        import os
+        from pathlib import Path
+
+        from asapville import cast, digest
+
+        with sessions() as s:
+            gateway.guard.load(s)
+            profiles = asyncio.run(cast.write_profiles(s, settings, gateway, redo=args.redo))
+            gateway.flush(s)
+            s.commit()
+            Path(args.out).write_text(cast.render_html(s, settings, profiles), encoding="utf-8")
+        print(f"wrote {args.out}")
+        if args.post:
+            token = os.environ.get("ASAPVILLE_TELEGRAM_TOKEN", "")
+            chat = os.environ.get("ASAPVILLE_TELEGRAM_CHAT", "")
+            res = digest.post_document(Path(args.out), "📌 Кто есть кто в Асапвиле: все жители, их работа, "
+                                       "деньги, тайны и симпатии. Открой в браузере.", token=token, chat=chat)
+            if res.get("ok"):
+                res = cast.pin(res["result"]["message_id"], token=token, chat=chat)
+            print("posted and pinned" if res.get("ok") else f"telegram said: {res}")
         return 0
     if args.cmd in ("digest", "news", "chunk", "post-file"):
         import os

@@ -42,3 +42,17 @@ async def test_a_bulletin_of_the_hours_with_a_builders_note(world, sessions, fak
         fake.script("chunk", "Часы 0–2 (день 1).\n\n• **Хлеб**. Рут печёт.")
         text = await digest.write_chunk(s, settings, world.gateway, hours=3, note="Ничего не сломалось.")
     assert text.startswith("Часы 0–2") and "**" not in text and text.endswith("🛠 Ничего не сломалось.")
+
+
+async def test_who_is_who_page_from_profiles_and_the_world(world, sessions, fake, settings, tmp_path):
+    from asapville import cast
+
+    with sessions() as s:
+        a = s.scalar(digest.select(digest.Agent))
+        fake.script("cast", json.dumps({"profiles": [{"name": a.name, "ru_name": "Тест Тестов",
+                                                      "who": "пекарь-хитрец", "secret": "прячет муку"}]}))
+        profiles = await cast.write_profiles(s, settings, world.gateway, path=tmp_path / "cast.json")
+        again = cast.load_profiles(tmp_path / "cast.json")
+        page = cast.render_html(s, settings, profiles)
+    assert again[a.name].ru_name == "Тест Тестов"
+    assert "Тест Тестов" in page and "пекарь-хитрец" in page and "прячет муку" in page

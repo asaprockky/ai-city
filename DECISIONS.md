@@ -277,3 +277,12 @@ a mark file remembers the last event posted. Nothing may be invented: only what 
 `asapville chunk` posts the bulletin the owner liked best after every 12 hours: "Часы X–Y", then
 6–9 bullets with real quotes and exact numbers, and an optional builder's note (what was fixed).
 Daily budget raised to $15 at the owner's request.
+
+## Who is who (`asapville cast`)
+The owner kept forgetting who is who. `asapville cast --post` sends a page with a table of every
+citizen (portrait, Russian name, who they are in a line, job, council seat, what they own, home,
+money with savings and debt) and a card each: character, what they want, their secret (readers only),
+how they talk, how to recognise them, whom they like and dislike, debts. The lasting part is written
+once from each personality card and kept in `saves/cast.json`; the rest is read fresh. The page is
+pinned in the channel; a refresh pins the new one and unpins the old (`saves/cast-pin.txt`).
+Plain bank deposits and withdrawals no longer count as breaking news.

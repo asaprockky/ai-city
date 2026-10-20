@@ -40,9 +40,10 @@ from asapville.world.clock import Clock
 SEASONS_RU = {"spring": "весна", "summer": "лето", "autumn": "осень", "winter": "зима"}
 QUIET_KINDS = {"move", "rest", "sleep", "idle", "travel", "depart", "arrive", "wake", "plan",
                "invalid_action", "tier_change", "angel", "eat", "work", "ballot"}
-BREAKING_KINDS = {"death", "property", "law", "proposal", "candidacy", "bank", "secret_deal",
+BREAKING_KINDS = {"death", "property", "law", "proposal", "candidacy", "secret_deal",
                   "open_stall", "collapse", "arrival"}
 BREAKING_AUTHORS = {"the town clerk", "AsapBank"}  # notices worth a flash: elections, defaults
+# (plain deposits and withdrawals are "bank" events and not news)
 _FENCE = re.compile(r"^```(?:json)?\s*|\s*```$", re.MULTILINE)
 
 REPORT_RULES = """You are the editor of the Asapville Gazette, the paper of a small town whose \
