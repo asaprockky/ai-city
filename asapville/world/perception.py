@@ -202,9 +202,11 @@ def render_perception(p: Perception) -> str:
     if p.businesses:
         lines.append("Your own businesses: " + "; ".join(p.businesses) + ".")
     if p.jobs_here:
+        others = [j for j in p.jobs_here if j.job != p.job]
         lines.append("Jobs here: " + "; ".join(
-            f"{j.job} ({j.wage_cents / 100:.2f}/h, {j.workers} working)" for j in p.jobs_here)
-            + ". Use 'apply' to take one.")
+            f"{j.job} ({j.wage_cents / 100:.2f}/h, {j.workers} working"
+            + (", this is YOUR job: choose 'work' to do a shift)" if j.job == p.job else ")")
+            for j in p.jobs_here) + (". Use 'apply' to take another." if others else "."))
     lines.append("Places you can walk to (key: name, hours on foot):")
     for d in p.destinations:
         extra = []

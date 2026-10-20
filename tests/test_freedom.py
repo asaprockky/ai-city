@@ -242,3 +242,15 @@ async def test_an_informer_arrives_with_a_secret_patron(world, sessions, setting
         assert any("report it to" in n for n in notes) and any("Nobody else may know" in n for n in notes)
         others = s.scalars(select(Memory).where(Memory.agent_id == 2, Memory.content.like("%paid%")))
         assert list(others) == []  # the town doesn't know
+
+
+async def test_a_worker_at_their_workplace_is_told_to_work_not_apply(world, sessions):
+    from asapville.world.perception import build_perception, render_perception
+
+    with sessions() as s:
+        ctx = _ctx(world, s)
+        a = s.get(Agent, 1)
+        a.role = "baker"
+        a.location_id, a.destination_id, a.travel_ticks_left = ctx.by_key["bakery"].id, None, 0
+        text = render_perception(build_perception(ctx, a))
+        assert "this is YOUR job: choose 'work'" in text and "apply' to take" not in text

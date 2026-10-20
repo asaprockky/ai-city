@@ -317,7 +317,7 @@ class Apply:
         if here is None or here.key != spec.workplace:
             return f"You apply for {job} at {ctx.by_key[spec.workplace].name}, not here."
         if agent.role == job:
-            return f"You already work here as a {job}."
+            return f"You already work here as a {job}. Choose 'work' to do a shift."
         return None
 
     @staticmethod
