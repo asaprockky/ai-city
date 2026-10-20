@@ -360,9 +360,15 @@ def main(argv: list[str] | None = None) -> int:
     p_com.add_argument("--script", help="redraw from a saved script JSON instead of writing a new one")
     p_com.add_argument("--post", action="store_true",
                        help="send it to Telegram (ASAPVILLE_TELEGRAM_TOKEN, ASAPVILLE_TELEGRAM_CHAT)")
-    p_dig = sub.add_parser("digest", help="write the town report in Russian (and post it to Telegram)")
+    p_dig = sub.add_parser("digest", help="write the town paper in Russian (and post it to Telegram)")
+    p_dig.add_argument("--hours", type=int, default=12, help="how many past hours the paper covers")
+    p_dig.add_argument("--out", default="asapville-gazette", help="where to save the .json and .html")
     p_dig.add_argument("--post", action="store_true",
                        help="send it to Telegram (ASAPVILLE_TELEGRAM_TOKEN, ASAPVILLE_TELEGRAM_CHAT)")
+    p_news = sub.add_parser("news", help="breaking-news posts for the big moments since the last run")
+    p_news.add_argument("--max", type=int, default=4, help="at most this many posts per run")
+    p_news.add_argument("--mark", default=".asapville-news", help="file remembering the last event posted")
+    p_news.add_argument("--post", action="store_true")
     p_doc = sub.add_parser("post-file", help="send a file (an HTML page, say) to the Telegram channel")
     p_doc.add_argument("path")
     p_doc.add_argument("--caption", default="")
@@ -462,31 +468,59 @@ def main(argv: list[str] | None = None) -> int:
             res = comic.post_telegram(out, f"Асапвиль, день {day}: {script.title}", token=token, chat=chat)
             print("posted" if res.get("ok") else f"telegram said: {res}")
         return 0
-    if args.cmd in ("digest", "post-file"):
+    if args.cmd in ("digest", "news", "post-file"):
         import os
         from pathlib import Path
 
         from asapville import comic, digest
 
-        token = os.environ.get("ASAPVILLE_TELEGRAM_TOKEN")
-        chat = os.environ.get("ASAPVILLE_TELEGRAM_CHAT")
+        token = os.environ.get("ASAPVILLE_TELEGRAM_TOKEN", "")
+        chat = os.environ.get("ASAPVILLE_TELEGRAM_CHAT", "")
         if (args.cmd == "post-file" or args.post) and (not token or not chat):
             raise SystemExit("set ASAPVILLE_TELEGRAM_TOKEN and ASAPVILLE_TELEGRAM_CHAT to post")
         if args.cmd == "post-file":
             res = digest.post_document(Path(args.path), args.caption, token=token, chat=chat)
-        else:
-            with sessions() as s:
-                gateway.guard.load(s)
-                text = asyncio.run(digest.write(s, settings, gateway))
-                gateway.flush(s)
-                s.commit()
-            print(text)
-            if len(text) < 80:  # the offline model, or a refusal: nothing worth sending
-                raise SystemExit("the report came back empty; not posting (is ASAPVILLE_LLM_BACKEND set?)")
-            if not args.post:
-                return 0
+            print("posted" if res.get("ok") else f"telegram said: {res}")
+            return 0
+        with sessions() as s:
+            gateway.guard.load(s)
+            if args.cmd == "news":
+                mark = Path(args.mark)
+                tick = get_world_state(s).tick
+                after = int(mark.read_text()) if mark.exists() else (s.scalar(
+                    select(func.min(Event.id)).where(Event.tick >= tick - 12)) or 1) - 1
+                big = [e for e in digest.breaking(s, after) if digest.is_breaking(e)]
+                if big:
+                    after = max(e.id for e in digest.breaking(s, after))
+                for e in big[-args.max:]:
+                    text = asyncio.run(digest.write_flash(s, settings, gateway, e))
+                    print(text, "\n")
+                    if args.post and len(text) > 40:
+                        comic.post_text(text, token=token, chat=chat)
+                if args.post or not mark.exists():
+                    mark.write_text(str(after))
+                print(f"{len(big)} big moments")
+            else:
+                paper = asyncio.run(digest.write(s, settings, gateway, hours=args.hours))
+                text = digest.as_text(s, settings, paper)
+                page = digest.render_html(s, settings, paper)
+                day = Clock(settings.clock).at(get_world_state(s).tick).day
+            gateway.flush(s)
+            s.commit()
+        if args.cmd == "news":
+            return 0
+        out = Path(args.out)
+        out.with_suffix(".json").write_text(paper.model_dump_json(indent=1), encoding="utf-8")
+        page_file = out.with_name(f"gazeta-den-{day}.html")
+        page_file.write_text(page, encoding="utf-8")
+        print(text)
+        print(f"wrote {page_file}")
+        if args.post:
             res = comic.post_text(text, token=token, chat=chat)
-        print("posted" if res.get("ok") else f"telegram said: {res}")
+            if res.get("ok"):
+                caption = f"🗞 {paper.headline} — газета целиком, с лицами и картой"
+                res = digest.post_document(page_file, caption, token=token, chat=chat)
+            print("posted" if res.get("ok") else f"telegram said: {res}")
         return 0
     if args.cmd == "export":
         from pathlib import Path

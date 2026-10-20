@@ -265,9 +265,13 @@ Each of these came from watching the real town:
   Phoenix, SDXL) work by name, each with its own request shape, and go without references.
   Panels are drawn in the page's shapes (square, or wide for an odd last panel).
 
-## Town report for Telegram (`asapville digest`)
-The channel gets a plain report in Russian, always the same shape: day and fund, the main story,
-food and work, where everyone is, who died. `digest.facts()` takes it straight from the database
-and one Sonnet call writes it up, told to invent nothing. `asapville post-file` sends any file
-(the replay page from `export`, say) so readers can open interesting HTML from the chat.
+## The Asapville Gazette and breaking news (Telegram)
+A bare list of where people stand was dull. The channel now gets a paper: one Sonnet call reads
+the state of the town and the hours' events with the citizens' own words, and writes a headline,
+three to five stories with real quotes, power, food and work, a line on everyone, and what to watch.
+The same JSON becomes the channel post (`as_text`) and a self-contained newspaper page with faces,
+a map of who is where, money/fed/health bars and the shelves (`render_html`), sent as a file.
+`asapville news` posts a short flash for each big moment (a death, an election result, a business
+bought, a default, a law, a secret deal, a candidacy) as soon as a chunk ends, whatever its length;
+a mark file remembers the last event posted. Nothing may be invented: only what is in the material.
 Daily budget raised to $15 at the owner's request.
