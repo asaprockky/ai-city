@@ -142,6 +142,39 @@ class Vote(Base):
     tick: Mapped[int] = mapped_column(Integer)
 
 
+class Election(Base):
+    """A town council election: candidates stand, everyone may cast one ballot, the top seats win."""
+    __tablename__ = "elections"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    opens_tick: Mapped[int] = mapped_column(Integer)
+    closes_tick: Mapped[int] = mapped_column(Integer, index=True)
+    status: Mapped[str] = mapped_column(String(16), default="open")  # open | decided
+    winners: Mapped[list[int]] = mapped_column(JSON, default=list)
+
+
+class Candidacy(Base):
+    __tablename__ = "candidacies"
+    __table_args__ = (UniqueConstraint("election_id", "agent_id", name="uq_candidacy"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    election_id: Mapped[int] = mapped_column(ForeignKey("elections.id"), index=True)
+    agent_id: Mapped[int] = mapped_column(ForeignKey("agents.id"))
+    pitch: Mapped[str] = mapped_column(UnicodeText)
+    tick: Mapped[int] = mapped_column(Integer)
+
+
+class Ballot(Base):
+    __tablename__ = "ballots"
+    __table_args__ = (UniqueConstraint("election_id", "voter_id", name="uq_ballot"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    election_id: Mapped[int] = mapped_column(ForeignKey("elections.id"), index=True)
+    voter_id: Mapped[int] = mapped_column(ForeignKey("agents.id"))
+    candidate_id: Mapped[int] = mapped_column(ForeignKey("agents.id"))
+    tick: Mapped[int] = mapped_column(Integer)
+
+
 class BankAccount(Base):
     """A citizen's account at AsapBank: savings that earn interest, and at most one loan."""
     __tablename__ = "bank_accounts"

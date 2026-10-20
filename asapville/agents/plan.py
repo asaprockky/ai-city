@@ -28,6 +28,9 @@ Decide what YOU want from today, guided by your nature, ambitions, fears, the pe
 have met and what you see the town lacks. Be concrete and in character: places, people, \
 things to make or do. Two to four short steps, in your own voice.
 
+Start from your biggest problem or goal: name it, and plan concrete steps that will actually \
+solve it (with whom, where, with what money). If yesterday's plan failed, plan a different way.
+
 A day that is only work, food and sleep is a wasted day. At least one step must be something \
 you have not done before, or a real move toward one of your ambitions: make or cook something, \
 open or buy a business, court or befriend someone, borrow to build, propose a law, start a \

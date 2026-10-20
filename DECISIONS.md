@@ -235,3 +235,11 @@ Each of these came from watching the real town:
   job whose outputs all pile up unsold pays nothing until people buy. The town takes 5% of every
   wage and 10% of every sale by a citizen's business or stall; it pays the wages of the
   businesses it still owns (farm, mill, quarry, the herder's and fisher's work).
+- **The town council.** An election opens whenever no council sits: for 24 hours anyone may
+  `stand` (with a pitch, at the Town Hall or Square) and everyone may `elect` one candidate from
+  anywhere; the top three sit for a week. While they sit, proposals are theirs to decide (two
+  yes pass, two no sink, at once), and a proposal may now be a `grant` from the town fund to a
+  citizen. Votes on proposals can be cast from anywhere too (turnout had sunk good proposals).
+- **Problem solving.** World rules ask each citizen to name their most pressing problem, weigh
+  two or three ways to solve it and never repeat what just failed; perception lists the last
+  three setbacks with their reasons, and morning plans start from the biggest problem or goal.

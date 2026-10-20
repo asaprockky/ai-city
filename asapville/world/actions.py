@@ -11,6 +11,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any
 
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from asapville.agents.schemas import ActionName, Decision
@@ -905,7 +906,7 @@ class ProposeLaw:
         return ActionResult(ok=True)
 
 
-VOTE_USAGE = 'vote {"proposal": <number>, "choice": "yes" or "no"}  -- at the Town Hall or Square'
+VOTE_USAGE = 'vote {"proposal": <number>, "choice": "yes" or "no"}  -- from anywhere, like a ballot slip'
 
 
 @register(ActionName.VOTE, VOTE_USAGE)
@@ -913,11 +914,7 @@ class CastVote:
     @staticmethod
     def validate(ctx: TickContext, agent: Agent, d: Decision, perceived: set[int]) -> str | None:
         from asapville.db.models import Proposal
-        from asapville.world import democracy
 
-        here = _here(ctx, agent)
-        if here is None or here.key not in democracy.VOTING_PLACES:
-            return "Votes are cast at the Town Hall or the Town Square."
         try:
             p = ctx.session.get(Proposal, int(d.action_args.get("proposal")))
         except (TypeError, ValueError):
@@ -1493,4 +1490,70 @@ class Cook:
              data={"dish": dish, "made": recipe.makes, "used": recipe.uses},
              actor_memory=f"I cooked {recipe.makes} {dish.replace('_', ' ')} from {used}.",
              witness_memory=f"{{actor}} cooked {dish.replace('_', ' ')}; it smelled good.", importance=3)
+        return ActionResult(ok=True)
+
+
+# --------------------------------------------------------------------------- the council
+STAND_USAGE = ('stand {"pitch": "<why the town should elect you>"}  -- at the Town Hall or Square while a '
+               'council election is open: become a candidate')
+
+
+@register(ActionName.STAND, STAND_USAGE)
+class Stand:
+    @staticmethod
+    def validate(ctx: TickContext, agent: Agent, d: Decision, perceived: set[int]) -> str | None:
+        from asapville.db.models import Candidacy
+        from asapville.world import democracy, elections
+
+        e = elections.open_election(ctx.session)
+        if e is None:
+            return "No council election is open now."
+        here = _here(ctx, agent)
+        if here is None or here.key not in democracy.VOTING_PLACES:
+            return "Candidates declare at the Town Hall or the Town Square."
+        if ctx.session.scalar(select(Candidacy).where(Candidacy.election_id == e.id,
+                                                      Candidacy.agent_id == agent.id)) is not None:
+            return "You are already standing in this election."
+        if len(str(d.action_args.get("pitch", "")).strip()) < 5:
+            return "Say why the town should elect you, in 'pitch'."
+        return None
+
+    @staticmethod
+    def execute(ctx: TickContext, agent: Agent, d: Decision) -> ActionResult:
+        from asapville.world import elections
+
+        e = elections.open_election(ctx.session)
+        assert e is not None
+        elections.stand(ctx.session, e, agent, str(d.action_args["pitch"]).strip(), ctx.tick,
+                        agent.location_id)
+        return ActionResult(ok=True)
+
+
+@register(ActionName.ELECT, 'elect {"candidate": <ref>}  -- from anywhere: your one ballot for the council')
+class Elect:
+    @staticmethod
+    def validate(ctx: TickContext, agent: Agent, d: Decision, perceived: set[int]) -> str | None:
+        from asapville.db.models import Candidacy
+        from asapville.world import elections
+
+        e = elections.open_election(ctx.session)
+        if e is None:
+            return "No council election is open now."
+        try:
+            ref = int(d.action_args.get("candidate"))
+        except (TypeError, ValueError):
+            return 'Name a candidate by ref: elect {"candidate": <ref>}.'
+        if ctx.session.scalar(select(Candidacy).where(Candidacy.election_id == e.id,
+                                                      Candidacy.agent_id == ref)) is None:
+            return "That person is not standing in this election."
+        return None
+
+    @staticmethod
+    def execute(ctx: TickContext, agent: Agent, d: Decision) -> ActionResult:
+        from asapville.world import elections
+
+        e = elections.open_election(ctx.session)
+        candidate = ctx.session.get(Agent, int(d.action_args["candidate"]))
+        assert e is not None and candidate is not None
+        elections.cast(ctx.session, e, agent, candidate, ctx.tick)
         return ActionResult(ok=True)

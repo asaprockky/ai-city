@@ -7,7 +7,7 @@ from sqlalchemy import select
 
 from asapville.agents.schemas import Destination, JobHere, Notice, Perception, SeenAgent, ShopItem
 from asapville.db.models import Agent, Event, Memory, Stall
-from asapville.world import bank, economy
+from asapville.world import bank, economy, elections
 from asapville.world.actions import TickContext, available_usages
 from asapville.world.map import travel_ticks
 from asapville.world.needs import describe_needs, sick_of
@@ -117,6 +117,34 @@ def routine_line(ctx: TickContext, agent: Agent) -> str | None:
     return (f"For two days you have done little but work, eat and walk ({did}). The sameness is "
             "wearing on you; you crave something different: something you have never done, a person, "
             "a craft, a venture, a step toward what you really want.")
+
+
+SETBACK_HOURS = 12
+
+
+def setbacks(ctx: TickContext, agent: Agent) -> list[str]:
+    """What went wrong for this citizen lately, newest first, one line per distinct problem."""
+    out: list[str] = []
+    seen: set[str] = set()
+    for e in ctx.session.scalars(select(Event).where(
+            Event.agent_id == agent.id, Event.tick >= ctx.tick - SETBACK_HOURS,
+            Event.kind.in_(("invalid_action", "work", "improvise"))).order_by(Event.id.desc()).limit(30)):
+        d = e.data or {}
+        if e.kind == "invalid_action":
+            line = f"{d.get('action')}: {d.get('error')}"
+        elif e.kind == "work" and not d.get("success"):
+            line = e.summary.replace(agent.name, "you", 1)
+        elif e.kind == "improvise" and not d.get("success"):
+            line = f"tried to {str(d.get('what', ''))[:80]}, and it came to nothing"
+        else:
+            continue
+        key = line[:60]
+        if key not in seen:
+            seen.add(key)
+            out.append(line[:200])
+        if len(out) >= 3:
+            break
+    return out
 
 
 def todays_plan(ctx: TickContext, agent: Agent) -> str | None:
@@ -259,6 +287,8 @@ def build_perception(ctx: TickContext, agent: Agent) -> Perception:
         bank=bank.describe(s, cfg, agent, ctx.tick),
         kitchen=_kitchen(ctx, agent, here),
         routine=routine_line(ctx, agent),
+        civic=elections.describe(s, agent, ctx.tick),
+        setbacks=setbacks(ctx, agent),
         bank_offer=(f"AsapBank: deposit savings (they earn {cfg.bank.deposit_rate:.1%} a day), withdraw, "
                     f"borrow up to {bank.can_borrow(s, cfg, agent, ctx.tick) / 100:.2f} asaps more "
                     f"({cfg.bank.loan_rate:.0%} a day, due in {cfg.bank.loan_days} days), or repay"
@@ -303,6 +333,11 @@ def render_perception(p: Perception) -> str:
         lines.append(p.kitchen)
     if p.routine:
         lines.append(p.routine)
+    for line in p.civic:
+        lines.append(line)
+    if p.setbacks:
+        lines.append("What went wrong for you lately (don't repeat it; find another way): "
+                     + " | ".join(p.setbacks) + ".")
     if p.job:
         boss = f" for {p.employer}, who owns it" if p.employer else ""
         lines.append(f"Your job: {p.job} at {p.workplace}{boss}, {(p.wage_cents or 0) / 100:.2f} asaps per "

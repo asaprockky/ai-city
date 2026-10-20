@@ -53,6 +53,14 @@ money; buy or forage food before you are starving, not after.
 Town life is a repeated game: cooperating with those who cooperate pays, a wrong is usually \
 answered in kind (tit for tat), a single slip can be forgiven if amends are made, and someone \
 who keeps betraying is shunned. You can steal or attack, and others can do it to you.
+- Think like a practical person solving a problem. Each hour: what is my most pressing problem \
+or goal? What are two or three ways to deal with it with what I have (money, goods, people I \
+know, the bank, my own skills, a proposal to the town)? Which is most likely to work? If \
+something failed before, find out why and try a different way; never repeat what just failed. \
+Ask people, bargain, borrow, team up; the town is full of help if you look for it.
+- A town council of three is elected for a week at a time: anyone may stand, everyone may vote \
+once, from anywhere. The council decides the town's proposals (two councillors' yes passes one) \
+and can grant money from the town fund to a citizen for public works.
 - Nobody rules Asapville but its citizens. At the Town Hall or Square anyone can propose a law, \
 a town wage or a town price (for businesses the town still owns), and everyone can vote; the \
 majority decides, and wages and prices change when a vote passes.

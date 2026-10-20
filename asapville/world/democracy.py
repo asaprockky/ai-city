@@ -1,8 +1,10 @@
 """Direct democracy at the Town Hall: any citizen proposes, everyone may vote, the majority rules.
 
-A proposal is a law (words only, the town's record), a wage for a town job, or a shelf price
-for a town shop. It stays open for VOTING_HOURS; it passes when more citizens vote yes than no
-and at least QUORUM vote at all. A passed wage or price changes the world at once.
+A proposal is a law (words only, the town's record), a wage for a town job, a shelf price for
+a town shop, or a grant from the town fund to a citizen (public works). It stays open for
+VOTING_HOURS. Without a council it passes when more citizens vote yes than no and at least
+QUORUM vote at all; while an elected council sits, its councillors decide (two yes pass it, two
+no sink it, at once). Citizens may vote from anywhere. A passed change happens at once.
 """
 
 from __future__ import annotations
@@ -21,6 +23,7 @@ VOTING_HOURS = 12
 QUORUM = 3
 WAGE_RANGE = (50, 1500)  # cents per hour a vote may set
 PRICE_RANGE = (10, 10_000)  # cents per item a vote may set
+GRANT_RANGE = (100, 30_000)  # cents a grant from the town fund may pay
 VOTING_PLACES = ("town_hall", "square")
 
 
@@ -57,7 +60,16 @@ def parse_change(settings: Settings, change: Any) -> tuple[str, str | None, int 
         if not PRICE_RANGE[0] <= cents <= PRICE_RANGE[1]:
             return f"A price must be between {PRICE_RANGE[0] / 100:.2f} and {PRICE_RANGE[1] / 100:.2f} asaps."
         return ("price", item, cents)
-    return 'A change is either {"wage": <job>, "to": <asaps>} or {"price": <item>, "to": <asaps>}.'
+    if "grant" in change:
+        try:
+            who = int(change["grant"])
+        except (TypeError, ValueError):
+            return 'A grant names the citizen by ref: {"grant": <ref>, "to": <asaps>}.'
+        if not GRANT_RANGE[0] <= cents <= GRANT_RANGE[1]:
+            return f"A grant must be between {GRANT_RANGE[0] / 100:.2f} and {GRANT_RANGE[1] / 100:.2f} asaps."
+        return ("grant", str(who), cents)
+    return ('A change is {"wage": <job>, "to": <asaps>}, {"price": <item>, "to": <asaps>} or '
+            '{"grant": <citizen ref>, "to": <asaps>}.')
 
 
 def describe(p: Proposal) -> str:
@@ -66,6 +78,8 @@ def describe(p: Proposal) -> str:
         change = f" [sets the {p.target} wage to {p.value_cents / 100:.2f}/h]"
     elif p.kind == "price":
         change = f" [sets the {p.target} price to {p.value_cents / 100:.2f}]"
+    elif p.kind == "grant":
+        change = f" [pays citizen {p.target} {p.value_cents / 100:.2f} from the town fund]"
     return f'#{p.id} "{p.text}"{change}'
 
 
@@ -105,11 +119,31 @@ def cast(session: Session, voter: Agent, p: Proposal, yes: bool, tick: int,
          witness_memory=f"{{actor}} cast a vote on proposal #{p.id}.", importance=3)
 
 
+def _council_votes(session: Session, p: Proposal, tick: int) -> tuple[int, int] | None:
+    from asapville.world.elections import council
+
+    seats = {a.id for a in council(session, tick)}
+    if not seats:
+        return None
+    votes = [v for v in session.scalars(select(Vote).where(Vote.proposal_id == p.id)) if v.agent_id in seats]
+    return sum(1 for v in votes if v.yes), sum(1 for v in votes if not v.yes)
+
+
 def close_due(session: Session, tick: int, settings: Settings | None = None) -> list[Proposal]:
-    """Decide every proposal whose voting time is over; apply the ones that pass."""
+    """Decide every proposal whose voting time is over, or that the council has already decided."""
+    from asapville.world.elections import MAJORITY
+
     done = []
-    for p in session.scalars(select(Proposal).where(Proposal.status == "open", Proposal.closes_tick <= tick)):
-        passed = p.yes > p.no and p.yes + p.no >= QUORUM
+    for p in list(session.scalars(select(Proposal).where(Proposal.status == "open"))):
+        cv = _council_votes(session, p, tick)
+        if cv is not None and (cv[0] >= MAJORITY or cv[1] >= MAJORITY):
+            passed = cv[0] >= MAJORITY
+        elif p.closes_tick > tick:
+            continue
+        elif cv is not None:
+            passed = cv[0] > cv[1]
+        else:
+            passed = p.yes > p.no and p.yes + p.no >= QUORUM
         p.status, p.decided_tick = ("passed" if passed else "failed"), tick
         ws = session.get(WorldState, 1)
         if (passed and p.kind == "wage" and settings is not None
@@ -119,7 +153,16 @@ def close_due(session: Session, tick: int, settings: Settings | None = None) -> 
             ws.wages = {**(ws.wages or {}), p.target: p.value_cents}
         elif passed and ws is not None and p.kind == "price":
             ws.prices = {**(ws.prices or {}), p.target: p.value_cents}
-        verdict = "PASSED" if passed else ("failed" if p.yes + p.no >= QUORUM else "failed: too few votes")
+        elif passed and ws is not None and p.kind == "grant":
+            to = session.get(Agent, int(p.target))
+            paid = min(p.value_cents, ws.treasury_cents) if to is not None and to.alive else 0
+            ws.treasury_cents -= paid
+            if to is not None:
+                to.money_cents += paid
+        verdict = "PASSED" if passed else ("failed" if p.yes + p.no >= QUORUM or cv is not None
+                                           else "failed: too few votes")
+        if cv is not None:
+            verdict += f" (council {cv[0]}-{cv[1]})"
         author = session.get(Agent, p.author_id)
         emit(session, tick=tick, kind="law", visibility="public",
              summary=f"The town voted {p.yes}-{p.no} on {describe(p)}: {verdict}",

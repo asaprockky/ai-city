@@ -115,6 +115,8 @@ class ActionName(StrEnum):
     WITHDRAW = "withdraw"
     REPAY = "repay"
     COOK = "cook"
+    STAND = "stand"
+    ELECT = "elect"
     IDLE = "idle"
 
 
@@ -209,6 +211,8 @@ class Perception(BaseModel):
     bank_offer: str | None = None  # at the bank: what it will do for them
     kitchen: str | None = None  # what they could cook, and where
     routine: str | None = None  # set when their days have been nothing but routine
+    civic: list[str] = Field(default_factory=list)  # the council and any election under way
+    setbacks: list[str] = Field(default_factory=list)  # what went wrong for them lately, and why
     shop: list[ShopItem] = Field(default_factory=list)  # for sale where the agent stands
     jobs_here: list[JobHere] = Field(default_factory=list)
     plan: str | None = None  # the citizen's own plan for today, in their words
