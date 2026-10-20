@@ -228,3 +228,14 @@ async def test_job_holders_who_never_turn_up_are_visible(world, sessions, settin
         _put(ctx, agents[4], "mill")
         text = render_perception(build_perception(ctx, agents[4]))
         assert "miller (3.00/h, 3 on the books, 1 turned up in the last day)" in text
+
+
+async def test_flour_piling_up_raises_the_bakers_wage(world, sessions, settings):
+    with sessions() as s:
+        agents = list(s.scalars(select(Agent).order_by(Agent.id)))
+        for a, role in zip(agents, ["baker", "miller", "farmer", "quarryman", "farmer"], strict=True):
+            a.role = role
+        bakery = s.scalar(select(Location).where(Location.key == "bakery"))
+        economy.stock_add(s, bakery.id, "flour", 40 - economy.stock_qty(s, bakery.id, "flour"))
+        changed = economy.adjust_wages(s, settings, tick=10)
+        assert changed["baker"] == (300, 375)

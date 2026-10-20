@@ -205,6 +205,7 @@ def stall_payload(s: Stall) -> dict[str, Any]:
 # The labour market: each midnight a job nobody holds pays more, a crowded one pays less.
 WAGE_UP, WAGE_DOWN, CROWDED = 1.25, 0.9, 3
 VACANT_UP, IDLE_DOWN = 1.5, 0.8  # nobody holds a needed job / a crowd stood mostly idle
+PILED_HOURS = 8  # a job whose inputs pile up for this many hours of work is short of hands
 SHORT_HOURS = 3  # idle hours downstream, in a day, that count as a shortage of this job's output
 WAGE_MIN, WAGE_MAX = 0.5, 3.0  # bounds, as multiples of the base wage in config
 
@@ -259,12 +260,21 @@ def shortages(session: Session, settings: Settings, since_tick: int) -> dict[str
     return out
 
 
+def _inputs_piled_up(session: Session, settings: Settings, job: JobCfg) -> bool:
+    """Raw material waiting for many hours of this job: the town lacks hands, not goods."""
+    source = session.scalar(select(Location).where(Location.key == (job.source or job.workplace)))
+    if not job.uses or source is None:
+        return False
+    return all(stock_qty(session, source.id, item) >= qty * PILED_HOURS for item, qty in job.uses.items())
+
+
 def adjust_wages(session: Session, settings: Settings, *,
                  tick: int | None = None) -> dict[str, tuple[int, int]]:
     """Move every wage one step toward what the town needs. Returns {job: (old, new)} for changes.
 
-    A job pays more when nobody holds it (a lot more), or when others stood idle waiting for what
-    it makes; it pays less when crowded and not short, faster if that crowd itself stood idle.
+    A job pays more when nobody holds it (a lot more), when others stood idle waiting for what
+    it makes, or when its raw material piles up unworked; it pays less when crowded and not
+    short, faster if that crowd itself stood idle.
     """
     ws = session.get(WorldState, 1)
     assert ws is not None
@@ -279,7 +289,7 @@ def adjust_wages(session: Session, settings: Settings, *,
         idle = sum(blocked_on.get(name, {}).values()) > worked.get(name, 0)
         if n == 0:
             factor = VACANT_UP
-        elif short.get(name, 0) >= SHORT_HOURS:
+        elif short.get(name, 0) >= SHORT_HOURS or _inputs_piled_up(session, settings, job):
             factor = WAGE_UP
         elif n > CROWDED:
             factor = IDLE_DOWN if idle else WAGE_DOWN
