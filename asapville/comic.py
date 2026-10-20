@@ -136,13 +136,20 @@ def portrait(agent: Agent, size: int = 120) -> str:
     """The citizen's drawn portrait if one exists (manga/faces/<id>.jpg), else their ink bust."""
     import base64
 
+    f = face_file(agent)
+    if f is None:
+        return face_svg(agent, size)
+    data = base64.b64encode(f.read_bytes()).decode()
+    return (f'<img class="face" src="data:image/{"jpeg" if f.suffix == ".jpg" else "png"};base64,{data}" '
+            f'width="{size}" height="{size}">')
+
+
+def face_file(agent: Agent) -> Path | None:
     for ext in ("jpg", "png"):
         f = FACES / f"{agent.id}.{ext}"
         if f.exists():
-            data = base64.b64encode(f.read_bytes()).decode()
-            return (f'<img class="face" src="data:image/{"jpeg" if ext == "jpg" else "png"};base64,{data}" '
-                    f'width="{size}" height="{size}">')
-    return face_svg(agent, size)
+            return f
+    return None
 
 
 def face_svg(agent: Agent, size: int = 120) -> str:
@@ -214,7 +221,8 @@ body{background:#fff;width:1080px;font-family:'DejaVu Sans',sans-serif;color:#11
 """
 
 
-SCENE_STYLE = ("Black-and-white Japanese seinen manga panel, clean ink lines, screentone shading, "
+SCENE_STYLE = ("Black-and-white Japanese seinen manga panel, black ink on white paper only, no colour, "
+               "clean confident ink lines, even screentone shading, consistent faces, "
                "dramatic composition, detailed background, small 19th-century-style town, "
                "no text, no speech bubbles, no lettering.")
 
@@ -228,11 +236,28 @@ def looks(agent: Agent) -> str:
             f"{a.clothing}; {a.signature_item}")
 
 
-def panel_prompt(session: Session, panel: Panel) -> str:
+def panel_cast(session: Session, panel: Panel) -> list[Agent]:
     by_first = {a.name.split()[0]: a for a in session.scalars(select(Agent))}
     cast = [by_first[c.split()[0]] for c in panel.characters[:3] if c and c.split()[0] in by_first]
+    return list(dict.fromkeys(cast))
+
+
+def panel_prompt(session: Session, panel: Panel, *, refs: bool = False) -> str:
+    """What the illustrator is asked to draw; with `refs`, the cast's portraits go along as images 0..n."""
+    cast = panel_cast(session, panel)
     people = " Characters: " + " | ".join(looks(a) for a in cast) + "." if cast else ""
-    return f"{SCENE_STYLE} Scene at the {panel.setting or 'town'}: {panel.scene or panel.caption}.{people}"
+    if refs:
+        named = [a.name.split()[0] for a in cast if face_file(a) is not None]
+        if named:
+            people += (" Reference pictures: " + ", ".join(f"image {i} is {n}" for i, n in enumerate(named))
+                       + ". Draw each of them with exactly that face and hairstyle, in this panel's ink "
+                       "style; do not copy the portrait framing.")
+    if panel.scene:  # the scene names the place in English; the setting is the page's Russian label
+        return f"{SCENE_STYLE} Scene: {panel.scene.rstrip('.')}.{people}"
+    return f"{SCENE_STYLE} Scene at the {panel.setting or 'town'}: {panel.caption.rstrip('.')}.{people}"
+
+
+PANEL_SIZE, WIDE_PANEL_SIZE = (1024, 1024), (1536, 640)  # the page's two panel shapes
 
 
 def draw_panels(session: Session, script: Script, folder: Path) -> dict[int, Path]:
@@ -242,12 +267,16 @@ def draw_panels(session: Session, script: Script, folder: Path) -> dict[int, Pat
     if images.available() is None:
         return {}
     folder.mkdir(parents=True, exist_ok=True)
+    refs = images.takes_refs()
+    n = len(script.panels)
     out: dict[int, Path] = {}
     for i, p in enumerate(script.panels):
         f = folder / f"panel-{i + 1}.png"
         if not f.exists():
+            faces = [ff.read_bytes() for ff in map(face_file, panel_cast(session, p)) if ff] if refs else []
+            size = WIDE_PANEL_SIZE if n % 2 == 1 and i == n - 1 else PANEL_SIZE
             try:
-                f.write_bytes(images.draw(panel_prompt(session, p)))
+                f.write_bytes(images.draw(panel_prompt(session, p, refs=refs), size=size, refs=faces))
                 from PIL import Image
 
                 Image.open(f).convert("L").save(f)  # manga is ink on paper, whatever the model drew
@@ -336,7 +365,7 @@ def portrait_prompt(agent: Agent) -> str:
 
 
 def has_portrait(agent: Agent) -> bool:
-    return any((FACES / f"{agent.id}.{ext}").exists() for ext in ("jpg", "png"))
+    return face_file(agent) is not None
 
 
 def draw_portrait(agent: Agent, *, key: str | None = None) -> Path:
@@ -348,7 +377,7 @@ def draw_portrait(agent: Agent, *, key: str | None = None) -> Path:
 
         FACES.mkdir(parents=True, exist_ok=True)
         out = FACES / f"{agent.id}.png"
-        out.write_bytes(images.draw(portrait_prompt(agent), square=True))
+        out.write_bytes(images.draw(portrait_prompt(agent), size=(1024, 1024)))
         return out
 
     body = json.dumps({"contents": [{"parts": [{"text": portrait_prompt(agent)}]}],

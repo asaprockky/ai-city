@@ -14,7 +14,8 @@
      "text": "Маддокс, пустая лавка у колодца. Месяц на пробу, два подписанных экземпляра. Да или нет?"
     }
    ],
-   "sfx": "Тик-так"
+   "sfx": "Тик-так",
+   "scene": "Dawn over the empty market square by the old stone well. Tobias, arms crossed, faces Corwin, who checks his gold pocket watch beside an empty wooden stall. Medium two-shot, long morning shadows, tense."
   },
   {
    "caption": "Желающих на лавку уже трое.",
@@ -33,7 +34,8 @@
      "text": "Не стану скрывать, Хестер. Метит. Скажи, что потянешь, и поговорим."
     }
    ],
-   "sfx": ""
+   "sfx": "",
+   "scene": "The market square by the well. Hester leans toward Corwin with a sly smile, barrels stacked behind her; Corwin stands stiff and polite. Over-the-shoulder shot, guarded mood."
   },
   {
    "caption": "Дэлл Хруска предлагает помощь. Улыбка у него слишком быстрая.",
@@ -48,7 +50,8 @@
      "text": "Гидеон, да или нет? Берёшь долю за бумаги на лавку? Ответ мне нужен сегодня."
     }
    ],
-   "sfx": ""
+   "sfx": "",
+   "scene": "Inside the bakery, between shelves full of bread loaves. Dell leans close to Gideon with a too-quick smile, holding out a folded paper; Gideon hesitates. Close two-shot, uneasy mood."
   },
   {
    "caption": "А Маддокс тем временем сбивает цену на хлеб.",
@@ -63,7 +66,8 @@
      "text": "Два двадцать пять, Лорна. Самый честный хлеб в Асапвилле. Купи и попробуй."
     }
    ],
-   "sfx": "Звяк!"
+   "sfx": "Звяк!",
+   "scene": "The bakery counter piled high with unsold loaves. Corwin slides a loaf toward Lorna and drops coins into a tin; Lorna eyes the bread with doubt. Medium shot, coins glinting."
   },
   {
    "caption": "Старый фермер Абнер Тиг падает без сил. Город этого почти не замечает.",
@@ -72,7 +76,8 @@
     "Abner Teague"
    ],
    "bubbles": [],
-   "sfx": "БАХ!"
+   "sfx": "БАХ!",
+   "scene": "A farm field at dusk. Old farmer Abner collapses beside his hoe and a spilled bucket, the little town small and far away on the horizon. Wide high-angle shot, lonely and quiet."
   },
   {
    "caption": "Утром объявляют выборы. Лайл Беннинг идёт на площадь, а Маддокс уже проголосовал за себя.",
@@ -92,7 +97,8 @@
      "text": "Хлеб гниёт, а город спорит о часах. Я наведу порядок."
     }
    ],
-   "sfx": "Шорох бюллетеней"
+   "sfx": "Шорох бюллетеней",
+   "scene": "The town square in the morning, a crowd gathering around a ballot box on a table. Lyle strides in, determined; Dell watches him; Corwin stands by the ballot box, smug, having just voted. Wide shot, election tension."
   }
  ]
 }

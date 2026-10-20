@@ -257,3 +257,10 @@ Each of these came from watching the real town:
   `FAL_KEY` or `OPENAI_API_KEY`) each panel is drawn from the scene plus every character's fixed
   look (from their card), turned to greyscale, and used as the panel's background under the
   code-set captions and bubbles. Without a key, panels show the portraits.
+  Cloudflare model: `ASAPVILLE_CF_IMAGE_MODEL`, default `@cf/black-forest-labs/flux-2-dev`, the
+  catalogue's text-to-image model that takes reference pictures (FLUX.2: up to four
+  `input_image_N`, multipart form, under 512x512). Each panel sends its cast's portraits from
+  `manga/faces` as references, named in the prompt (image 0 is ...), so faces hold from panel to
+  panel; FLUX.1 schnell kept no faces. Other models (FLUX.2 klein, Leonardo Lucid Origin and
+  Phoenix, SDXL) work by name, each with its own request shape, and go without references.
+  Panels are drawn in the page's shapes (square, or wide for an odd last panel).
