@@ -134,3 +134,15 @@ async def test_init_world_without_key_touches_no_database(settings, tmp_path, mo
     with pytest.raises(RuntimeError, match="ASAPVILLE_ANTHROPIC_KEY"):
         await init_world(settings)
     assert not db.exists() or db.stat().st_size == 0
+
+
+async def test_a_capped_citizen_still_eats_what_they_carry(world, sessions, gateway):
+    with sessions() as s:
+        a = s.get(Agent, 1)
+        a.hunger, a.inventory, a.bedtime_hour, a.energy = 95, {"bread": 2}, 22, 80
+        s.commit()
+    gateway.guard.spent_by_agent[1] = 999.0  # over their daily cap: no LLM turn
+    await world.step()
+    with sessions() as s:
+        a = s.get(Agent, 1)
+        assert a.inventory == {"bread": 1} and a.hunger < 95

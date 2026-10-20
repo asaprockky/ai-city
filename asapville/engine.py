@@ -40,6 +40,8 @@ from asapville.world.timeline import record_tick, tick_payload
 log = logging.getLogger("asapville.engine")
 
 WAKE_ENERGY = 70.0
+REFLEX_HUNGER = 60.0  # without an LLM turn, a body this hungry eats what it carries
+REFLEX_ENERGY = 15.0
 # Actions an agent keeps doing on its own when it doesn't get an LLM turn (slow mode / capped).
 CONTINUABLE = {ActionName.REST, ActionName.FORAGE, ActionName.WORK, ActionName.IDLE}
 
@@ -103,9 +105,18 @@ class World:
             return (tick + agent.id) % n == 0
         return True
 
-    @staticmethod
-    def _continue(agent: Agent) -> Decision:
-        """Habit: keep doing a continuable action, otherwise idle. No LLM call."""
+    def _continue(self, agent: Agent) -> Decision:
+        """Reflex, then habit, when there is no LLM turn: a hungry body eats what it carries, an
+        exhausted one rests; otherwise keep doing a continuable action, or idle. No LLM call."""
+        food = self.settings.food
+        carried = [(food[k].nutrition, k) for k, v in (agent.inventory or {}).items()
+                   if v > 0 and k in food and food[k].nutrition > 0]
+        if agent.hunger >= REFLEX_HUNGER and carried:
+            item = max(carried)[1]
+            return Decision(thought="(hunger takes over)", action=ActionName.EAT,
+                            action_args={"item": item}, mood=agent.mood_label)
+        if agent.energy <= REFLEX_ENERGY:
+            return Decision(thought="(too tired to think)", action=ActionName.REST, mood=agent.mood_label)
         try:
             last = ActionName(agent.last_action) if agent.last_action else ActionName.IDLE
         except ValueError:
