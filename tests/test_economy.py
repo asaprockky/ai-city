@@ -181,3 +181,20 @@ async def test_a_shortage_is_blamed_on_the_first_idle_link_of_the_chain(world, s
         changed = economy.adjust_wages(s, settings, tick=10)
         assert changed["farmer"][1] > changed["farmer"][0]
         assert changed["miller"][1] < changed["miller"][0]  # four millers, none of them short
+
+
+async def test_a_crowded_job_passes_a_shortage_up_even_if_it_sometimes_worked(world, sessions, settings):
+    from asapville.world.events import emit
+
+    with sessions() as s:
+        agents = list(s.scalars(select(Agent).order_by(Agent.id)))
+        for a in agents[:4]:
+            a.role = "miller"
+        emit(s, tick=1, kind="work", actor=agents[0], visibility="local", summary="milled",
+             data={"job": "miller", "success": True})
+        emit(s, tick=2, kind="work", actor=agents[1], visibility="local", summary="no grain",
+             data={"job": "miller", "success": False, "missing": "grain"})
+        for t in range(4):
+            emit(s, tick=t, kind="work", actor=agents[4], visibility="local", summary="no flour",
+                 data={"job": "baker", "success": False, "missing": "flour"})
+        assert economy.shortages(s, settings, 0) == {"farmer": 5}

@@ -230,7 +230,8 @@ def shortages(session: Session, settings: Settings, since_tick: int) -> dict[str
 
     The blame walks up the chain: bakers idle for flour count against the miller only if the
     millers themselves were working; if the millers stood idle for grain, it is the farmer's
-    shortage (more millers would not bake a single loaf).
+    shortage (more millers would not bake a single loaf). A crowded job that was blocked at all
+    passes the blame up too: it has hands enough, it lacks input.
     """
     makers = {item: name for name, job in settings.economy.jobs.items() for item in job.makes}
     worked, blocked_on = _work_log(session, settings, since_tick)
@@ -241,7 +242,8 @@ def shortages(session: Session, settings: Settings, since_tick: int) -> dict[str
             while maker not in seen:  # pass the blame up while the maker was mostly idle too
                 seen.add(maker)
                 up = blocked_on.get(maker, {})
-                if not up or sum(up.values()) <= worked.get(maker, 0):
+                crowded = len(workers_in(session, maker)) > CROWDED
+                if not up or (sum(up.values()) <= worked.get(maker, 0) and not crowded):
                     break
                 maker = makers[max(up, key=lambda k: up[k])]
             out[maker] = out.get(maker, 0) + hours
