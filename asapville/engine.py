@@ -42,6 +42,7 @@ log = logging.getLogger("asapville.engine")
 WAKE_ENERGY = 70.0
 LASTING_IMPORTANCE = 7  # memories this important stay with a citizen beyond the last few hours
 LASTING_MEMORIES = 5
+STARVING_AWAKE = 90.0  # nobody sleeps through this much hunger
 REFLEX_HUNGER = 60.0  # without an LLM turn, a body this hungry eats what it carries
 REFLEX_ENERGY = 15.0
 # Actions an agent keeps doing on its own when it doesn't get an LLM turn (slow mode / capped).
@@ -164,6 +165,13 @@ class World:
                 arrive(ctx, a)  # arrived: may now fall asleep below
             in_window = in_sleep_window(ctx.time.hour, a.bedtime_hour, cfg.sleep.hours,
                                         cfg.clock.ticks_per_day)
+            if a.hunger >= STARVING_AWAKE and a.location_id is not None:
+                if a.asleep:  # hunger wakes a sleeper before it kills them
+                    a.asleep = False
+                    emit(ctx.session, tick=ctx.tick, kind="wake", actor=a, location_id=a.location_id,
+                         summary=f"{a.name} woke up, too hungry to sleep",
+                         actor_memory="Hunger woke me in the night; I have to eat.", importance=4)
+                continue
             if in_window and not a.asleep and a.location_id is not None:
                 a.asleep = True
                 where = "in my own bed" if a.location_id == a.home_id else "wherever I could, without a bed"
@@ -387,7 +395,8 @@ class World:
                 pending = watcher.open_anomalies(s)
                 everyone_asleep = all(a.asleep or not a.alive for a in agents)
                 due = ws.tick % max(1, self.settings.angels.fixer_every) == 0
-                if pending and due and not everyone_asleep:
+                urgent = any(x.severity >= 3 for x in pending)  # a life at stake doesn't wait for dawn
+                if pending and (urgent or (due and not everyone_asleep)):
                     fix = await fixer.run(ctx, self.gateway, pending, agents)
                     report.interventions = sum(1 for r in fix.applied if r.applied)
                     if fix.note:

@@ -98,7 +98,7 @@ async def test_fixer_unreadable_reply_keeps_anomalies_open(world, sessions, sett
     fake.script("fixer", "I refuse to answer in JSON")
     with sessions() as s:
         a = s.get(Agent, 1)
-        a.hunger, a.health = 95, 15
+        a.hunger, a.health, a.inventory, a.money_cents = 95, 15, {}, 0
         s.commit()
     await world.step()
     with sessions() as s:
@@ -156,7 +156,7 @@ async def test_watcher_cools_down_and_fixer_rests_while_all_sleep(world, session
         s.flush()
         assert watcher.scan(ctx, agents) == []  # handled within the cooldown: not filed again
         for a in agents:
-            a.asleep, a.hunger, a.health, a.energy = True, 95, 15, 10  # too tired to wake
+            a.asleep, a.hunger, a.health, a.energy = True, 70, 45, 10  # tired and peckish, not dying
         s.commit()
     before = sum(1 for r in fake.requests if r.purpose == "fixer")
     await world.step()

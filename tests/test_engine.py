@@ -162,3 +162,14 @@ async def test_a_capped_citizen_with_money_buys_a_meal_where_they_stand(world, s
     with sessions() as s:
         a = s.get(Agent, 1)
         assert a.money_cents == 1500 and a.hunger < 100
+
+
+async def test_a_starving_citizen_does_not_sleep_through_it(world, sessions, gateway):
+    with sessions() as s:
+        a = s.get(Agent, 1)
+        a.hunger, a.asleep, a.inventory, a.money_cents = 95, True, {}, 0
+        a.bedtime_hour = (world.clock.at(s.get(WorldState, 1).tick).hour) % 24  # deep in their night
+        s.commit()
+    await world.step()
+    with sessions() as s:
+        assert s.scalar(select(Event).where(Event.kind == "wake", Event.agent_id == 1)) is not None
