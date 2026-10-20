@@ -7,7 +7,7 @@ from sqlalchemy import select
 
 from asapville.agents.schemas import Destination, JobHere, Notice, Perception, SeenAgent, ShopItem
 from asapville.db.models import Agent, Event, Memory, Stall
-from asapville.world import bank, economy, elections
+from asapville.world import bank, economy, elections, feelings
 from asapville.world.actions import TickContext, available_usages
 from asapville.world.map import travel_ticks
 from asapville.world.needs import describe_needs, sick_of
@@ -313,6 +313,7 @@ def build_perception(ctx: TickContext, agent: Agent) -> Perception:
         civic=elections.describe(s, agent, ctx.tick),
         setbacks=setbacks(ctx, agent),
         given=money_given(ctx, agent),
+        feelings=feelings.describe(s, agent),
         bank_offer=(f"AsapBank: deposit savings (they earn {cfg.bank.deposit_rate:.1%} a day), withdraw, "
                     f"borrow up to {bank.can_borrow(s, cfg, agent, ctx.tick) / 100:.2f} asaps more "
                     f"({cfg.bank.loan_rate:.0%} a day, due in {cfg.bank.loan_days} days), or repay"
@@ -359,6 +360,9 @@ def render_perception(p: Perception) -> str:
         lines.append(p.routine)
     for line in p.civic:
         lines.append(line)
+    if p.feelings:
+        lines.append("How you feel right now: " + "; ".join(p.feelings)
+                     + ". Let it colour what you do and say, as a real person's feelings would.")
     if p.given:
         lines.append(f"Money you have already handed over in the last {GIVEN_HOURS} hours: "
                      + "; ".join(p.given) + ". A debt you paid is settled: don't pay it again.")

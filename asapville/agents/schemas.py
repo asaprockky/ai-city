@@ -120,6 +120,33 @@ class ActionName(StrEnum):
     IDLE = "idle"
 
 
+class FeelingReport(BaseModel):
+    """One feeling a citizen names in their decision."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    emotion: str = Field(max_length=32)
+    toward: int | None = None  # ref of the person it is about, if any
+    why: str = Field(default="", max_length=200)
+    strength: float = Field(default=40, ge=0, le=100)
+
+    @field_validator("toward", mode="before")
+    @classmethod
+    def _ref_or_none(cls, v: Any) -> Any:
+        try:
+            return int(v) if v is not None and str(v).strip() not in ("", "null") else None
+        except (TypeError, ValueError):
+            return None
+
+    @field_validator("strength", mode="before")
+    @classmethod
+    def _clamp(cls, v: Any) -> Any:
+        try:
+            return max(0.0, min(100.0, float(v)))
+        except (TypeError, ValueError):
+            return 40
+
+
 class Decision(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
@@ -128,6 +155,14 @@ class Decision(BaseModel):
     action_args: dict[str, Any] = Field(default_factory=dict)
     dialogue: str | None = Field(default=None, max_length=1000)
     mood: str = Field(default="calm", max_length=64)
+    feelings: list[FeelingReport] = Field(default_factory=list)
+
+    @field_validator("feelings", mode="before")
+    @classmethod
+    def _keep_readable_feelings(cls, v: Any) -> Any:
+        if not isinstance(v, list):
+            return []
+        return [f for f in v if isinstance(f, dict) and f.get("emotion")][:3]
 
     @field_validator("action", mode="before")
     @classmethod
@@ -214,6 +249,7 @@ class Perception(BaseModel):
     civic: list[str] = Field(default_factory=list)  # the council and any election under way
     setbacks: list[str] = Field(default_factory=list)  # what went wrong for them lately, and why
     given: list[str] = Field(default_factory=list)  # money they handed to each person lately
+    feelings: list[str] = Field(default_factory=list)  # what they feel, toward whom, and why
     shop: list[ShopItem] = Field(default_factory=list)  # for sale where the agent stands
     jobs_here: list[JobHere] = Field(default_factory=list)
     plan: str | None = None  # the citizen's own plan for today, in their words

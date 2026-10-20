@@ -94,6 +94,9 @@ def emit(
                location_id=location_id, visibility=visibility, data=data or {})
     session.add(ev)
     session.flush()
+    from asapville.world import feelings
+
+    feelings.appraise(session, ev)
     if visibility not in PERCEIVABLE:
         return ev
 

@@ -24,7 +24,7 @@ from asapville.digest import PAGE_STYLE, _face, _when
 from asapville.llm.client import LLMGateway
 from asapville.llm.routing import ANGEL
 from asapville.llm.types import ChatMessage, LLMRequest
-from asapville.world import economy, elections
+from asapville.world import economy, elections, feelings
 
 PROFILES = Path(__file__).resolve().parent.parent / "saves" / "cast.json"
 ROLES_RU = {"baker": "пекарь", "farmer": "фермер", "miller": "мельник", "herder": "пастух",
@@ -169,6 +169,7 @@ def render_html(session: Session, settings: Settings, profiles: dict[str, Profil
             f"<tr><td>Тайна</td><td>{esc(p.secret)}</td></tr>"
             f"<tr><td>Как говорит</td><td>{esc(p.voice)}</td></tr>"
             f"<tr><td>Узнать по</td><td>{esc(p.remember_by)}</td></tr>"
+            f"<tr><td>Сейчас чувствует</td><td>{esc(feelings.summary_ru(session, a, 4)) or '—'}</td></tr>"
             f"<tr><td>Симпатии</td><td>{who_list(likes)}</td></tr>"
             f"<tr><td>Не любит</td><td>{who_list(dislikes)}</td></tr>"
             f"<tr><td>Долги</td><td>{debts}</td></tr></table></div></div>")

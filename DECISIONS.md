@@ -297,3 +297,19 @@ Even with that, Abner paid Ruth the same 3.50 four times (hours 994, 1017, 1022,
 left only a small memory, and his morning plan kept saying "pay Ruth". Now every citizen sees the
 money they handed to each person in the last 72 hours ("Ruth Caddick 14.00 asaps, 4 times, last 2
 hours ago") with a reminder that a debt paid is settled.
+
+## Feelings
+The owner asked for feelings like people have. Each citizen now carries up to eight feelings
+(`Agent.feelings`, migration 0011): an emotion from a fixed list of 25 (joy, gratitude, love, pride,
+hope, anger, resentment, fear, grief, shame, guilt, jealousy, envy, loneliness...), a strength 0-100,
+often the person it is about, and why. They come from two places. Events (`feelings.appraise`, run
+for every emitted event): a gift brings gratitude toward the giver, a caught theft anger and fear, a
+blow anger and fear, a death grief to everyone who cared and a little fear to all, being fired anger
+and shame, an election pride or disappointment, a default shame; and the body each hour: starving
+brings fear, long solitude loneliness. And the citizen themselves: each decision may name up to
+three feelings in character, which is where envy, love, guilt and hope mostly come from (capped at
+90 so one hour never starts at full strength). Each emotion fades at its own pace (irritation in
+hours, grief and love over weeks) and while it lasts pulls the mood up or down. Citizens see their
+feelings ("envy toward Corwin (strong): he owns the bakery") with the reminder that real feelings
+colour what one says and does; they may act on them, hide them or fight them. The reports and the
+who-is-who page show them too.

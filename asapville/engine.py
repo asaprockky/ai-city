@@ -29,7 +29,7 @@ from asapville.db.models import Agent, Anomaly, Event, Location, WorldState
 from asapville.llm.budget import NORMAL, PAUSED, SLOW
 from asapville.llm.client import LLMGateway
 from asapville.llm.routing import WORKER, effort_for, model_for, tier_for
-from asapville.world import actions, democracy, economy, elections
+from asapville.world import actions, democracy, economy, elections, feelings
 from asapville.world.actions import ActionResult, TickContext, arrive
 from asapville.world.clock import Clock, in_sleep_window
 from asapville.world.events import EventBus, emit, event_payload, remember
@@ -290,6 +290,7 @@ class World:
             error = actions.validate(ctx, a, d, perceived) if a.location_id else "You are on the road."
             a.last_thought = d.thought
             a.mood_label = d.mood[:64]
+            feelings.from_decision(a, d.feelings, ctx.tick, perceived)
             if error:
                 report.invalid_actions += 1
                 emit(ctx.session, tick=ctx.tick, kind="invalid_action", actor=a,
@@ -325,6 +326,7 @@ class World:
             st = outcome.state
             a.hunger, a.energy, a.social, a.health, a.mood = (
                 st.hunger, st.energy, st.social, st.health, st.mood)
+            feelings.hourly(a, ctx.tick)
             if outcome.collapsed and a.travel_ticks_left == 0:
                 a.asleep = True
                 emit(ctx.session, tick=ctx.tick, kind="collapse", actor=a, location_id=a.location_id,

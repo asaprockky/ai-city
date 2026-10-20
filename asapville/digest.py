@@ -53,7 +53,8 @@ You get the state of the town and the real events of the last hours, with the ci
 
 Write in Russian, vividly and in detail, like a good small-town newspaper with a sense of humour: \
 concrete names, numbers, places, and short quotes taken from what citizens really said (translate \
-them into natural Russian). Explain why things matter: motives, rivalries, debts, deals, hunger. \
+them into natural Russian). Explain why things matter: motives, feelings, rivalries, debts, deals, \
+hunger. \
 Never invent an event, a deal, a death or a quote that is not in the material; if the hours were \
 quiet, say so and write about plans and tensions instead.
 
@@ -97,7 +98,8 @@ Write in Russian, in plain text (no markdown, no asterisks), exactly in this sha
 <One closing line on food, money or what to watch next.>
 
 Write 6 to 9 bullets, the most dramatic first: deals and price wars, schemes, quarrels, kindness, \
-new businesses and dishes, the council and elections, hunger and illness. Name people by their \
+new businesses and dishes, the council and elections, hunger and illness, and what people feel \
+(grief, anger, love, envy, gratitude) and how it drives them. Name people by their \
 first names in Russian and keep numbers exact. Quote citizens' real words (translated into natural \
 Russian) in «»; no English may remain in the text, and spell each name the same way every time. \
 Never invent anything that is not in the material; if the hours were mostly night, \
@@ -149,6 +151,17 @@ def _shelf(session: Session, settings: Settings, loc: Location) -> list[tuple[st
             for i in economy.shop_items(settings, loc.key)]
 
 
+def _feels(session: Session, agent: Agent) -> str:
+    from asapville.world.feelings import strength_word
+
+    out = []
+    for f in (agent.feelings or [])[:4]:
+        other = session.get(Agent, int(f["to"])) if f.get("to") is not None else None
+        out.append(f"{f['e']}{' toward ' + other.name if other else ''} ({strength_word(float(f['s']))}, "
+                   f"{f.get('why', '')})")
+    return "; ".join(out)
+
+
 def facts(session: Session, settings: Settings) -> str:
     ws = session.get(WorldState, 1)
     assert ws is not None
@@ -188,7 +201,8 @@ def facts(session: Session, settings: Settings) -> str:
         where = locs[a.location_id].name if a.location_id in locs else "on the road"
         out.append(f"- {a.name}, {a.role}, at {where}{' (asleep)' if a.asleep else ''}; "
                    f"{a.money_cents / 100:.2f} asaps; fed {100 - a.hunger:.0f}, health {a.health:.0f}, "
-                   f"mood {a.mood_label}. Thinking: {(a.last_thought or '')[:400]} "
+                   f"mood {a.mood_label}; feels {_feels(session, a) or 'nothing much'}. "
+                   f"Thinking: {(a.last_thought or '')[:400]} "
                    f"Plan today: {(_plan(session, a) or '-')[:400]}")
     dead = list(session.scalars(select(Agent).where(Agent.alive.is_(False))))
     if dead:
