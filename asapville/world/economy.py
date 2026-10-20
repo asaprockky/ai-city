@@ -71,6 +71,15 @@ def workers_in(session: Session, job: str) -> list[Agent]:
                                 .order_by(Agent.id)))
 
 
+def active_workers(session: Session, job: str, since_tick: int) -> int:
+    """How many of a job's holders actually turned up to work (or tried to) since `since_tick`."""
+    from asapville.db.models import Event
+
+    ids = {e.agent_id for e in session.scalars(select(Event).where(
+        Event.kind == "work", Event.tick >= since_tick)) if (e.data or {}).get("job") == job}
+    return sum(1 for a in workers_in(session, job) if a.id in ids)
+
+
 def shelf_food(session: Session, settings: Settings, by_key: dict[str, Location]) -> int:
     """Units of food on shop shelves that can run out (the tavern kitchen doesn't count)."""
     total = 0

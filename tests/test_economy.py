@@ -117,7 +117,7 @@ async def test_sell_and_notice(world, sessions, settings):
         assert any(n.text == "Berries for sale" for n in p.notices)
         text = render_perception(p)
         assert "For sale here: bread 3.00 asaps (24 left)" in text
-        assert "Jobs here: baker (3.00/h, 0 working)" in text
+        assert "Jobs here: baker (3.00/h, 0 on the books)" in text
         assert "market: Market" in text and "sells vegetables, berries, fish" in text
         assert "On the town board:" in text
 
@@ -145,7 +145,7 @@ async def test_wages_follow_the_labour_market(world, sessions, settings):
         ctx = _ctx(world, s)
         _put(ctx, agents[4], "farm")
         text = render_perception(build_perception(ctx, agents[4]))
-        assert "farmer (7.50/h, 0 working)" in text
+        assert "farmer (7.50/h, 0 on the books)" in text
 
 
 async def test_a_bottleneck_raises_its_own_wage(world, sessions, settings):
@@ -213,3 +213,18 @@ async def test_a_farmer_leaves_a_share_at_the_farm_gate(world, sessions, setting
         assert economy.stock_qty(s, market.id, "vegetables") == before + 2
         text = render_perception(build_perception(ctx, a))
         assert "For sale here: vegetables" in text
+
+
+async def test_job_holders_who_never_turn_up_are_visible(world, sessions, settings):
+    with sessions() as s:
+        ctx = _ctx(world, s, tick=30)
+        agents = list(s.scalars(select(Agent).order_by(Agent.id)))
+        for a in agents[:3]:
+            a.role = "miller"
+        from asapville.world.events import emit
+
+        emit(s, tick=20, kind="work", actor=agents[0], visibility="local", summary="milled",
+             data={"job": "miller", "success": True})
+        _put(ctx, agents[4], "mill")
+        text = render_perception(build_perception(ctx, agents[4]))
+        assert "miller (3.00/h, 3 on the books, 1 turned up in the last day)" in text

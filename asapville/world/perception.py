@@ -91,7 +91,8 @@ def build_perception(ctx: TickContext, agent: Agent) -> Perception:
         mine.append(f'"{st.name}" at {place}: {st.item} at {st.price_cents / 100:.2f} asaps, '
                     f'{st.qty} on the stall, {st.sold} sold so far')
     jobs_here = [JobHere(job=name, wage_cents=economy.wage_of(s, cfg, name),
-                         workers=len(economy.workers_in(s, name)))
+                         workers=len(economy.workers_in(s, name)),
+                         active=economy.active_workers(s, name, ctx.tick - 24))
                  for name, job in economy.jobs_at(cfg, here.key).items()]
     my_job = cfg.economy.jobs.get(agent.role)
     notices = []
@@ -211,7 +212,9 @@ def render_perception(p: Perception) -> str:
     if p.jobs_here:
         others = [j for j in p.jobs_here if j.job != p.job]
         lines.append("Jobs here: " + "; ".join(
-            f"{j.job} ({j.wage_cents / 100:.2f}/h, {j.workers} working"
+            f"{j.job} ({j.wage_cents / 100:.2f}/h, {j.workers} on the books"
+            + (f", {j.active} turned up in the last day"
+               if j.active is not None and j.active < j.workers else "")
             + (", this is YOUR job: choose 'work' to do a shift)" if j.job == p.job else ")")
             for j in p.jobs_here) + (". Use 'apply' to take another." if others else "."))
     lines.append("Places you can walk to (key: name, hours on foot):")

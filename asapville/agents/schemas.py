@@ -162,6 +162,7 @@ class JobHere(BaseModel):
     job: str
     wage_cents: int
     workers: int
+    active: int | None = None  # of those, how many turned up in the last day
 
 
 class Notice(BaseModel):
