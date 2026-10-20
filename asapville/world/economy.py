@@ -323,13 +323,27 @@ def shortages(session: Session, settings: Settings, since_tick: int) -> dict[str
             maker, seen = makers[item], {job}
             while maker not in seen:  # pass the blame up while the maker was mostly idle too
                 seen.add(maker)
-                up = blocked_on.get(maker, {})
+                up = dict(blocked_on.get(maker, {}))
+                for need in _missing_inputs(session, settings, maker):
+                    up[need] = up.get(need, 0) + 1  # its own input is out of stock right now
                 crowded = len(workers_in(session, maker)) > CROWDED
-                if not up or (sum(up.values()) <= worked.get(maker, 0) and not crowded):
+                if not up or (sum(up.values()) <= worked.get(maker, 0) and not crowded
+                              and not _missing_inputs(session, settings, maker)):
                     break
                 maker = makers[max(up, key=lambda k: up[k])]
             out[maker] = out.get(maker, 0) + hours
     return out
+
+
+def _missing_inputs(session: Session, settings: Settings, job_name: str) -> list[str]:
+    """The inputs a job needs that its source shelf doesn't have enough of right now."""
+    job = settings.economy.jobs.get(job_name)
+    if job is None or not job.uses:
+        return []
+    source = session.scalar(select(Location).where(Location.key == (job.source or job.workplace)))
+    if source is None:
+        return list(job.uses)
+    return [i for i, q in job.uses.items() if stock_qty(session, source.id, i) < q]
 
 
 def _inputs_piled_up(session: Session, settings: Settings, job: JobCfg) -> bool:

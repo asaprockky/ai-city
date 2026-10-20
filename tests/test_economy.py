@@ -239,3 +239,17 @@ async def test_flour_piling_up_raises_the_bakers_wage(world, sessions, settings)
         economy.stock_add(s, bakery.id, "flour", 40 - economy.stock_qty(s, bakery.id, "flour"))
         changed = economy.adjust_wages(s, settings, tick=10)
         assert changed["baker"] == (300, 375)
+
+
+async def test_an_empty_input_shelf_passes_the_blame_up_even_if_nobody_tried(world, sessions, settings):
+    from asapville.world.events import emit
+
+    with sessions() as s:
+        agents = list(s.scalars(select(Agent).order_by(Agent.id)))
+        agents[0].role, agents[1].role = "miller", "farmer"
+        farm = s.scalar(select(Location).where(Location.key == "farm"))
+        economy.stock_add(s, farm.id, "grain", -economy.stock_qty(s, farm.id, "grain"))
+        for t in range(4):  # bakers want flour; the miller never even went to the mill
+            emit(s, tick=t, kind="work", actor=agents[2], visibility="local", summary="no flour",
+                 data={"job": "baker", "success": False, "missing": "flour"})
+        assert economy.shortages(s, settings, 0) == {"farmer": 4}
