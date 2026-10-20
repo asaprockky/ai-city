@@ -17,7 +17,7 @@ from asapville.dashboard.app import INDEX
 DATA_TAG = '<script id="asapville-data" type="application/json"></script>'
 # Lines a hosting page supplies itself (document skeleton, charset, viewport).
 SKELETON_LINES = {
-    "<!doctype html>", '<html lang="en">', "<head>", '<meta charset="utf-8">',
+    "<!doctype html>", '<html lang="en">', '<html lang="ru">', "<head>", '<meta charset="utf-8">',
     '<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">',
     "</head>", "<body>", "</body>", "</html>",
 }
