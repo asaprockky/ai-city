@@ -13,7 +13,8 @@ async def test_a_manga_page_from_the_towns_events(world, sessions, fake):
         assert "] " in comic.digest(s, 0, 3) or comic.digest(s, 0, 3) == ""
         script = await comic.write_script(s, world.gateway, "m", 0, 3)
         page = comic.render_html(s, script, chapter="· ДЕНЬ 1")
-    assert "Глава 1" in page and "Привет!" in page and page.count("<svg") == 2
+    assert "Глава 1" in page and "Привет!" in page
+    assert page.count("<svg") + page.count('class="face"') == 2  # a portrait or an ink bust each
     assert comic.face_svg.__doc__  # the same face every time
     with sessions() as s:
         a = s.scalar(comic.select(comic.Agent))
