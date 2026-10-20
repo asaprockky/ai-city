@@ -286,3 +286,10 @@ how they talk, how to recognise them, whom they like and dislike, debts. The las
 once from each personality card and kept in `saves/cast.json`; the rest is read fresh. The page is
 pinned in the channel; a refresh pins the new one and unpins the old (`saves/cast-pin.txt`).
 Plain bank deposits and withdrawals no longer count as breaking news.
+
+## Improvising never pays anyone
+Abner "left 3.50 under a cup" for Ruth: the Judge narrated it, his memory said "paid in full", but
+improvising moves nothing, so the coins stayed in his purse and Ruth found only a wet ring. He then
+paid her twice with `give`. Now the Judge is told that coins left, slipped or "paid" by improvising
+stay with the citizen, and in code any improvised attempt that mentions money adds to the memory
+that the money never left the purse and must be given in person.

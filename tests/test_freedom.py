@@ -120,6 +120,25 @@ async def test_watcher_sees_failing_health_poverty_and_a_stalled_economy(world, 
         assert ("production_stalled", None) in kinds
 
 
+async def test_paying_by_improvising_moves_no_money_and_the_payer_knows_it(world, sessions, fake):
+    from asapville.db.models import Memory
+
+    fake.script("judge", json.dumps({"results": [{
+        "agent_id": 1, "success": True, "outcome": "{actor} leaves coins under a cup for Ruth.",
+        "memory": "I paid Ruth her 3.50 in full."}]}))
+    with sessions() as s:
+        ctx = _ctx(world, s)
+        a = s.get(Agent, 1)
+        a.location_id, a.destination_id, a.travel_ticks_left = ctx.by_key["square"].id, None, 0
+        a.money_cents = 900
+        d = Decision(thought="", action=ActionName.IMPROVISE,
+                     action_args={"what": "leave 3.50 asaps under the cup to pay Ruth", "uses": {}})
+        actions.execute(ctx, a, d)
+        await judge.run(ctx, world.gateway, ctx.improvised)
+        mem = s.scalar(select(Memory.content).where(Memory.agent_id == 1).order_by(Memory.id.desc()))
+    assert a.money_cents == 900 and "never left my purse" in mem
+
+
 async def test_fake_town_improvises_gives_and_writes_live_bundles(world, sessions, settings, tmp_path):
     from asapville.cli import _live_writer
 

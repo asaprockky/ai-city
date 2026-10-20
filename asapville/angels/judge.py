@@ -30,6 +30,9 @@ WILD_KINDS = {"forest", "river", "farm", "quarry"}  # places that give raw mater
 WILD_NOURISHMENT = 15.0  # what the land itself can add to a meal made there
 _ITEM = re.compile(r"[^a-z' -]+")
 _FENCE = re.compile(r"^```(?:json)?\s*|\s*```$", re.MULTILINE)
+_MONEY = re.compile(r"\b(asaps?|coins?|money|pay|paid|pays|owed|debt|loan)\b", re.IGNORECASE)
+STILL_YOURS = (" (The money never left my purse: improvising moves nothing. To pay someone I must "
+               "give it to them myself.)")
 
 JUDGE_RULES = """You are the Judge, a guardian angel of Asapville: a simulated small town whose \
 citizens are LLM-driven people with real needs, money and permanent death. You belong to the \
@@ -43,6 +46,9 @@ hour (say how far they got). Impossible or absurd things fail, gently.
 - Nothing comes from nothing. Goods come from the materials the citizen listed in "uses", or \
 from the land where they stand (forest: wood, herbs, berries; river: fish, reeds, clay; farm: \
 straw, eggs; quarry: stone). Money is never created. Other people's belongings never change.
+- An attempt never moves money or goods to anyone else: coins "left under a cup", "slipped into \
+a pocket" or "paid" stay with the citizen. Say so in the outcome and the memory (the coins are \
+still in their purse; to pay someone they must give it to them in person).
 - Food they make must be one of: {foods}. A meal cannot nourish more than what went into it. \
 Never produce: {forbidden}.
 - Keep it grounded and specific. Let character show: a cruel person's prank, a kind person's \
@@ -173,7 +179,8 @@ def _apply(ctx: TickContext, a: dict[str, Any], v: Verdict | None) -> None:
     emit(s, tick=ctx.tick, kind="improvise", actor=agent, target=other, location_id=a["location_id"],
          summary=summary, data={"what": a["what"], "success": v.success, "consumed": consumed,
                                 "made": made, "outcome": summary},
-         actor_memory=v.memory.strip() or f"I tried to {a['what'][:150]}.",
+         actor_memory=(v.memory.strip() or f"I tried to {a['what'][:150]}.")
+         + (STILL_YOURS if _MONEY.search(a["what"]) else ""),
          target_memory=outcome if other else None, witness_memory=outcome,
          importance=4 if v.success else 3)
     if other is not None and abs(v.toward_target) >= 0.2:
