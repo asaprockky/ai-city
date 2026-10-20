@@ -48,7 +48,7 @@ class EffortCfg(BaseModel):
 
 class LLMCfg(BaseModel):
     backend: Literal["fake", "anthropic"] = "fake"
-    # env: send ANTHROPIC_API_KEY from the environment.
+    # env: send ASAPVILLE_ANTHROPIC_KEY from the environment.
     # proxy: send no key; an egress proxy (e.g. a cloud "network secret") adds x-api-key.
     auth: Literal["env", "proxy"] = "env"
     max_concurrency: int = 8

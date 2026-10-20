@@ -1,5 +1,5 @@
 # Asapville world configuration. Every tunable lives here.
-# DB_URL and ANTHROPIC_API_KEY come from the environment, never from this file.
+# DB_URL and ASAPVILLE_ANTHROPIC_KEY come from the environment, never from this file.
 
 world:
   name: Asapville
@@ -14,7 +14,7 @@ clock:
 
 llm:
   backend: fake              # fake | anthropic
-  auth: env                  # env: ANTHROPIC_API_KEY | proxy: an egress proxy adds x-api-key
+  auth: env                  # env: ASAPVILLE_ANTHROPIC_KEY | proxy: an egress proxy adds x-api-key
   max_concurrency: 8         # semaphore for concurrent decide calls
   max_output_tokens: 2048     # includes adaptive thinking tokens
   json_retries: 1            # one retry with the parse error, then "hesitate"

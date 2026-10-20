@@ -104,14 +104,14 @@ Choices made where the brief left room. Newest phase at the bottom.
   invalid reply and retried once.
 - **Birth gets more room:** `birth.max_tokens` = 4096 and `llm.max_output_tokens` = 2048, because
   adaptive thinking tokens count against `max_tokens`. Only tokens actually used are billed.
-- **Credentials are pinned.** The Anthropic backend reads `ANTHROPIC_API_KEY` explicitly and talks
+- **Credentials are pinned.** The Anthropic backend reads `ASAPVILLE_ANTHROPIC_KEY` explicitly and talks
   to `https://api.anthropic.com`. It ignores any `ANTHROPIC_BASE_URL` or other credentials already
   in the shell, so it can never ride on someone else's credentials. `ASAPVILLE_ANTHROPIC_BASE_URL`
   overrides the URL on purpose. A missing key fails loudly at startup.
 - **"Unpleasant" is defined in code** (`persona.unpleasant_reasons`): a dark moral baseline, or any
   dark trait ≥0.6, or agreeableness ≤0.25. `asapville personas --out FILE` writes markdown persona
   cards with the flagged citizens listed at the top.
-- **Two ways to supply the key** (`llm.auth`): `env` reads `ANTHROPIC_API_KEY`. `proxy` is for
+- **Two ways to supply the key** (`llm.auth`): `env` reads `ASAPVILLE_ANTHROPIC_KEY`. `proxy` is for
   cloud "network secrets", where an egress proxy adds `x-api-key` to requests to
   `api.anthropic.com`. In proxy mode the SDK gets a placeholder key (so it never looks for other
   credentials) and the `X-Api-Key` header is left out, so the proxy's header is the only one sent.

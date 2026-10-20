@@ -19,7 +19,7 @@ Other commands: `asapville pause`, `asapville resume`, `asapville speed 2.0`.
 ## Real Claude models
 
 ```bash
-export ANTHROPIC_API_KEY=...         # never put it in config.yaml
+export ASAPVILLE_ANTHROPIC_KEY=...         # never put it in config.yaml
 export ASAPVILLE_LLM_BACKEND=anthropic
 ```
 

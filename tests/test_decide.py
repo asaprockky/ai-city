@@ -85,8 +85,8 @@ def test_anthropic_request_shape_caches_static_prefix():
 def test_anthropic_backend_needs_explicit_key(monkeypatch):
     from asapville.llm.client import AnthropicBackend
 
-    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
-    with pytest.raises(RuntimeError, match="ANTHROPIC_API_KEY"):
+    monkeypatch.delenv("ASAPVILLE_ANTHROPIC_KEY", raising=False)
+    with pytest.raises(RuntimeError, match="ASAPVILLE_ANTHROPIC_KEY"):
         AnthropicBackend()
 
 
@@ -95,7 +95,7 @@ async def test_anthropic_backend_parses_usage(monkeypatch):
 
     from asapville.llm.client import AnthropicBackend
 
-    monkeypatch.setenv("ANTHROPIC_API_KEY", "test-not-a-real-key")
+    monkeypatch.setenv("ASAPVILLE_ANTHROPIC_KEY", "test-not-a-real-key")
     monkeypatch.setenv("ANTHROPIC_BASE_URL", "http://host-proxy.invalid")
     backend = AnthropicBackend()
     assert str(backend.client.base_url).startswith("https://api.anthropic.com")
@@ -128,7 +128,7 @@ async def test_proxy_auth_sends_no_key_header(monkeypatch):
     except ImportError:  # older SDKs use httpx
         import httpx
 
-    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    monkeypatch.delenv("ASAPVILLE_ANTHROPIC_KEY", raising=False)
     monkeypatch.setenv("ANTHROPIC_AUTH_TOKEN", "ambient-token-must-not-be-used")
     seen = {}
 

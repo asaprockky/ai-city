@@ -127,10 +127,10 @@ async def test_no_citizen_memory_mentions_angels_or_system(world, sessions):
 async def test_init_world_without_key_touches_no_database(settings, tmp_path, monkeypatch):
     import pytest
 
-    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    monkeypatch.delenv("ASAPVILLE_ANTHROPIC_KEY", raising=False)
     settings.llm.backend = "anthropic"
     db = tmp_path / "nokey.db"
     settings.db_url = f"sqlite:///{db}"
-    with pytest.raises(RuntimeError, match="ANTHROPIC_API_KEY"):
+    with pytest.raises(RuntimeError, match="ASAPVILLE_ANTHROPIC_KEY"):
         await init_world(settings)
     assert not db.exists() or db.stat().st_size == 0
