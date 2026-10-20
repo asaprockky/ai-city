@@ -77,7 +77,7 @@ async def test_starving_agent_dies_without_scripting(world, sessions, fake):
 
 
 async def test_budget_slow_mode_then_pause(settings, sessions):
-    settings.budget.daily_usd = 0.01  # small enough to hit before anyone can starve
+    settings.budget.daily_usd = 0.02  # small enough to hit before anyone can starve
     guard = BudgetGuard(settings.budget, today=lambda: "2026-10-20")
     gw = LLMGateway(FakeLLM(billable=True), settings.llm, guard)
     await init_world(settings, sessions=sessions, gateway=gw)

@@ -1,7 +1,9 @@
 """The town's economy: shelves, the town fund, jobs and the production chain.
 
-Money is conserved: citizens pay shops, shops pay the treasury, the treasury pays
-wages. Goods are conserved too: nothing lands on a shelf unless a worker made it
+Money is conserved: citizens pay shops, shops pay their owner's purse (the town fund
+when the town owns them), and a business pays its workers' wages and buys its raw
+material from its own purse. A citizen who buys a business keeps its takings, pays its
+wages and sets its wages and prices. Goods are conserved too: nothing lands on a shelf unless a worker made it
 (or an angel put it there, which the dashboard shows as an intervention).
 """
 
@@ -45,13 +47,77 @@ def stocks_by_location(session: Session, locations: dict[int, Location]) -> dict
     return out
 
 
-def price_of(settings: Settings, item: str, session: Session | None = None) -> int | None:
-    """Shelf price in cents: the town's vote if there was one, else config."""
+def price_of(settings: Settings, item: str, session: Session | None = None,
+             at: str | None = None) -> int | None:
+    """Shelf price in cents: the owner's price at `at` if they set one, else the town's vote,
+    else config."""
     if session is not None:
         ws = session.get(WorldState, 1)
-        if ws is not None and item in (ws.prices or {}):
-            return int(ws.prices[item])
+        prices = (ws.prices or {}) if ws is not None else {}
+        if at is not None and f"{at}:{item}" in prices:
+            return int(prices[f"{at}:{item}"])
+        if item in prices:
+            return int(prices[item])
     return settings.economy.prices.get(item)
+
+
+# ------------------------------------------------------------------ businesses and purses
+def is_business(settings: Settings, loc: Location) -> bool:
+    """A place that can be owned: an empty shop building, or a business the town sells."""
+    return loc.kind == "shop" or loc.key in settings.economy.business_prices
+
+
+def business_price(settings: Settings, loc: Location) -> int:
+    return settings.economy.business_prices.get(loc.key, settings.economy.property_price_cents)
+
+
+def owner_of(session: Session, loc: Location | None) -> Agent | None:
+    if loc is None or loc.owner_id is None:
+        return None
+    o = session.get(Agent, loc.owner_id)
+    return o if o is not None and o.alive else None
+
+
+def funds(session: Session, loc: Location | None) -> int:
+    """What the purse behind a place holds: its owner's money, or the town fund."""
+    o = owner_of(session, loc)
+    if o is not None:
+        return o.money_cents
+    ws = session.get(WorldState, 1)
+    return ws.treasury_cents if ws is not None else 0
+
+
+def credit(session: Session, loc: Location | None, cents: int) -> None:
+    o = owner_of(session, loc)
+    if o is not None:
+        o.money_cents += cents
+        return
+    ws = session.get(WorldState, 1)
+    assert ws is not None
+    ws.treasury_cents += cents
+
+
+def same_purse(session: Session, a: Location | None, b: Location | None) -> bool:
+    oa, ob = owner_of(session, a), owner_of(session, b)
+    return (oa.id if oa else None) == (ob.id if ob else None)
+
+
+def pay(session: Session, payer: Location | None, payee: Location | None, cents: int) -> int:
+    """Move up to `cents` from one place's purse to another's; returns what was paid."""
+    if cents <= 0 or same_purse(session, payer, payee):
+        return 0
+    cents = min(cents, funds(session, payer))
+    credit(session, payer, -cents)
+    credit(session, payee, cents)
+    return cents
+
+
+def owned_job(session: Session, settings: Settings, job: str) -> Agent | None:
+    """The citizen who owns the workplace of a job, if any (they set its wage)."""
+    spec = settings.economy.jobs.get(job)
+    if spec is None:
+        return None
+    return owner_of(session, session.scalar(select(Location).where(Location.key == spec.workplace)))
 
 
 def prices_now(session: Session, settings: Settings) -> dict[str, int]:
@@ -64,6 +130,12 @@ def shop_items(settings: Settings, location_key: str) -> list[str]:
 
 def jobs_at(settings: Settings, location_key: str) -> dict[str, JobCfg]:
     return {name: job for name, job in settings.economy.jobs.items() if job.workplace == location_key}
+
+
+def workers_at(session: Session, settings: Settings, location_key: str) -> list[Agent]:
+    """Everyone whose job is done at this place."""
+    jobs = list(jobs_at(settings, location_key))
+    return [a for j in jobs for a in workers_in(session, j)]
 
 
 def workers_in(session: Session, job: str) -> list[Agent]:
@@ -284,6 +356,8 @@ def adjust_wages(session: Session, settings: Settings, *,
     worked, blocked_on = _work_log(session, settings, since)
     changed = {}
     for name, job in settings.economy.jobs.items():
+        if owned_job(session, settings, name) is not None:
+            continue  # its owner sets that wage
         old = int(wages.get(name, job.wage_cents))
         n = len(workers_in(session, name))
         idle = sum(blocked_on.get(name, {}).values()) > worked.get(name, 0)

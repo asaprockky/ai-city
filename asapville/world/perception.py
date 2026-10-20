@@ -25,14 +25,20 @@ PLAN_DAY_START = 5  # hours after midnight when a new day of plans begins
 
 
 def _ownership(ctx: TickContext, agent: Agent, loc) -> str | None:
-    if loc.kind != "shop":
+    cfg = ctx.settings
+    if not economy.is_business(cfg, loc):
         return None
+    price = economy.business_price(cfg, loc) / 100
+    shop_only = loc.kind == "shop" and not economy.jobs_at(cfg, loc.key) and loc.key not in cfg.economy.shops
     if loc.owner_id is None:
-        return f"empty shop for sale, {ctx.settings.economy.property_price_cents / 100:.0f} asaps"
+        if shop_only:
+            return f"empty shop for sale, {price:.0f} asaps"
+        return f"run by the town; for sale, {price:.0f} asaps (buy_property there)"
     if loc.owner_id == agent.id:
-        return "your own shop"
+        return "your own shop" if shop_only else "your own business"
     owner = ctx.session.get(Agent, loc.owner_id)
-    return f"shop owned by {describe(ctx.session, agent.id, owner) if owner else 'someone'}"
+    who = describe(ctx.session, agent.id, owner) if owner else "someone"
+    return f"shop owned by {who}" if shop_only else f"business owned by {who}"
 
 
 def todays_plan(ctx: TickContext, agent: Agent) -> str | None:
@@ -75,7 +81,7 @@ def build_perception(ctx: TickContext, agent: Agent) -> Perception:
         for loc in sorted(ctx.locations.values(), key=lambda x: x.id)
         if loc.id != here.id and (loc.kind != "home" or loc.id == agent.home_id)
     ]
-    shop = [ShopItem(item=item, price_cents=economy.price_of(cfg, item, s) or 0,
+    shop = [ShopItem(item=item, price_cents=economy.price_of(cfg, item, s, at=here.key) or 0,
                      qty=None if item in cfg.economy.unlimited else economy.stock_qty(s, here.id, item))
             for item in economy.shop_items(cfg, here.key)]
     for st in economy.stalls_at(s, here.id):
@@ -90,6 +96,20 @@ def build_perception(ctx: TickContext, agent: Agent) -> Perception:
         place = ctx.locations[st.location_id].name
         mine.append(f'"{st.name}" at {place}: {st.item} at {st.price_cents / 100:.2f} asaps, '
                     f'{st.qty} on the stall, {st.sold} sold so far')
+    for loc in sorted(ctx.locations.values(), key=lambda x: x.id):
+        if loc.owner_id != agent.id or not economy.is_business(cfg, loc):
+            continue
+        parts = []
+        for name in economy.jobs_at(cfg, loc.key):
+            n = len(economy.workers_in(s, name))
+            parts.append(f"you pay {name}s {economy.wage_of(s, cfg, name) / 100:.2f}/h, {n} on the books")
+        made = {i for job in economy.jobs_at(cfg, loc.key).values() for i in job.makes}
+        for item in sorted(set(economy.shop_items(cfg, loc.key)) | made):
+            price = economy.price_of(cfg, item, s, at=loc.key) or 0
+            parts.append(f"{item} at {price / 100:.2f} ({economy.stock_qty(s, loc.id, item)} in stock)")
+        if parts:
+            mine.append(f"{loc.name} (its takings, wages and materials are your own money): "
+                        + ", ".join(parts) + "; change them with hire / set_price, dismiss with fire")
     jobs_here = [JobHere(job=name, wage_cents=economy.wage_of(s, cfg, name),
                          workers=len(economy.workers_in(s, name)),
                          active=economy.active_workers(s, name, ctx.tick - 24))
@@ -148,8 +168,10 @@ def build_perception(ctx: TickContext, agent: Agent) -> Perception:
         job=agent.role if my_job else None,
         workplace=ctx.by_key[my_job.workplace].name if my_job else None,
         wage_cents=economy.wage_of(s, cfg, agent.role) if my_job else None,
-        job_output_cents=(sum((economy.price_of(cfg, item, s) or 0) * qty
+        job_output_cents=(sum((economy.price_of(cfg, item, s, at=my_job.workplace) or 0) * qty
                               for item, qty in my_job.makes.items()) if my_job else None),
+        employer=(boss.name if (boss := economy.owned_job(s, cfg, agent.role)) and boss.id != agent.id
+                  else None),
         shop=shop,
         jobs_here=jobs_here,
         plan=plan,
@@ -187,13 +209,17 @@ def render_perception(p: Perception) -> str:
     inv = ", ".join(f"{k} x{v}" for k, v in sorted(p.inventory.items())) or "nothing"
     lines.append(f"You carry {asaps:.2f} asaps and: {inv}.")
     if p.job:
-        lines.append(f"Your job: {p.job} at {p.workplace}, {(p.wage_cents or 0) / 100:.2f} asaps per hour "
-                     f"worked (choose 'work' while you are there).")
+        boss = f" for {p.employer}, who owns it" if p.employer else ""
+        lines.append(f"Your job: {p.job} at {p.workplace}{boss}, {(p.wage_cents or 0) / 100:.2f} asaps per "
+                     f"hour worked (choose 'work' while you are there).")
         if p.job_output_cents and p.wage_cents is not None and p.job_output_cents >= 2 * p.wage_cents:
-            lines.append(f"One hour of your work makes goods the town sells for "
+            seller = p.employer or "the town"
+            how = (f"{p.employer} sets your wage: bargain with them, or work elsewhere." if p.employer else
+                   "Wages are not fixed: any citizen may put a new wage to a town vote "
+                   "(propose_law at the Town Hall or Square).")
+            lines.append(f"One hour of your work makes goods {seller} sells for "
                          f"{p.job_output_cents / 100:.2f} asaps, and pays you {p.wage_cents / 100:.2f}. "
-                         "Wages are not fixed: any citizen may put a new wage to a town vote "
-                         "(propose_law at the Town Hall or Square).")
+                         + how)
     else:
         lines.append("You have no job.")
     town = [x for x in p.shop if x.seller is None]

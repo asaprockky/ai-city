@@ -36,7 +36,7 @@ llm:
 
 budget:
   daily_usd: 5.00            # hard cap for all calls in one real (UTC) day
-  per_agent_daily_usd: 0.50  # hard cap per citizen per real day
+  per_agent_daily_usd: 1.00  # hard cap per citizen per real day
   angel_opus_monthly_usd: 10.00
   slow_mode_threshold: 0.90  # fraction of daily cap that triggers slow mode
   slow_mode:
@@ -85,6 +85,8 @@ economy:
   treasury_cents: 2000000      # 20,000 asaps in AsapBank: pays wages, takes what shops earn
   prices:                      # cents per unit on the shelf (100 cents = 1 asap)
     bread: 300
+    grain: 100                   # what the mill pays the farm per sack
+    flour: 200                   # what the bakery pays the mill per sack
     vegetables: 150
     berries: 80
     fish: 200
@@ -111,6 +113,12 @@ economy:
     farm: {grain: 12}
   work_energy_cost: 5
   property_price_cents: 30000  # an empty shop costs 300 asaps, paid to the town fund
+  business_prices:             # the town sells its businesses too; the buyer keeps the takings,
+    farm: 40000                # pays the wages and sets wages and prices
+    mill: 40000
+    bakery: 60000
+    quarry: 20000
+    market: 60000              # (the tavern and the clinic stay the town's: the safety net)
   notice_ticks: 24             # a notice stays on the town board for a day
 
 angels:                        # the simulation's guardians (never citizens)

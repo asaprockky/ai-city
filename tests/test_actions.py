@@ -28,7 +28,7 @@ def put(s, agent, key):
 async def test_unimplemented_actions_are_rejected(world, sessions, settings):
     with sessions() as s:
         a = s.get(Agent, 1)
-        err = actions.validate(ctx_for(s, settings), a, dec(ActionName.HIRE), set())
+        err = actions.validate(ctx_for(s, settings), a, dec(ActionName.BUILD), set())
         assert err and "yet" in err
 
 

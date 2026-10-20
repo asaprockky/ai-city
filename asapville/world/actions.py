@@ -18,7 +18,7 @@ from asapville.config import Settings
 from asapville.db.models import Agent, Location, WorldState
 from asapville.world import needs as needs_rules
 from asapville.world.clock import WorldTime
-from asapville.world.events import emit
+from asapville.world.events import emit, remember
 from asapville.world.map import has_room, travel_ticks
 from asapville.world.social import introduce, nudge_reputation, record_deed
 
@@ -375,8 +375,6 @@ class Work:
         spec = _job_of(ctx, agent)
         here = _here(ctx, agent)
         assert spec is not None and here is not None
-        ws = ctx.session.get(WorldState, 1)
-        assert ws is not None
         agent.energy = needs_rules.clamp(agent.energy - ctx.settings.economy.work_energy_cost)
         source = ctx.by_key.get(spec.source) if spec.source else None
         for item, qty in spec.uses.items():
@@ -391,14 +389,26 @@ class Work:
                      witness_memory="{actor} stood idle at work; the supplies had run out.", importance=3)
                 return ActionResult(ok=True)
         wage = economy.wage_of(ctx.session, ctx.settings, agent.role)
-        if ws.treasury_cents < wage:
+        boss = economy.owner_of(ctx.session, here)
+        if boss is not None and boss.id == agent.id:
+            wage = 0  # an owner working their own business pays nobody
+        material = 0  # raw material bought from another business's shelf
+        if source is not None and not economy.same_purse(ctx.session, here, source):
+            material = sum((economy.price_of(ctx.settings, item, ctx.session, at=source.key) or 0) * qty
+                           for item, qty in spec.uses.items())
+        if economy.funds(ctx.session, here) < wage + material:
+            payer = f"{boss.name} could not pay" if boss else "the town fund could not pay"
             emit(ctx.session, tick=ctx.tick, kind="work", actor=agent, location_id=here.id,
-                 summary=f"{agent.name} worked as {agent.role} but the town fund could not pay",
+                 summary=f"{agent.name} came to work as {agent.role} but {payer}",
                  data={"job": agent.role, "success": False, "missing": "wages"},
-                 actor_memory="The town could not pay my wages today; the fund is empty.", importance=4)
+                 actor_memory=(f"I came to work, but {boss.name}, who owns {here.name}, could not pay "
+                               "my wage and the materials." if boss else
+                               "The town could not pay my wages today; the fund is empty."),
+                 importance=4)
             return ActionResult(ok=True)
         for item, qty in spec.uses.items():
             economy.stock_add(ctx.session, source.id, item, -qty)  # type: ignore[union-attr]
+        economy.pay(ctx.session, here, source, material)
         made = []
         for item, qty in spec.makes.items():
             dest = ctx.by_key.get(spec.deliver.get(item, spec.workplace), here)
@@ -407,9 +417,13 @@ class Work:
                 economy.stock_add(ctx.session, here.id, item, kept)
             if qty - kept:
                 economy.stock_add(ctx.session, dest.id, item, qty - kept)
+                # the receiving shop buys what is delivered to it, at the maker's price
+                economy.pay(ctx.session, dest, here,
+                            (economy.price_of(ctx.settings, item, ctx.session, at=here.key) or 0)
+                            * (qty - kept))
             made.append(f"{qty} {item}" + (f" ({qty - kept} to {dest.name})" if kept else
                                           f" to {dest.name}" if dest.id != here.id else ""))
-        ws.treasury_cents -= wage
+        economy.credit(ctx.session, here, -wage)
         agent.money_cents += wage
         what = ", ".join(made) or "an hour's labour"
         emit(ctx.session, tick=ctx.tick, kind="work", actor=agent, location_id=here.id,
@@ -454,7 +468,7 @@ class Buy:
             hint = f" {sellers[0]} sells it." if sellers else ""
             return f"Nobody sells {item or 'that'} here.{hint}"
         qty = _qty(d)
-        price = economy.price_of(ctx.settings, item, ctx.session) or 0
+        price = economy.price_of(ctx.settings, item, ctx.session, at=here.key) or 0
         if agent.money_cents < price * qty:
             return (f"{qty} {item} costs {price * qty / 100:.2f} asaps; "
                     f"you have {agent.money_cents / 100:.2f}.")
@@ -476,11 +490,9 @@ class Buy:
         stall = economy.stall_for(ctx.session, here, item, d.action_args.get("from"), buyer=agent)
         if stall is not None and not isinstance(stall, str):
             return _buy_from_stall(ctx, agent, stall, qty)
-        price = economy.price_of(ctx.settings, item, ctx.session) or 0
-        ws = ctx.session.get(WorldState, 1)
-        assert ws is not None
+        price = economy.price_of(ctx.settings, item, ctx.session, at=here.key) or 0
         agent.money_cents -= price * qty
-        ws.treasury_cents += price * qty
+        economy.credit(ctx.session, here, price * qty)  # the shop's owner, or the town fund
         if item not in ctx.settings.economy.unlimited:
             economy.stock_add(ctx.session, here.id, item, -qty)
         if item in ctx.settings.economy.served:
@@ -671,19 +683,15 @@ class Sell:
         assert here is not None
         item = str(d.action_args["item"]).strip().lower()
         qty = _qty(d)
-        shelf = economy.price_of(ctx.settings, item, ctx.session) or 0
-        cents = int(shelf * ctx.settings.economy.buyback) * qty
-        ws = ctx.session.get(WorldState, 1)
-        assert ws is not None
-        if ws.treasury_cents < cents:
-            cents = ws.treasury_cents  # the town pays what it can
+        shelf = economy.price_of(ctx.settings, item, ctx.session, at=here.key) or 0
+        cents = min(int(shelf * ctx.settings.economy.buyback) * qty, economy.funds(ctx.session, here))
         inv = dict(agent.inventory or {})
         inv[item] -= qty
         if inv[item] <= 0:
             del inv[item]
         agent.inventory = inv
         agent.money_cents += cents
-        ws.treasury_cents -= cents
+        economy.credit(ctx.session, here, -cents)  # the shop pays what it can
         economy.stock_add(ctx.session, here.id, item, qty)
         emit(ctx.session, tick=ctx.tick, kind="sell", actor=agent, location_id=here.id,
              summary=f"{agent.name} sold {qty} {item} at {here.name} for {cents / 100:.2f}",
@@ -856,7 +864,15 @@ class ProposeLaw:
         if any(p.author_id == agent.id for p in democracy.open_proposals(ctx.session)):
             return "You already have a proposal open; wait for the vote."
         parsed = democracy.parse_change(ctx.settings, d.action_args.get("change"))
-        return parsed if isinstance(parsed, str) else None
+        if isinstance(parsed, str):
+            return parsed
+        from asapville.world import economy
+
+        boss = economy.owned_job(ctx.session, ctx.settings, parsed[1]) if parsed[0] == "wage" else None
+        if boss is not None:
+            return (f"The {parsed[1]} wage is set by {boss.name}, who owns that business; "
+                    "the town can't vote on it. Bargain with them, or work elsewhere.")
+        return None
 
     @staticmethod
     def execute(ctx: TickContext, agent: Agent, d: Decision) -> ActionResult:
@@ -1053,41 +1069,210 @@ class Attack:
 
 
 # --------------------------------------------------------------------------- property
-BUY_PROPERTY_USAGE = ("buy_property {}  -- buy the empty shop you stand in from the town; "
-                      "then it is yours to trade in")
+BUY_PROPERTY_USAGE = ("buy_property {}  -- buy the place you stand in from the town, if it is for sale "
+                      "(an empty shop, or a business such as the farm, mill or bakery); a business's "
+                      "takings become yours, and so do its wages and prices")
 
 
 @register(ActionName.BUY_PROPERTY, BUY_PROPERTY_USAGE)
 class BuyProperty:
     @staticmethod
     def validate(ctx: TickContext, agent: Agent, d: Decision, perceived: set[int]) -> str | None:
+        from asapville.world import economy
+
         here = _here(ctx, agent)
-        if here is None or here.kind != "shop":
-            return "Only the empty shops can be bought; go and stand in one."
+        if here is None or not economy.is_business(ctx.settings, here):
+            return "This place isn't for sale. Empty shops and the town's businesses are."
         if here.owner_id is not None:
             owner = ctx.session.get(Agent, here.owner_id)
             return f"{here.name} already belongs to {owner.name if owner else 'someone'}."
-        price = ctx.settings.economy.property_price_cents
+        price = economy.business_price(ctx.settings, here)
         if agent.money_cents < price:
             return f"{here.name} costs {price / 100:.2f} asaps; you have {agent.money_cents / 100:.2f}."
         return None
 
     @staticmethod
     def execute(ctx: TickContext, agent: Agent, d: Decision) -> ActionResult:
+        from asapville.world import economy
+
         here = _here(ctx, agent)
         assert here is not None
-        price = ctx.settings.economy.property_price_cents
+        price = economy.business_price(ctx.settings, here)
         ws = ctx.session.get(WorldState, 1)
         assert ws is not None
         agent.money_cents -= price
         ws.treasury_cents += price
         here.owner_id = agent.id
+        jobs = list(economy.jobs_at(ctx.settings, here.key))
+        if here.kind == "shop" and not jobs and here.key not in ctx.settings.economy.shops:
+            mine = "only I can trade there (open_stall)."
+        else:
+            mine = ("its takings are mine now, and I pay its wages and buy its materials from my own "
+                    "money; I set the wage (hire) and the prices (set_price), and I can fire people.")
         emit(ctx.session, tick=ctx.tick, kind="property", actor=agent, location_id=here.id,
              visibility="public",
              summary=f"{agent.name} bought {here.name} for {price / 100:.2f}",
-             data={"place": here.key, "cents": price},
+             data={"place": here.key, "cents": price, "jobs": jobs},
              actor_memory=f"I bought {here.name} from the town for {price / 100:.2f} asaps. It is mine; "
-                          "only I can trade there (open_stall).",
-             witness_memory=f"{{actor}} bought {here.name}.", importance=7)
+                          + mine,
+             witness_memory=f"{{actor}} bought {here.name}" + (
+                 f"; whoever works there as {' or '.join(jobs)} now works for {{actor}}." if jobs else "."),
+             importance=7)
+        for w in economy.workers_at(ctx.session, ctx.settings, here.key):
+            if w.id != agent.id:
+                remember(ctx.session, w.id, ctx.tick, "observation",
+                         f"{agent.name} bought {here.name}; I work for them now, and they set my wage.",
+                         importance=6)
         nudge_reputation(agent, 0.02)
+        return ActionResult(ok=True)
+
+
+def _my_business_for_job(ctx: TickContext, agent: Agent, job: str) -> Location | str:
+    spec = ctx.settings.economy.jobs.get(job)
+    if spec is None:
+        return f"There is no job called '{job}'."
+    place = ctx.by_key[spec.workplace]
+    if place.owner_id != agent.id:
+        return f"You don't own {place.name}; only its owner sets the {job} wage."
+    return place
+
+
+HIRE_USAGE = ('hire {"job": "<job at your business>", "wage": 4.0}  -- for business owners: set the '
+              'hourly wage you pay; anyone may then apply')
+
+
+@register(ActionName.HIRE, HIRE_USAGE)
+class Hire:
+    @staticmethod
+    def validate(ctx: TickContext, agent: Agent, d: Decision, perceived: set[int]) -> str | None:
+        place = _my_business_for_job(ctx, agent, str(d.action_args.get("job", "")).strip().lower())
+        if isinstance(place, str):
+            return place
+        try:
+            wage = float(d.action_args.get("wage"))
+        except (TypeError, ValueError):
+            return 'Say the wage: "wage": <asaps per hour>.'
+        if not 0 <= wage <= 50:
+            return "A wage must be between 0 and 50 asaps an hour."
+        return None
+
+    @staticmethod
+    def execute(ctx: TickContext, agent: Agent, d: Decision) -> ActionResult:
+        from asapville.world import economy
+
+        job = str(d.action_args["job"]).strip().lower()
+        place = _my_business_for_job(ctx, agent, job)
+        assert not isinstance(place, str)
+        cents = round(float(d.action_args["wage"]) * 100)
+        ws = ctx.session.get(WorldState, 1)
+        assert ws is not None
+        old = economy.wage_of(ctx.session, ctx.settings, job)
+        ws.wages = {**(ws.wages or {}), job: cents}
+        text = f"{agent.name} is hiring at {place.name}: {job}, {cents / 100:.2f} asaps an hour"
+        emit(ctx.session, tick=ctx.tick, kind="wages", actor=agent, location_id=agent.location_id,
+             visibility="public", summary=f"{text} (was {old / 100:.2f})",
+             data={"job": job, "from": old, "to": cents, "owner": agent.id,
+                   "notice": f"{text}. Apply at {place.name}."},
+             actor_memory=f"I set the {job} wage at my {place.name} to {cents / 100:.2f} an hour "
+                          f"(it was {old / 100:.2f}).", importance=4)
+        for w in economy.workers_in(ctx.session, job):
+            if w.id != agent.id:
+                remember(ctx.session, w.id, ctx.tick, "observation",
+                         f"{agent.name}, who owns {place.name}, changed my {job} wage from "
+                         f"{old / 100:.2f} to {cents / 100:.2f} an hour.", importance=5)
+                record_deed(ctx.session, w.id, agent, ctx.tick,
+                            "raised my wage" if cents > old else "cut my wage",
+                            trust=0.1 if cents > old else -0.1 if cents < old else 0.0)
+        return ActionResult(ok=True)
+
+
+FIRE_USAGE = 'fire {"who": <id>}  -- for business owners: dismiss someone who works at your business'
+
+
+@register(ActionName.FIRE, FIRE_USAGE)
+class Fire:
+    @staticmethod
+    def validate(ctx: TickContext, agent: Agent, d: Decision, perceived: set[int]) -> str | None:
+        try:
+            who = ctx.session.get(Agent, int(d.action_args.get("who")))
+        except (TypeError, ValueError):
+            who = None
+        if who is None or not who.alive:
+            return "Name the worker by their id: \"who\": <id>."
+        spec = ctx.settings.economy.jobs.get(who.role)
+        if spec is None or ctx.by_key[spec.workplace].owner_id != agent.id:
+            return f"{who.name} doesn't work at a business you own."
+        if who.id == agent.id:
+            return "To stop working at your own business, use quit."
+        return None
+
+    @staticmethod
+    def execute(ctx: TickContext, agent: Agent, d: Decision) -> ActionResult:
+        who = ctx.session.get(Agent, int(d.action_args["who"]))
+        assert who is not None
+        job = who.role
+        place = ctx.by_key[ctx.settings.economy.jobs[job].workplace]
+        who.role = "unemployed"
+        emit(ctx.session, tick=ctx.tick, kind="fired", actor=agent, target=who,
+             location_id=agent.location_id, visibility="local",
+             summary=f"{agent.name} fired {who.name} from {place.name}",
+             data={"job": job, "place": place.key},
+             actor_memory=f"I fired {who.name} from my {place.name}.",
+             target_memory=f"{agent.name} fired me from {place.name}; I am no longer a {job}.",
+             witness_memory="{actor} dismissed {target} from their work.", importance=6)
+        record_deed(ctx.session, who.id, agent, ctx.tick, "fired me", trust=-0.3, affinity=-0.3)
+        return ActionResult(ok=True)
+
+
+SET_PRICE_USAGE = ('set_price {"item": "<item>", "to": 2.5}  -- for business owners: the price of '
+                   'something your business sells or makes')
+
+
+@register(ActionName.SET_PRICE, SET_PRICE_USAGE)
+class SetPrice:
+    @staticmethod
+    def _place(ctx: TickContext, agent: Agent, item: str) -> Location | None:
+        from asapville.world import economy
+
+        for loc in ctx.by_key.values():
+            if loc.owner_id != agent.id:
+                continue
+            made = {i for job in economy.jobs_at(ctx.settings, loc.key).values() for i in job.makes}
+            if item in economy.shop_items(ctx.settings, loc.key) or item in made:
+                return loc
+        return None
+
+    @staticmethod
+    def validate(ctx: TickContext, agent: Agent, d: Decision, perceived: set[int]) -> str | None:
+        item = str(d.action_args.get("item", "")).strip().lower()
+        if item in ctx.settings.economy.unlimited:
+            return f"The price of {item} is the town's."
+        if SetPrice._place(ctx, agent, item) is None:
+            return f"You own no business that sells or makes {item or 'that'}."
+        try:
+            to = float(d.action_args.get("to"))
+        except (TypeError, ValueError):
+            return 'Say the price: "to": <asaps>.'
+        if not 0.1 <= to <= 100:
+            return "A price must be between 0.10 and 100 asaps."
+        return None
+
+    @staticmethod
+    def execute(ctx: TickContext, agent: Agent, d: Decision) -> ActionResult:
+        from asapville.world import economy
+
+        item = str(d.action_args["item"]).strip().lower()
+        place = SetPrice._place(ctx, agent, item)
+        assert place is not None
+        cents = round(float(d.action_args["to"]) * 100)
+        old = economy.price_of(ctx.settings, item, ctx.session, at=place.key) or 0
+        ws = ctx.session.get(WorldState, 1)
+        assert ws is not None
+        ws.prices = {**(ws.prices or {}), f"{place.key}:{item}": cents}
+        text = f"{place.name} now charges {cents / 100:.2f} for {item} (was {old / 100:.2f})"
+        emit(ctx.session, tick=ctx.tick, kind="notice", actor=agent, location_id=agent.location_id,
+             visibility="public", summary=f"{agent.name}: {text}",
+             data={"text": text, "author_id": agent.id, "item": item, "place": place.key, "cents": cents},
+             actor_memory=f"I set the price of {item} at my {place.name} to {cents / 100:.2f}.",
+             importance=4)
         return ActionResult(ok=True)

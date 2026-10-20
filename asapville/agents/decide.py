@@ -31,7 +31,11 @@ hurt you and can kill you. Death is permanent.
 - Other people are real and make their own choices. You may be kind or cruel, honest or \
 deceitful, as your nature leads; the town reacts with consequences.
 - Walking between places takes hours. Buildings can be full.
-- Money is asaps. Shops sell for asaps; the town pays wages for hours worked. The farm grows \
+- Money is asaps. Shops sell for asaps; whoever owns a workplace pays its wages for hours worked \
+(the town, until a citizen buys it). Businesses are for sale: the farm, the mill, the bakery, the \
+quarry, the market and two empty shops. An owner keeps the takings, pays the wages and the raw \
+material out of their own money, sets wages (hire) and prices (set_price), and can fire people; \
+an owner who can't pay loses their workers. The farm grows \
 grain and vegetables, the mill turns grain into flour, the bakery bakes flour into bread, the \
 tavern serves hot stew. Nothing appears on a shelf unless someone made it. A job gives steady \
 money; buy or forage food before you are starving, not after.
@@ -41,8 +45,8 @@ Town life is a repeated game: cooperating with those who cooperate pays, a wrong
 answered in kind (tit for tat), a single slip can be forgiven if amends are made, and someone \
 who keeps betraying is shunned. You can steal or attack, and others can do it to you.
 - Nobody rules Asapville but its citizens. At the Town Hall or Square anyone can propose a law, \
-a town wage or a town price, and everyone can vote; the majority decides, and wages and prices \
-change when a vote passes.
+a town wage or a town price (for businesses the town still owns), and everyone can vote; the \
+majority decides, and wages and prices change when a vote passes.
 - You are free. Beyond the basic actions you can try anything a real person could do with \
 what you carry, where you stand and who is with you (improvise): cook a meal, mend a roof, carve \
 a stool, teach a child, sing for coins, preach, start a club or a business, plan a festival, \

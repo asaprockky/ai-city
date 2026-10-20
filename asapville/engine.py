@@ -357,7 +357,7 @@ class World:
                 report.improvised = len(ctx.improvised)
                 await judge.run(ctx, self.gateway, ctx.improvised)
             self._needs(ctx, agents, results, report)
-            democracy.close_due(s, ws.tick)
+            democracy.close_due(s, ws.tick, self.settings)
             if self.settings.angels.enabled:
                 report.anomalies = len(watcher.scan(ctx, agents))
                 pending = watcher.open_anomalies(s)

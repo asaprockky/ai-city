@@ -122,7 +122,9 @@ def town_status(ctx: TickContext, agents: list[Agent]) -> str:
     lines.append("Jobs (job: place, wage/h, who):")
     for name, job in cfg.economy.jobs.items():
         who = ", ".join(a.name for a in economy.workers_in(s, name)) or "nobody"
-        lines.append(f"  - {name}: {job.workplace}, {economy.wage_of(s, cfg, name) / 100:.2f}, {who}")
+        boss = economy.owned_job(s, cfg, name)
+        owned = f" (owned by {boss.name}, purse {boss.money_cents / 100:.2f})" if boss else ""
+        lines.append(f"  - {name}: {job.workplace}{owned}, {economy.wage_of(s, cfg, name) / 100:.2f}, {who}")
     stalls = list(s.scalars(select(Stall).order_by(Stall.id)))
     if stalls:
         lines.append("Citizens' own businesses: " + "; ".join(

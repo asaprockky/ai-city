@@ -207,3 +207,12 @@ Each of these came from watching the real town:
   forgive a single slip, shun repeat betrayers), but each citizen still chooses.
 - **Newcomers** (`asapville arrive --preset NAME [--works-for NAME]`): fictional presets only (a
   would-be strongman; an informer with a secret patron). No real people, no real ideologies.
+- **Wages follow the chain.** A shortage is blamed on the first link whose own workers were
+  working; a crowded link passes it upstream; raw material piling up raises that job's wage; a
+  vacant job rises 50% a day. Jobs show who is on the books and who actually turned up.
+- **Businesses have owners.** The town sells the farm, mill, bakery, quarry and market
+  (`business_prices`; the tavern and clinic stay public as the safety net). An owner's purse is
+  their own money: it takes the shop's sales, pays wages and buys raw material from other
+  businesses at the seller's price (deliveries are bought by the receiving shop). Owners set
+  wages (`hire`), prices (`set_price`) and can `fire`; an owner who can't pay leaves workers
+  unpaid. The daily wage adjustment and town votes only touch businesses the town still owns.

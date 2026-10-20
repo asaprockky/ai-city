@@ -110,6 +110,7 @@ class ActionName(StrEnum):
     OPEN_STALL = "open_stall"
     BUY_PROPERTY = "buy_property"
     STOCK_STALL = "stock_stall"
+    SET_PRICE = "set_price"
     IDLE = "idle"
 
 
@@ -197,6 +198,7 @@ class Perception(BaseModel):
     workplace: str | None = None  # name of where that job is done
     wage_cents: int | None = None
     job_output_cents: int | None = None  # shelf value of what one hour of that job makes
+    employer: str | None = None  # the citizen who owns the workplace, if any
     shop: list[ShopItem] = Field(default_factory=list)  # for sale where the agent stands
     jobs_here: list[JobHere] = Field(default_factory=list)
     plan: str | None = None  # the citizen's own plan for today, in their words

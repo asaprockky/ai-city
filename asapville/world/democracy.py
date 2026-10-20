@@ -14,6 +14,7 @@ from sqlalchemy.orm import Session
 
 from asapville.config import Settings
 from asapville.db.models import Agent, Proposal, Vote, WorldState
+from asapville.world.economy import owned_job
 from asapville.world.events import emit
 
 VOTING_HOURS = 12
@@ -104,13 +105,16 @@ def cast(session: Session, voter: Agent, p: Proposal, yes: bool, tick: int,
          witness_memory=f"{{actor}} cast a vote on proposal #{p.id}.", importance=3)
 
 
-def close_due(session: Session, tick: int) -> list[Proposal]:
+def close_due(session: Session, tick: int, settings: Settings | None = None) -> list[Proposal]:
     """Decide every proposal whose voting time is over; apply the ones that pass."""
     done = []
     for p in session.scalars(select(Proposal).where(Proposal.status == "open", Proposal.closes_tick <= tick)):
         passed = p.yes > p.no and p.yes + p.no >= QUORUM
         p.status, p.decided_tick = ("passed" if passed else "failed"), tick
         ws = session.get(WorldState, 1)
+        if (passed and p.kind == "wage" and settings is not None
+                and owned_job(session, settings, p.target) is not None):
+            passed = False  # the business was sold while the town voted; its owner sets the wage now
         if passed and ws is not None and p.kind == "wage":
             ws.wages = {**(ws.wages or {}), p.target: p.value_cents}
         elif passed and ws is not None and p.kind == "price":
