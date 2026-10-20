@@ -414,12 +414,24 @@ def draw_missing_portraits(session: Session, *, key: str | None = None) -> list[
 
 
 def post_text(text: str, *, token: str, chat: str) -> dict[str, Any]:
-    """Send a written update to the Telegram channel."""
-    body = json.dumps({"chat_id": chat, "text": text[:4000], "disable_web_page_preview": True}).encode()
-    req = urllib.request.Request(f"https://api.telegram.org/bot{token}/sendMessage", data=body,
-                                 headers={"Content-Type": "application/json"})
-    with urllib.request.urlopen(req, timeout=60) as resp:
-        return json.loads(resp.read())
+    """Send a written update to the Telegram channel, in as many messages as its length needs."""
+    chunks, cur = [], ""
+    for para in text.split("\n"):
+        if cur and len(cur) + len(para) + 1 > 4000:
+            chunks.append(cur)
+            cur = ""
+        cur = f"{cur}\n{para}" if cur else para[:4000]
+    chunks.append(cur)
+    res: dict[str, Any] = {}
+    for chunk in chunks:
+        body = json.dumps({"chat_id": chat, "text": chunk, "disable_web_page_preview": True}).encode()
+        req = urllib.request.Request(f"https://api.telegram.org/bot{token}/sendMessage", data=body,
+                                     headers={"Content-Type": "application/json"})
+        with urllib.request.urlopen(req, timeout=60) as resp:
+            res = json.loads(resp.read())
+        if not res.get("ok"):
+            break
+    return res
 
 
 def post_telegram(png: Path, caption: str, *, token: str, chat: str) -> dict[str, Any]:

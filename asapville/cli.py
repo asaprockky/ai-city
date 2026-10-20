@@ -481,6 +481,8 @@ def main(argv: list[str] | None = None) -> int:
                 gateway.flush(s)
                 s.commit()
             print(text)
+            if len(text) < 80:  # the offline model, or a refusal: nothing worth sending
+                raise SystemExit("the report came back empty; not posting (is ASAPVILLE_LLM_BACKEND set?)")
             if not args.post:
                 return 0
             res = comic.post_text(text, token=token, chat=chat)

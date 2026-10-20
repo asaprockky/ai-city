@@ -100,7 +100,7 @@ def facts(session: Session, settings: Settings) -> str:
 async def write(session: Session, settings: Settings, gateway: LLMGateway) -> str:
     ws = session.get(WorldState, 1)
     req = LLMRequest(purpose="digest", model=settings.llm.models.sonnet, tier=ANGEL, effort=None,
-                     system_rules=REPORT_RULES, angel_role="reporter", max_tokens=1500,
+                     system_rules=REPORT_RULES, angel_role="reporter", max_tokens=5000,
                      messages=[ChatMessage(role="user", content=facts(session, settings)
                                            + "\n\nWrite the report.")],
                      context={"tick": ws.tick if ws else 0})
