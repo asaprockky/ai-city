@@ -1,5 +1,6 @@
 # Asapville world configuration. Every tunable lives here.
-# DB_URL and ANTHROPIC_API_KEY come from the environment, never from this file.
+# DB_URL comes from the environment. The Claude key is never in this file: in proxy mode
+# a cloud network secret adds it; in env mode ANTHROPIC_API_KEY is read from the shell.
 
 world:
   name: Asapville
@@ -14,7 +15,7 @@ clock:
 
 llm:
   backend: fake              # fake | anthropic
-  auth: env                  # env: ANTHROPIC_API_KEY | proxy: an egress proxy adds x-api-key
+  auth: proxy                # proxy: a cloud network secret adds x-api-key | env: ANTHROPIC_API_KEY
   max_concurrency: 8         # semaphore for concurrent decide calls
   max_output_tokens: 2048     # includes adaptive thinking tokens
   json_retries: 1            # one retry with the parse error, then "hesitate"

@@ -129,6 +129,7 @@ async def test_init_world_without_key_touches_no_database(settings, tmp_path, mo
 
     monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
     settings.llm.backend = "anthropic"
+    settings.llm.auth = "env"
     db = tmp_path / "nokey.db"
     settings.db_url = f"sqlite:///{db}"
     with pytest.raises(RuntimeError, match="ANTHROPIC_API_KEY"):
