@@ -209,7 +209,8 @@ class World:
         async def one(a: Agent):
             # a day's plan is where a life's direction comes from: always the stronger model
             return a, await plan_day(
-                gateway=self.gateway, agent_id=a.id, tier=a.tier, model=cfg.models.sonnet,
+                gateway=self.gateway, agent_id=a.id, tier=a.tier,
+                model=(cfg.models.haiku if self.gateway.guard.agent_on_fallback(a.id) else cfg.models.sonnet),
                 effort=effort_for(a, cfg.effort), persona=self.persona_for(a),
                 perception=build_perception(ctx, a), tick=ctx.tick, max_tokens=cfg.max_output_tokens,
                 yesterday=yesterday(a), lately=lately(a))
@@ -254,7 +255,8 @@ class World:
                 return a.id, DecideOutcome(self._continue(a, ctx))
             out = await decide(
                 gateway=self.gateway, agent_id=a.id, tier=a.tier,
-                model=model_for(a, cfg.models), effort=effort_for(a, cfg.effort),
+                model=(cfg.models.haiku if self.gateway.guard.agent_on_fallback(a.id)
+                       else model_for(a, cfg.models)), effort=effort_for(a, cfg.effort),
                 persona=self.persona_for(a), perception=perceptions[a.id],
                 memories=self._lasting_memories(ctx, a),
                 tick=ctx.tick, retries=cfg.json_retries, max_tokens=cfg.max_output_tokens,

@@ -67,6 +67,7 @@ class SlowModeCfg(BaseModel):
 class BudgetCfg(BaseModel):
     daily_usd: float = 5.0
     per_agent_daily_usd: float = 0.5
+    fallback_agent_daily_usd: float = 1.5  # past the cap a citizen keeps thinking on the cheap model
     angel_opus_monthly_usd: float = 10.0
     slow_mode_threshold: float = 0.9
     slow_mode: SlowModeCfg = SlowModeCfg()

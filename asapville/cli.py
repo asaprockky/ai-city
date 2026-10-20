@@ -37,7 +37,8 @@ FOUNDING_BRANDS = [
 def _bootstrap(settings: Settings) -> tuple[sessionmaker[Session], LLMGateway]:
     engine = make_engine(settings.db_url)
     sessions = make_session_factory(engine)
-    guard = BudgetGuard(settings.budget, opus_model=settings.llm.models.opus)
+    guard = BudgetGuard(settings.budget, opus_model=settings.llm.models.opus,
+                        cheap_model=settings.llm.models.haiku)
     gateway = LLMGateway(make_backend(settings.llm), settings.llm, guard)
     return sessions, gateway
 

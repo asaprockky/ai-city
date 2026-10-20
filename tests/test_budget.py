@@ -33,7 +33,13 @@ def test_per_agent_cap_blocks_only_that_agent():
         g.check(agent_id=7, model="m", angel_role=None)
     assert e.value.scope == "agent"
     g.check(agent_id=8, model="m", angel_role=None)
-    assert g.agent_capped(7) and not g.agent_capped(8)
+    assert g.agent_on_fallback(7) and not g.agent_on_fallback(8)
+    assert not g.agent_capped(7)
+    g.check(agent_id=7, model=g.cheap_model, angel_role=None)  # past the cap: the cheap model still thinks
+    g.record(g.cfg.fallback_agent_daily_usd, agent_id=7, model=g.cheap_model, angel_role=None)
+    assert g.agent_capped(7)
+    with pytest.raises(BudgetExceeded):
+        g.check(agent_id=7, model=g.cheap_model, angel_role=None)
 
 
 def test_opus_monthly_cap_is_separate():

@@ -36,7 +36,8 @@ llm:
 
 budget:
   daily_usd: 5.00            # hard cap for all calls in one real (UTC) day
-  per_agent_daily_usd: 1.00  # hard cap per citizen per real day
+  per_agent_daily_usd: 1.00  # cap per citizen per real day on their usual model
+  fallback_agent_daily_usd: 1.50  # then they keep thinking on the cheap model up to this hard cap
   angel_opus_monthly_usd: 10.00
   slow_mode_threshold: 0.90  # fraction of daily cap that triggers slow mode
   slow_mode:
