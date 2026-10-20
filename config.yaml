@@ -80,6 +80,29 @@ food:                        # nutrition = hunger reduced per item
   vegetables: {nutrition: 20}
   stew: {nutrition: 45}        # a hot meal at the tavern, eaten at the counter
   treatment: {nutrition: 0, health: 30}   # an hour with the clinic's nurse
+  eggs: {nutrition: 12}        # from the farm's hens and cows (flour from the mill, fish from the river)
+  milk: {nutrition: 10}
+  # dishes: anyone can cook them (cook) at home or in a shop or business they own, then eat or sell
+  soup:          {nutrition: 30, mood: 3}
+  omelette:      {nutrition: 35, mood: 4}
+  porridge:      {nutrition: 28, mood: 2}
+  pancakes:      {nutrition: 25, mood: 7}
+  fish_pie:      {nutrition: 38, mood: 6}
+  grilled_fish:  {nutrition: 40, mood: 5}
+  berry_tart:    {nutrition: 25, mood: 8}
+  cheese:        {nutrition: 30, mood: 4}
+  fish_hotpot:   {nutrition: 35, mood: 5}
+
+recipes:                       # ingredients -> portions; one hour at a kitchen
+  soup:         {uses: {vegetables: 2}, makes: 2}
+  omelette:     {uses: {eggs: 2}, makes: 1}
+  porridge:     {uses: {grain: 1, milk: 1}, makes: 2}
+  pancakes:     {uses: {flour: 1, eggs: 1, milk: 1}, makes: 3}
+  fish_pie:     {uses: {fish: 1, flour: 1}, makes: 2}
+  grilled_fish: {uses: {fish: 1}, makes: 1}
+  berry_tart:   {uses: {flour: 1, berries: 2}, makes: 2}
+  cheese:       {uses: {milk: 3}, makes: 1}
+  fish_hotpot:  {uses: {fish: 1, vegetables: 1}, makes: 2}
 
 economy:
   treasury_cents: 2000000      # 20,000 asaps in AsapBank: pays wages, takes what shops earn
@@ -90,13 +113,15 @@ economy:
     vegetables: 150
     berries: 80
     fish: 200
+    eggs: 80
+    milk: 70
     stew: 500
     treatment: 800
   buyback: 0.6                 # the market pays 60% of the shelf price when citizens sell
   shops:                       # where things are sold
-    bakery: [bread]
-    market: [vegetables, berries, fish]
-    farm: [vegetables]           # the farm gate
+    bakery: [bread, flour]
+    market: [vegetables, berries, fish, eggs, milk]
+    farm: [vegetables, eggs, milk, grain]  # the farm gate
     tavern: [stew]
     clinic: [treatment]
   served: [stew, treatment]    # used on the spot, never carried
@@ -107,6 +132,9 @@ economy:
     miller:    {workplace: mill,   wage_cents: 300, uses: {grain: 3}, source: farm, makes: {flour: 3}, deliver: {flour: bakery}}
     baker:     {workplace: bakery, wage_cents: 300, uses: {flour: 2}, source: bakery, makes: {bread: 4}}
     quarryman: {workplace: quarry, wage_cents: 350, makes: {stone: 2}}
+    herder:    {workplace: farm,   wage_cents: 250, makes: {eggs: 4, milk: 4}, deliver: {eggs: market, milk: market},
+                keep: {eggs: 1, milk: 1}}  # hens and cows; a share stays at the farm gate
+    fisher:    {workplace: river,  wage_cents: 250, makes: {fish: 3}, deliver: {fish: market}}
   stock_start:                 # seeded once, the day the shops open
     bakery: {bread: 24, flour: 6}
     market: {vegetables: 20}

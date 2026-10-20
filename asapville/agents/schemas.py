@@ -114,6 +114,7 @@ class ActionName(StrEnum):
     DEPOSIT = "deposit"
     WITHDRAW = "withdraw"
     REPAY = "repay"
+    COOK = "cook"
     IDLE = "idle"
 
 
@@ -204,6 +205,7 @@ class Perception(BaseModel):
     employer: str | None = None  # the citizen who owns the workplace, if any
     bank: str | None = None  # their AsapBank account, in words
     bank_offer: str | None = None  # at the bank: what it will do for them
+    kitchen: str | None = None  # what they could cook, and where
     shop: list[ShopItem] = Field(default_factory=list)  # for sale where the agent stands
     jobs_here: list[JobHere] = Field(default_factory=list)
     plan: str | None = None  # the citizen's own plan for today, in their words

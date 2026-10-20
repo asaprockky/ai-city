@@ -86,7 +86,10 @@ def _savour(ctx: TickContext, agent: Agent, item: str) -> str | None:
     """Taste: the same food three times running spoils the mood; something new lifts it."""
     diet, change, feeling = needs_rules.taste(list(agent.diet or []), item, ctx.settings.needs)
     agent.diet = diet
-    agent.mood = needs_rules.clamp(agent.mood + change)
+    treat = ctx.settings.food[item].mood if item in ctx.settings.food else 0.0
+    agent.mood = needs_rules.clamp(agent.mood + change + treat)
+    if treat >= 5:
+        feeling = "delicious" + (f"; {feeling}" if feeling else "")
     return feeling
 
 
@@ -1418,4 +1421,57 @@ class Repay:
              importance=6 if not left else 4)
         if not left:
             nudge_reputation(agent, 0.03)
+        return ActionResult(ok=True)
+
+
+# --------------------------------------------------------------------------- cooking
+def has_kitchen(agent: Agent, here: Location | None) -> bool:
+    """A citizen cooks at home, or in a shop or business of their own."""
+    return here is not None and (here.id == agent.home_id or here.owner_id == agent.id)
+
+
+def cookable(ctx: TickContext, agent: Agent) -> list[str]:
+    inv = agent.inventory or {}
+    return [dish for dish, r in ctx.settings.recipes.items()
+            if all(inv.get(i, 0) >= q for i, q in r.uses.items())]
+
+
+@register(ActionName.COOK, 'cook {"dish": "<dish>"}  -- at home, or in a shop or business you own: turn '
+                           'ingredients you carry into a dish (eat it, give it, or sell it at your stall)')
+class Cook:
+    @staticmethod
+    def validate(ctx: TickContext, agent: Agent, d: Decision, perceived: set[int]) -> str | None:
+        dish = str(d.action_args.get("dish", "")).strip().lower().replace(" ", "_")
+        recipe = ctx.settings.recipes.get(dish)
+        if recipe is None:
+            return f"Nobody knows how to cook '{dish}'. Dishes: {', '.join(ctx.settings.recipes)}."
+        if not has_kitchen(agent, _here(ctx, agent)):
+            return "You need a kitchen: your home, or a shop or business you own."
+        inv = agent.inventory or {}
+        missing = [f"{q} {i}" for i, q in recipe.uses.items() if inv.get(i, 0) < q]
+        if missing:
+            return f"{dish} needs {', '.join(f'{q} {i}' for i, q in recipe.uses.items())}; you lack " \
+                   + ", ".join(missing) + "."
+        if agent.energy < 4:
+            return "You are too tired to cook."
+        return None
+
+    @staticmethod
+    def execute(ctx: TickContext, agent: Agent, d: Decision) -> ActionResult:
+        dish = str(d.action_args["dish"]).strip().lower().replace(" ", "_")
+        recipe = ctx.settings.recipes[dish]
+        inv = dict(agent.inventory or {})
+        for item, qty in recipe.uses.items():
+            inv[item] -= qty
+            if inv[item] <= 0:
+                del inv[item]
+        inv[dish] = inv.get(dish, 0) + recipe.makes
+        agent.inventory = inv
+        agent.energy = needs_rules.clamp(agent.energy - 4)
+        used = ", ".join(f"{q} {i}" for i, q in recipe.uses.items())
+        emit(ctx.session, tick=ctx.tick, kind="cook", actor=agent, location_id=agent.location_id,
+             summary=f"{agent.name} cooked {recipe.makes} {dish.replace('_', ' ')} from {used}",
+             data={"dish": dish, "made": recipe.makes, "used": recipe.uses},
+             actor_memory=f"I cooked {recipe.makes} {dish.replace('_', ' ')} from {used}.",
+             witness_memory=f"{{actor}} cooked {dish.replace('_', ' ')}; it smelled good.", importance=3)
         return ActionResult(ok=True)

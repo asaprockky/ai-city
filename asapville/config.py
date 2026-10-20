@@ -108,6 +108,12 @@ class SleepCfg(BaseModel):
 class FoodItem(BaseModel):
     nutrition: float
     health: float = 0.0  # medicine heals; ordinary food doesn't
+    mood: float = 0.0  # a good dish lifts the mood
+
+
+class RecipeCfg(BaseModel):
+    uses: dict[str, int]  # ingredients taken from what the cook carries
+    makes: int = 1  # portions of the dish
 
 
 class ForageSpot(BaseModel):
@@ -214,6 +220,7 @@ class Settings(BaseModel):
     needs: NeedsCfg = NeedsCfg()
     sleep: SleepCfg = SleepCfg()
     food: dict[str, FoodItem] = Field(default_factory=dict)
+    recipes: dict[str, RecipeCfg] = Field(default_factory=dict)  # dish -> how to cook it
     forage: dict[str, ForageSpot] = Field(default_factory=dict)
     birth: BirthCfg = BirthCfg()
     conversation: ConversationCfg = ConversationCfg()

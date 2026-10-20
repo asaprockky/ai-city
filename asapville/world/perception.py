@@ -41,6 +41,23 @@ def _ownership(ctx: TickContext, agent: Agent, loc) -> str | None:
     return f"shop owned by {who}" if shop_only else f"business owned by {who}"
 
 
+def _kitchen(ctx: TickContext, agent: Agent, here) -> str | None:
+    from asapville.world.actions import cookable, has_kitchen
+
+    cfg = ctx.settings
+    can = cookable(ctx, agent)
+    if has_kitchen(agent, here):
+        menu = "; ".join(f"{d.replace('_', ' ')} ({', '.join(f'{q} {i}' for i, q in r.uses.items())} -> "
+                         f"{r.makes})" for d, r in cfg.recipes.items())
+        now = f" With what you carry you can cook now: {', '.join(can)}." if can else ""
+        return (f"You have a kitchen here (cook). Recipes: {menu}.{now} Ingredients are sold at the "
+                "Market, the farm gate and the Bakery; dishes can be eaten, given, or sold at a stall "
+                "you open (open_stall), at the price you choose.")
+    if can:
+        return (f"With what you carry you could cook {', '.join(can)} at home or in a shop you own.")
+    return None
+
+
 def todays_plan(ctx: TickContext, agent: Agent) -> str | None:
     """The plan this citizen wrote this simulated day, if any."""
     from asapville.world.clock import Clock
@@ -177,6 +194,7 @@ def build_perception(ctx: TickContext, agent: Agent) -> Perception:
         plan=plan,
         businesses=mine,
         bank=bank.describe(s, cfg, agent, ctx.tick),
+        kitchen=_kitchen(ctx, agent, here),
         bank_offer=(f"AsapBank: deposit savings (they earn {cfg.bank.deposit_rate:.1%} a day), withdraw, "
                     f"borrow up to {bank.can_borrow(s, cfg, agent, ctx.tick) / 100:.2f} asaps more "
                     f"({cfg.bank.loan_rate:.0%} a day, due in {cfg.bank.loan_days} days), or repay"
@@ -217,6 +235,8 @@ def render_perception(p: Perception) -> str:
         lines.append(p.bank)
     if p.bank_offer:
         lines.append(p.bank_offer + ".")
+    if p.kitchen:
+        lines.append(p.kitchen)
     if p.job:
         boss = f" for {p.employer}, who owns it" if p.employer else ""
         lines.append(f"Your job: {p.job} at {p.workplace}{boss}, {(p.wage_cents or 0) / 100:.2f} asaps per "

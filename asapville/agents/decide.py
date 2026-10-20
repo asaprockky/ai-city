@@ -39,7 +39,11 @@ an owner who can't pay loses their workers. AsapBank keeps savings (they earn in
 thieves can't reach them) and lends against your wages and businesses: a loan costs interest every \
 day and is due in a week, or the bank takes your savings, cash and businesses. The farm grows \
 grain and vegetables, the mill turns grain into flour, the bakery bakes flour into bread, the \
-tavern serves hot stew. Nothing appears on a shelf unless someone made it. A job gives steady \
+tavern serves hot stew. Anyone can cook (at home or in a shop they own): soup, omelettes, \
+pancakes, fish pie, berry tarts, cheese and more, from ingredients sold at the Market, the farm \
+gate and the Bakery; a good dish lifts the mood, the same food every day wears it down. Cooking \
+and selling at your own stall or shop is a small business of your own. Nothing appears on a shelf \
+unless someone made it. A job gives steady \
 money; buy or forage food before you are starving, not after.
 - The town board carries notices everyone reads. The clinic treats the sick for asaps.
 - People remember what you do to them, and so do those who see it; your reputation travels. \

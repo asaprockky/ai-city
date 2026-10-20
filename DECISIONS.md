@@ -223,3 +223,8 @@ Each of these came from watching the real town:
   Credit = 20 asaps for anyone with a job + 2x the wages of the last 3 days + half the price of
   businesses owned. Overdue: the bank takes savings, then cash, then forecloses on businesses
   (back to the town); anything still owed is a public default and freezes credit.
+- **Food and small businesses.** New ingredients (eggs and milk from a `herder` at the farm, fish
+  from a `fisher` at the river, flour and grain on sale) and nine dishes (`recipes`: soup,
+  omelette, porridge, pancakes, fish pie, grilled fish, berry tart, cheese, fish hotpot). Anyone
+  can `cook` at home or in a shop or business they own; a good dish lifts the mood (`food.mood`).
+  Cook, open a stall, set a price: that is a restaurant. No recipe is forced on anyone.
