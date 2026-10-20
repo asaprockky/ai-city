@@ -97,3 +97,18 @@ async def test_a_broke_owner_cannot_pay_and_deliveries_are_bought(world, session
         assert baker.money_cents == pay
         ev = s.scalar(select(Event).where(Event.kind == "work", Event.agent_id == baker.id))
         assert ev.data["missing"] == "wages" and owner.name in ev.summary
+
+
+async def test_owning_a_business_makes_a_manager(world, sessions, settings):
+    from asapville.llm.routing import MANAGER
+
+    with sessions() as s:
+        a = s.get(Agent, 1)
+        a.role, a.money_cents = "unemployed", 100
+        s.scalar(select(Location).where(Location.key == "mill")).owner_id = a.id
+        ws = s.get(WorldState, 1)
+        ws.tick = 18  # midnight: the step runs the daily round
+        s.commit()
+    await world.step()
+    with sessions() as s:
+        assert s.get(Agent, 1).tier == MANAGER

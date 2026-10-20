@@ -363,7 +363,9 @@ class World:
                          "Another day of nothing but work, food and sleep. I want more from my life.",
                          importance=6)
         for a in agents:
-            new_tier = tier_for(a.role, a.money_cents, self.settings.tiers)
+            owns = any(loc.owner_id == a.id and economy.is_business(self.settings, loc)
+                       for loc in ctx.locations.values())
+            new_tier = tier_for(a.role, a.money_cents, self.settings.tiers, owns_business=owns)
             if new_tier != a.tier:
                 old = a.tier
                 a.tier = new_tier
