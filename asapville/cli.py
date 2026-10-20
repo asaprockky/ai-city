@@ -411,7 +411,7 @@ def main(argv: list[str] | None = None) -> int:
 
         from asapville import comic
 
-        key = os.environ.get("ASAPVILLE_GEMINI_KEY")
+        key = (os.environ.get("ASAPVILLE_GEMINI_KEY") or os.environ.get("GEMINI_API"))
         if not key:
             raise SystemExit("set ASAPVILLE_GEMINI_KEY (a Gemini API key) to draw portraits")
         with sessions() as s:
@@ -426,7 +426,7 @@ def main(argv: list[str] | None = None) -> int:
 
         from asapville import comic
 
-        if key := os.environ.get("ASAPVILLE_GEMINI_KEY"):
+        if key := (os.environ.get("ASAPVILLE_GEMINI_KEY") or os.environ.get("GEMINI_API")):
             with sessions() as s:
                 try:
                     comic.draw_missing_portraits(s, key=key)  # newcomers get a face before their debut
