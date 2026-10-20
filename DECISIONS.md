@@ -134,3 +134,48 @@ Choices made where the brief left room. Newest phase at the bottom.
   never read these tables or endpoints. `system` events are hidden from the feed.
 - **Controls write `world_state`** (`paused`, `mode`, `speed`) exactly like the CLI does, so the page,
   `asapville pause` and `asapville speed` stay interchangeable.
+
+## Phase 4 preview — economy, jobs, the town board
+
+- **Why now:** the first real two days starved the town. Everyone walked to the Bakery with money
+  in hand and stood in a queue at an unattended counter; one citizen died there. The world had
+  shops but no way to trade, and no way to make food. Citizens were behaving sensibly inside
+  rules that did not let them live.
+- **Money is conserved.** A town fund (`world_state.treasury_cents`, "AsapBank") pays wages and
+  takes what shops earn. Citizens → shops → fund → wages → citizens. The fund can run dry.
+- **Goods are conserved.** Shelves are `stocks` rows per location. Nothing lands on a shelf unless
+  a worker made it: farmer (grain, vegetables → market) → miller (grain → flour) → baker (flour →
+  bread). A missing link stops the chain and the worker downstream is not paid for an idle hour.
+  Quarryman is a wage-only job. The tavern's stew is the one unlimited good: the safety valve for
+  anyone with money, priced high.
+- **Shops are unattended.** `buy` works whenever the shelf has stock; a shopkeeper role would have
+  reproduced the queue. The market also buys foraged food at 60% of the shelf price.
+- **Jobs are chosen (`apply` at the workplace) or given (the Fixer may appoint).** Workers must
+  still walk there and choose `work`. Wages, inputs and outputs are per hour in `config.yaml`.
+- **The town board.** `write_notice` at the Town Hall or Square; notices stay in everyone's
+  perception for a day, signed by name if the reader knows the author. The council (angels) posts
+  there too. This is the cheapest way for information to spread without omniscience.
+- **Perception tells citizens what they need to plan:** goods and prices where they stand, jobs
+  and wages, what each destination sells or hires, their own job. World rules now say how food is
+  made, so nobody waits for bread that nobody is baking.
+
+## Phase 6 preview — angels
+
+- **Watcher is code, not an LLM.** It runs every tick for free and files one open anomaly per
+  (kind, subject): `starving` (sev 3, 4 when health < 20), `death` (5), `stuck` (3 failures in 6h),
+  `no_food_for_sale` (4), `no_workers_<job>` when the product is low (2).
+- **Fixer is one LLM call per round**, at most every `angels.fixer_every` ticks and only while
+  anomalies are open. Sonnet by default; Opus when severity ≥ 4 or after two failed rounds (via
+  `AngelTask`, always with a `reason`). It sees the whole town (omniscient status) and replies with
+  JSON interventions: `notice`, `restock`, `appoint`, `grant`, `give_food`. Each one is validated
+  and capped (`angels.max_*`), written as an `Intervention` row with before/after, and shown on
+  the dashboard's Angels tab. Rejected ones are kept with the reason.
+- **Citizens never see angels.** They see a notice from "the town council", a cart unloading at
+  the shop, a council letter with a job, a relief parcel. The angel's own summary is a `system`
+  event the dashboard shows and no citizen remembers.
+- **Lightest touch is a rule in the prompt**, not just a hope: prefer information over hand-outs
+  and hand-outs over miracles; never fix what citizens can fix within a few hours.
+- **First real round (Opus, tick 48):** it read the situation correctly (food existed, people
+  held bread they hadn't eaten, the supply chain had nobody in it), posted a precise notice with
+  prices and wages, gave a parcel only to the one citizen at health 8, and appointed a baker and a
+  miller. Cost of the round: about three cents.

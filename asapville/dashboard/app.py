@@ -62,6 +62,8 @@ class Feed:
                 "frames": snapshot.frames(s, self.settings, since_tick=since_tick),
                 "events": snapshot.events(s, after_id=since_event),
                 "cost": snapshot.cost(s),
+                "economy": snapshot.economy_payload(s, self.settings),
+                "angels": snapshot.angels_payload(s),
             }
 
     def _refresh(self) -> dict[str, Any] | None:

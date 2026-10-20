@@ -157,6 +157,37 @@ class MapCfg(BaseModel):
     home_plots: HomePlotsCfg = HomePlotsCfg()
 
 
+class JobCfg(BaseModel):
+    workplace: str  # location key where the work happens
+    wage_cents: int  # paid by the town treasury per hour worked
+    uses: dict[str, int] = Field(default_factory=dict)  # inputs taken from `source` each hour
+    source: str | None = None  # location key whose stock holds the inputs
+    makes: dict[str, int] = Field(default_factory=dict)  # outputs per hour
+    deliver: dict[str, str] = Field(default_factory=dict)  # item -> location key (default: workplace)
+
+
+class EconomyCfg(BaseModel):
+    treasury_cents: int = 2_000_000  # the town fund: pays wages, takes what shops earn
+    prices: dict[str, int] = Field(default_factory=dict)  # cents per unit on the shelf
+    buyback: float = 0.6  # fraction of the shelf price a shop pays when a citizen sells
+    shops: dict[str, list[str]] = Field(default_factory=dict)  # location key -> items for sale
+    served: list[str] = Field(default_factory=list)  # eaten at the counter (tavern meals)
+    unlimited: list[str] = Field(default_factory=list)  # never run out (the tavern kitchen)
+    jobs: dict[str, JobCfg] = Field(default_factory=dict)
+    stock_start: dict[str, dict[str, int]] = Field(default_factory=dict)
+    work_energy_cost: float = 5.0
+    notice_ticks: int = 24  # how long a notice stays on the town board
+
+
+class AngelsCfg(BaseModel):
+    enabled: bool = True
+    fixer_every: int = 3  # at most one Fixer call per N ticks
+    max_restock: int = 50
+    max_grant_cents: int = 5000
+    max_food: int = 5
+    max_tokens: int = 2048
+
+
 class Settings(BaseModel):
     world: WorldCfg = WorldCfg()
     clock: ClockCfg = ClockCfg()
@@ -171,6 +202,8 @@ class Settings(BaseModel):
     conversation: ConversationCfg = ConversationCfg()
     memory: MemoryCfg = MemoryCfg()
     map: MapCfg = MapCfg()
+    economy: EconomyCfg = EconomyCfg()
+    angels: AngelsCfg = AngelsCfg()
     db_url: str = DEFAULT_DB_URL
 
 

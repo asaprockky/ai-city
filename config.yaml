@@ -76,6 +76,43 @@ food:                        # nutrition = hunger reduced per item
   berries: {nutrition: 15}
   fish: {nutrition: 30}
   vegetables: {nutrition: 20}
+  stew: {nutrition: 45}        # a hot meal at the tavern, eaten at the counter
+
+economy:
+  treasury_cents: 2000000      # 20,000 asaps in AsapBank: pays wages, takes what shops earn
+  prices:                      # cents per unit on the shelf (100 cents = 1 asap)
+    bread: 300
+    vegetables: 150
+    berries: 80
+    fish: 200
+    stew: 500
+  buyback: 0.6                 # the market pays 60% of the shelf price when citizens sell
+  shops:                       # where things are sold
+    bakery: [bread]
+    market: [vegetables, berries, fish]
+    tavern: [stew]
+  served: [stew]               # eaten at the counter, never carried
+  unlimited: [stew]            # the tavern kitchen never runs dry (the town's safety net)
+  jobs:                        # take one with `apply` at the workplace; `work` there for wages
+    farmer:    {workplace: farm,   wage_cents: 250, makes: {grain: 3, vegetables: 2}, deliver: {vegetables: market}}
+    miller:    {workplace: mill,   wage_cents: 300, uses: {grain: 3}, source: farm, makes: {flour: 3}}
+    baker:     {workplace: bakery, wage_cents: 300, uses: {flour: 2}, source: mill, makes: {bread: 4}}
+    quarryman: {workplace: quarry, wage_cents: 350, makes: {stone: 2}}
+  stock_start:                 # seeded once, the day the shops open
+    bakery: {bread: 24}
+    market: {vegetables: 20}
+    farm: {grain: 12}
+    mill: {flour: 6}
+  work_energy_cost: 5
+  notice_ticks: 24             # a notice stays on the town board for a day
+
+angels:                        # the simulation's guardians (never citizens)
+  enabled: true
+  fixer_every: 3               # at most one Fixer call every N ticks
+  max_restock: 50
+  max_grant_cents: 5000
+  max_food: 5
+  max_tokens: 2048
 
 forage:                      # free food costs time + energy and is never guaranteed
   forest: {item: berries, chance: 0.55, max_qty: 3, energy_cost: 6}

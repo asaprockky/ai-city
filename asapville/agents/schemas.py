@@ -142,6 +142,26 @@ class Destination(BaseModel):
     name: str
     kind: str
     travel_hours: int
+    sells: list[str] = Field(default_factory=list)
+    jobs: list[str] = Field(default_factory=list)
+
+
+class ShopItem(BaseModel):
+    item: str
+    price_cents: int
+    qty: int | None = None  # None = never runs out
+
+
+class JobHere(BaseModel):
+    job: str
+    wage_cents: int
+    workers: int
+
+
+class Notice(BaseModel):
+    text: str
+    author: str  # name if known, else a description or "the town council"
+    hours_ago: int
 
 
 class Perception(BaseModel):
@@ -164,7 +184,12 @@ class Perception(BaseModel):
     social: int
     money_cents: int
     inventory: dict[str, int]
-    notices: list[str] = Field(default_factory=list)
+    notices: list[Notice] = Field(default_factory=list)
+    job: str | None = None  # the agent's job, if any
+    workplace: str | None = None  # name of where that job is done
+    wage_cents: int | None = None
+    shop: list[ShopItem] = Field(default_factory=list)  # for sale where the agent stands
+    jobs_here: list[JobHere] = Field(default_factory=list)
     recent_dialogue: list[str] = Field(default_factory=list)
     recent_events: list[str] = Field(default_factory=list)
     available_actions: list[str] = Field(default_factory=list)

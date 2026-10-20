@@ -21,12 +21,13 @@ from sqlalchemy.orm import Session, sessionmaker
 from asapville.agents.decide import DecideOutcome, decide
 from asapville.agents.persona import persona_block
 from asapville.agents.schemas import ActionName, Decision, Personality
+from asapville.angels import fixer, watcher
 from asapville.config import Settings
 from asapville.db.models import Agent, Anomaly, Event, Location, WorldState
 from asapville.llm.budget import NORMAL, PAUSED, SLOW
 from asapville.llm.client import LLMGateway
 from asapville.llm.routing import WORKER, effort_for, model_for, tier_for
-from asapville.world import actions
+from asapville.world import actions, economy
 from asapville.world.actions import ActionResult, TickContext, arrive
 from asapville.world.clock import Clock, in_sleep_window
 from asapville.world.events import EventBus, emit, event_payload
@@ -53,6 +54,8 @@ class TickReport:
     invalid_actions: int = 0
     deaths: list[str] = field(default_factory=list)
     events: int = 0
+    anomalies: int = 0
+    interventions: int = 0
 
 
 def get_world_state(session: Session) -> WorldState:
@@ -73,6 +76,9 @@ class World:
         self._personas: dict[int, str] = {}
         with self.sessions() as s:
             gateway.guard.load(s)
+            ws = s.get(WorldState, 1)
+            if ws is not None and economy.open_economy(s, settings, tick=ws.tick):
+                s.commit()
 
     # ------------------------------------------------------------------ helpers
     def persona_for(self, agent: Agent) -> str:
@@ -268,9 +274,18 @@ class World:
             report.llm_calls = len(self.gateway.pending) - calls_before
             results = self._execute(ctx, agents, outcomes, report)
             self._needs(ctx, agents, results, report)
+            if self.settings.angels.enabled:
+                report.anomalies = len(watcher.scan(ctx, agents))
+                pending = watcher.open_anomalies(s)
+                if pending and ws.tick % max(1, self.settings.angels.fixer_every) == 0:
+                    fix = await fixer.run(ctx, self.gateway, pending, agents)
+                    report.interventions = sum(1 for r in fix.applied if r.applied)
+                    if fix.note:
+                        log.warning("fixer: %s", fix.note)
             if self.clock.is_new_day(ws.tick):
                 self._daily(ctx, agents)
             snapshots = record_tick(s, ws.tick, agents)
+            economy.record_world_tick(s, ws.tick, ws, ctx.locations)
 
             ws.tick += 1
             self.gateway.flush(s)
@@ -284,6 +299,7 @@ class World:
                 "type": "tick", "tick": report.tick, "label": t.label(), "hour": t.hour,
                 "day": t.day, "season": t.season, "weather": ws.weather, "mode": mode,
                 "spent_today": round(self.gateway.guard.spent_today, 4),
+                "treasury": ws.treasury_cents,
                 "agents": [tick_payload(row) for row in snapshots],
             })
             return report

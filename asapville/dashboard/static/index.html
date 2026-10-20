@@ -235,6 +235,26 @@ td.num, th.num { text-align: right; }
 .agent .ring { stroke: none; fill: none; }
 .agent-name { font-family: var(--body); font-size: 9px; fill: var(--ink); text-anchor: middle; pointer-events: none; paint-order: stroke; stroke: var(--surface); stroke-width: 3px; stroke-linejoin: round; }
 .night-overlay { fill: var(--night); pointer-events: none; transition: opacity 1s; }
+.stock-badge { font-family: var(--mono); font-size: 8.5px; fill: var(--muted); text-anchor: middle; pointer-events: none; paint-order: stroke; stroke: var(--surface); stroke-width: 3px; stroke-linejoin: round; }
+.stock-badge.empty { fill: var(--crit); font-weight: 500; }
+.chip.job { background: var(--accent-soft); color: var(--ink); border: 1px solid var(--accent); font-weight: 500; }
+.ev.angel .ic { background: color-mix(in srgb, var(--accent) 22%, transparent); }
+.shelves { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
+.shelf { background: var(--surface-2); border-radius: 10px; padding: 8px 10px; }
+.shelf .nm { font-weight: 600; font-size: 13px; }
+.shelf .it { display: flex; justify-content: space-between; font-size: 13px; }
+.shelf .it .num.zero { color: var(--crit); }
+.ivs { display: grid; gap: 6px; }
+.iv { display: grid; grid-template-columns: 52px 1fr; gap: 8px; padding: 8px 10px; border-radius: 10px; background: var(--surface-2); border-left: 3px solid var(--accent); }
+.iv.rejected { border-left-color: var(--muted); opacity: .75; }
+.iv .t { font-family: var(--mono); font-size: 11px; color: var(--muted); }
+.iv .tg { font-weight: 600; }
+.iv .why { font-size: 13px; color: var(--muted); }
+.anom { display: grid; grid-template-columns: 52px 1fr auto; gap: 8px; padding: 6px 10px; border-radius: 8px; font-size: 13px; align-items: start; }
+.anom .sev { font-family: var(--mono); font-size: 11px; padding: 1px 6px; border-radius: 999px; color: #fff; background: var(--warn); }
+.anom .sev.hi { background: var(--crit); }
+.anom.fixed { opacity: .6; }
+.assess { font-style: italic; border-left: 3px solid var(--accent); padding: 4px 10px; background: var(--surface-2); border-radius: 0 8px 8px 0; margin-bottom: 10px; }
 .map-frame { fill: var(--land); }
 .grid-line { stroke: var(--land-2); stroke-width: .6; }
 @media (prefers-reduced-motion: no-preference) {
@@ -267,6 +287,7 @@ td.num, th.num { text-align: right; }
     </div>
     <div class="spacer"></div>
     <span class="pill" id="statusPill"><span class="dot"></span><span id="statusText">connecting…</span></span>
+    <span class="pill" id="fundPill" title="The town fund (AsapBank): pays wages, takes what shops earn"><span>fund</span><span class="num" id="fundText">—</span></span>
     <span class="pill" id="spendPill" title="Total spent on LLM calls so far"><span>$</span><span class="num" id="spendText">0.0000</span></span>
     <div class="controls" id="liveControls" hidden>
       <button class="btn" id="btnPause">Pause world</button>
@@ -288,7 +309,8 @@ td.num, th.num { text-align: right; }
       <div class="tabs" role="tablist">
         <button class="tab" role="tab" aria-selected="true" data-tab="citizens">Citizens<span class="count" id="cntCitizens"></span></button>
         <button class="tab" role="tab" aria-selected="false" data-tab="events">Events<span class="count" id="cntEvents"></span></button>
-        <button class="tab" role="tab" aria-selected="false" data-tab="costs">Costs</button>
+        <button class="tab" role="tab" aria-selected="false" data-tab="town">Town</button>
+        <button class="tab" role="tab" aria-selected="false" data-tab="angels">Angels<span class="count" id="cntAngels"></span></button>
       </div>
       <div class="tabpanel" id="tab-citizens" role="tabpanel"><div class="citizens" id="citizens"></div></div>
       <div class="tabpanel" id="tab-events" role="tabpanel" hidden>
@@ -297,11 +319,14 @@ td.num, th.num { text-align: right; }
           <button aria-pressed="false" data-f="talk">Talk</button>
           <button aria-pressed="false" data-f="move">Moves</button>
           <button aria-pressed="false" data-f="body">Body</button>
+          <button aria-pressed="false" data-f="trade">Trade</button>
           <button aria-pressed="false" data-f="trouble">Trouble</button>
+          <button aria-pressed="false" data-f="angels">Angels</button>
         </div>
         <div class="feed" id="feed"></div>
       </div>
-      <div class="tabpanel" id="tab-costs" role="tabpanel" hidden></div>
+      <div class="tabpanel" id="tab-town" role="tabpanel" hidden></div>
+      <div class="tabpanel" id="tab-angels" role="tabpanel" hidden></div>
       <div class="drawer" id="drawer" hidden></div>
     </div>
   </section>
@@ -334,12 +359,17 @@ td.num, th.num { text-align: right; }
   const TIER_LABEL = { notable: 'notable', manager: 'manager', worker: 'worker' };
   const KIND_FILTER = {
     talk: ['talk'], move: ['depart', 'arrive', 'turned_away'], body: ['sleep', 'wake', 'eat', 'forage'],
+    trade: ['buy', 'sell', 'work', 'hired', 'quit', 'delivery'],
     trouble: ['collapse', 'death', 'invalid_action', 'budget_paused'],
+    angels: ['angel', 'notice', 'relief', 'delivery'],
   };
   const KIND_ICON = {
     talk: '💬', depart: '🚶', arrive: '📍', turned_away: '🚪', sleep: '🌙', wake: '☀️', eat: '🍞',
     forage: '🌿', collapse: '💫', death: '✝', invalid_action: '✗', budget_paused: '⏸', tier_change: '↕',
+    buy: '🛒', sell: '💰', work: '🔨', hired: '📋', quit: '🚪', notice: '📜', angel: '👁', relief: '🎁',
+    delivery: '🛻',
   };
+  const ANGEL_LABEL = { angel: 'The Fixer', notice: 'Town council', delivery: 'A cart', relief: 'The council' };
 
   // ---------------------------------------------------------------- state
   const S = {
@@ -446,6 +476,8 @@ td.num, th.num { text-align: right; }
     locs.sort((a, b) => (order[a.kind] ?? 2) - (order[b.kind] ?? 2));
     svg.innerHTML = `<rect class="map-frame" width="${W}" height="${H}"/>${grid}
       <g id="places">${locs.map(buildingSVG).join('')}</g>
+      <g id="badges">${locs.filter((l) => (S.data.economy?.shops || {})[l.key] || Object.values(S.data.economy?.jobs || {}).some((j) => j.workplace === l.key))
+        .map((l) => `<text class="stock-badge" data-key="${l.key}" x="${(l.x + .5) * CELL}" y="${(l.y + .5) * CELL + (l.kind === 'farm' || l.kind === 'quarry' ? 42 : 40)}"></text>`).join('')}</g>
       <g id="paths"></g><g id="agents"></g>
       <rect class="night-overlay" id="night" width="${W}" height="${H}" opacity="0"/>`;
     const g = svg.querySelector('#agents');
@@ -486,6 +518,14 @@ td.num, th.num { text-align: right; }
       el.querySelector('title').textContent = `${a.name} · ${fa.alive ? (fa.asleep ? 'asleep' : p.travelling ? 'walking to ' + p.to.name : 'at ' + locName(p.loc)) : 'dead'} · ${fa.mood_label}`;
     }
     document.querySelector('#paths').innerHTML = paths.join('');
+    const stocks = frameStocks(); const e = S.data.economy || {};
+    document.querySelectorAll('#badges .stock-badge').forEach((el) => {
+      const k = el.dataset.key; const items = Object.entries(stocks[k] || {}).filter(([it]) => !(e.unlimited || []).includes(it));
+      const sells = (e.shops || {})[k] || [];
+      const soldOut = sells.filter((it) => !(e.unlimited || []).includes(it) && !(stocks[k] || {})[it]);
+      el.textContent = items.length ? items.map(([it, q]) => `${it} ${q}`).join(' · ') : (sells.length ? (soldOut.length ? 'sold out' : '') : '');
+      el.classList.toggle('empty', !items.length && soldOut.length > 0);
+    });
     const h = f.hour; // night tint: deepest 00-04, none 08-18
     const night = h >= 21 || h < 5 ? .5 : h >= 19 ? .3 : h < 7 ? .25 : 0;
     $('night').setAttribute('opacity', night);
@@ -504,6 +544,8 @@ td.num, th.num { text-align: right; }
     else if (w.mode === 'slow') { pill.classList.add('slow'); $('statusText').textContent = 'Live · slow mode'; }
     else { pill.classList.add('live'); $('statusText').textContent = `Live · ${w.speed}×`; }
     $('spendText').textContent = S.data.cost.total_usd.toFixed(4);
+    const fund = frameTreasury();
+    $('fundText').textContent = fund != null ? (fund / 100).toLocaleString(undefined, { maximumFractionDigits: 0 }) : '—';
     $('btnPause').textContent = w.paused ? 'Resume world' : 'Pause world';
     $('btnPause').classList.toggle('primary', !!w.paused);
     const sel = $('speedSel'); if (document.activeElement !== sel) sel.value = String(w.speed);
@@ -546,7 +588,7 @@ td.num, th.num { text-align: right; }
       return `<button class="cit ${fa.alive ? '' : 'dead'} ${S.selected === a.id ? 'selected' : ''}" data-id="${a.id}">
         <span class="avatar ${fa.asleep ? 'asleep' : ''}" style="background:${alignColor(a.alignment)}">${esc(initials(a.name))}</span>
         <span>
-          <span class="name">${esc(a.name)} <span class="chip ${a.alignment}">${a.alignment}</span></span>
+          <span class="name">${esc(a.name)} <span class="chip ${a.alignment}">${a.alignment}</span>${(S.data.economy?.jobs || {})[a.role] ? ` <span class="chip job">${esc(a.role)}</span>` : ''}</span>
           <span class="where"><span>${esc(stateOf(fa, pos))} · ${esc(where)}</span><span class="mood">· ${esc(fa.mood_label)}</span></span>
         </span>
         <span class="bars">
@@ -562,13 +604,16 @@ td.num, th.num { text-align: right; }
   }
 
   // ---------------------------------------------------------------- events
-  function evKind(e) { return e.kind === 'talk' ? 'talk' : KIND_FILTER.trouble.includes(e.kind) ? 'trouble' : ''; }
+  function evKind(e) { return e.kind === 'talk' ? 'talk' : KIND_FILTER.trouble.includes(e.kind) ? 'trouble' : KIND_FILTER.angels.includes(e.kind) ? 'angel' : ''; }
   function evHTML(e, cls) {
     const a = S.agents.get(e.agent_id); const t = S.agents.get(e.target_id);
-    const who = a ? `<button data-id="${a.id}">${esc(a.name)}</button>` : '';
+    const who = a ? `<button data-id="${a.id}">${esc(a.name)}</button>` : esc(ANGEL_LABEL[e.kind] || '');
     let txt;
     if (e.kind === 'talk') txt = `to ${t ? `<button data-id="${t.id}">${esc(t.name)}</button>` : 'someone'}: <q>${esc(e.data?.line || '')}</q>`;
     else if (e.kind === 'invalid_action') txt = `<span class="muted">tried to ${esc(e.data?.action)} but ${esc(e.data?.error || "couldn't")}</span>`;
+    else if (e.kind === 'angel') txt = `<q>${esc(e.data?.assessment || e.summary)}</q> <span class="muted">(${esc((e.data?.interventions || []).join(', ') || 'no action')})</span>`;
+    else if (e.kind === 'notice') txt = `pinned a notice: <q>${esc(e.data?.text || '')}</q>`;
+    else if (!a) txt = esc(e.summary.replace(/^(A cart|The council) /, ''));
     else txt = esc(a ? e.summary.replace(a.name, '').replace(/^\s+/, '') : e.summary);
     const at = e.location_id ? `<span class="at"> · ${esc(locName(e.location_id))}</span>` : '';
     return `<div class="ev ${evKind(e)} ${cls || ''}"><span class="ic">${KIND_ICON[e.kind] || '•'}</span><span><span class="who">${who}</span> <span class="txt">${txt}</span>${at}</span></div>`;
@@ -594,12 +639,43 @@ td.num, th.num { text-align: right; }
     S.seenEvent = Math.max(S.seenEvent, ...evs.map((e) => e.id));
   }
 
-  // ---------------------------------------------------------------- costs
-  function renderCosts() {
-    const c = S.data.cost; const w = S.data.world;
+  // ---------------------------------------------------------------- town (economy + costs)
+  function frameStocks() { const f = curFrame(); return (f && f.stocks) || S.data.economy?.stocks || {}; }
+  function frameTreasury() { const f = curFrame(); return f && f.treasury != null ? f.treasury : S.data.economy?.treasury; }
+  function renderTown() {
+    const c = S.data.cost; const w = S.data.world; const e = S.data.economy || { stocks: {}, jobs: {}, shops: {}, prices: {} };
+    const f = curFrame(); const stocks = frameStocks();
     const pct = Math.min(100, c.total_usd / w.budget_daily_usd * 100);
     const rows = c.by_model.map((r) => `<tr><td>${esc(r.tier)}</td><td>${esc(r.model)}</td><td class="num">${r.calls}</td><td class="num">${r.input.toLocaleString()}</td><td class="num">${r.output.toLocaleString()}</td><td class="num">${r.cache_read.toLocaleString()}</td><td class="num">$${r.usd.toFixed(4)}</td></tr>`).join('');
-    $('tab-costs').innerHTML = `
+    const placeKeys = [...new Set([...Object.keys(e.shops || {}), ...Object.keys(e.jobs || {}).map((j) => e.jobs[j].workplace)])];
+    const byKey = Object.fromEntries([...S.locs.values()].map((l) => [l.key, l]));
+    const shelves = placeKeys.map((k) => {
+      const l = byKey[k]; if (!l) return '';
+      const items = Object.entries(stocks[k] || {});
+      const sells = (e.shops || {})[k] || [];
+      const lines = items.length ? items.map(([it, q]) => `<div class="it"><span>${esc(it)}${sells.includes(it) ? ` <span class="num" style="color:var(--muted)">${((e.prices || {})[it] || 0) / 100}</span>` : ''}</span><span class="num ${q ? '' : 'zero'}">${q}</span></div>`).join('')
+        : `<div class="it"><span class="num zero">empty</span></div>`;
+      const served = sells.filter((it) => (e.unlimited || []).includes(it)).map((it) => `<div class="it"><span>${esc(it)} <span class="num" style="color:var(--muted)">${((e.prices || {})[it] || 0) / 100}</span></span><span class="num">∞</span></div>`).join('');
+      return `<div class="shelf"><div class="nm">${esc(l.name)}</div>${lines}${served}</div>`;
+    }).join('');
+    const jobs = Object.entries(e.jobs || {}).map(([name, j]) => {
+      const workers = (j.workers || []).map((id) => { const a = S.agents.get(id); const fa = f && frameAgent(f, id); return a && (!fa || fa.alive) ? `<button data-id="${id}" class="chip job">${esc(a.name)}</button>` : ''; }).join(' ') || '<span class="chip soft">nobody</span>';
+      const chain = [Object.keys(j.uses || {}).length ? `uses ${Object.entries(j.uses).map(([k, v]) => `${v} ${k}`).join(', ')}` : '', Object.keys(j.makes || {}).length ? `makes ${Object.entries(j.makes).map(([k, v]) => `${v} ${k}`).join(', ')}` : ''].filter(Boolean).join(' → ');
+      return `<tr><td><strong>${esc(name)}</strong><br><span style="color:var(--muted);font-size:12px">${esc(byKey[j.workplace]?.name || j.workplace)} · ${(j.wage_cents / 100).toFixed(2)}/h${chain ? ' · ' + esc(chain) : ''}</span></td><td class="chips">${workers}</td></tr>`;
+    }).join('');
+    const employed = Object.values(e.jobs || {}).reduce((n, j) => n + (j.workers || []).length, 0);
+    const bread = Object.values(stocks).reduce((n, s) => n + (s.bread || 0), 0);
+    $('tab-town').innerHTML = `
+      <div class="stats">
+        <div class="stat"><div class="v">${frameTreasury() != null ? (frameTreasury() / 100).toLocaleString(undefined, { maximumFractionDigits: 0 }) : '—'}</div><div class="k">asaps in the town fund</div></div>
+        <div class="stat"><div class="v">${bread}</div><div class="k">loaves on shelves</div></div>
+        <div class="stat"><div class="v">${employed}</div><div class="k">citizens with a job</div></div>
+      </div>
+      <div class="eyebrow" style="margin:8px 0 6px">Shelves · this hour</div>
+      <div class="shelves">${shelves}</div>
+      <div class="eyebrow" style="margin:14px 0 6px">Jobs · the town pays wages from the fund</div>
+      <table><tbody>${jobs}</tbody></table>
+      <div class="eyebrow" style="margin:16px 0 6px">LLM spend</div>
       <div class="stats">
         <div class="stat"><div class="v">$${c.total_usd.toFixed(4)}</div><div class="k">spent so far</div></div>
         <div class="stat"><div class="v">${c.calls}</div><div class="k">LLM calls</div></div>
@@ -636,7 +712,7 @@ td.num, th.num { text-align: right; }
       </div>
       <div class="body">
         <div class="sec"><h3>Right now · day ${f.day} ${hourLabel(f.hour)}</h3>
-          <dl class="kv"><dt>Where</dt><dd>${esc(where)}</dd><dt>Doing</dt><dd>${esc(stateOf(fa, pos))}</dd><dt>Mood</dt><dd>${esc(fa.mood_label)} (${fa.mood})</dd><dt>Money</dt><dd class="num">${money(fa.money || 0)} asaps</dd><dt>Carrying</dt><dd class="chips">${inv}</dd></dl>
+          <dl class="kv"><dt>Where</dt><dd>${esc(where)}</dd><dt>Doing</dt><dd>${esc(stateOf(fa, pos))}</dd><dt>Job</dt><dd>${(S.data.economy?.jobs || {})[a.role] ? `${esc(a.role)} at ${esc(locName((([...S.locs.values()].find((l) => l.key === S.data.economy.jobs[a.role].workplace)) || {}).id))} · ${(S.data.economy.jobs[a.role].wage_cents / 100).toFixed(2)}/h` : 'none'}</dd><dt>Mood</dt><dd>${esc(fa.mood_label)} (${fa.mood})</dd><dt>Money</dt><dd class="num">${money(fa.money || 0)} asaps</dd><dt>Carrying</dt><dd class="chips">${inv}</dd></dl>
           ${fa.thought ? `<p class="thought" style="margin:10px 0 0">${esc(fa.thought)}</p>` : ''}
         </div>
         <div class="sec"><h3>Body</h3><div class="needs">
@@ -671,9 +747,39 @@ td.num, th.num { text-align: right; }
     d.querySelectorAll('.minifeed button[data-id]').forEach((b) => b.addEventListener('click', () => select(Number(b.dataset.id))));
   }
 
+  // ---------------------------------------------------------------- angels
+  function renderAngels() {
+    const f = curFrame(); const g = S.data.angels || { anomalies: [], interventions: [] };
+    const tickOf = (t) => { const fr = S.frames.find((x) => x.tick === t); return fr ? `d${fr.day} ${hourLabel(fr.hour)}` : `t${t}`; };
+    const ivs = g.interventions.filter((i) => !f || i.tick <= f.tick).slice().reverse();
+    const anoms = g.anomalies.filter((a) => !f || a.tick <= f.tick).slice().reverse();
+    const rounds = S.events.filter((e) => e.kind === 'angel' && (!f || e.tick <= f.tick)).slice().reverse();
+    $('cntAngels').textContent = ivs.filter((i) => i.applied).length;
+    const name = (id) => { const a = S.agents.get(id); return a ? `<button data-id="${a.id}">${esc(a.name)}</button>` : ''; };
+    const ivText = (i) => {
+      const t = i.target || '';
+      if (t === 'notice') return `Pinned a notice: <q>${esc(i.after?.text || '')}</q>`;
+      if (t.startsWith('stock:')) { const [, loc, item] = t.split(':'); return `A cart brought ${(i.after?.qty ?? 0) - (i.before?.qty ?? 0)} ${esc(item)} to ${esc(locName((([...S.locs.values()].find((l) => l.key === loc)) || {}).id))}`; }
+      if (t.endsWith(':role')) return `Appointed ${name(Number(t.split(':')[1]))} as ${esc(i.after?.role)}`;
+      if (t.endsWith(':money')) return `Granted ${name(Number(t.split(':')[1]))} ${(((i.after?.money_cents ?? 0) - (i.before?.money_cents ?? 0)) / 100).toFixed(2)} asaps of relief`;
+      if (t.endsWith(':inventory')) return `Handed ${name(Number(t.split(':')[1]))} a food parcel`;
+      return esc(t || i.reason || 'nothing');
+    };
+    const latest = rounds[0];
+    $('tab-angels').innerHTML = `
+      <p style="margin:0 0 10px;color:var(--muted);font-size:13px">The <strong>Watcher</strong> (plain code, free) scans the town every hour. The <strong>Fixer</strong> (Sonnet, or Opus when lives are at risk) reads its findings and intervenes with the lightest touch: a notice, a cart, a job, a relief parcel. Citizens only ever see the effect.</p>
+      ${latest ? `<div class="assess"><div class="eyebrow" style="margin-bottom:4px">Latest assessment · ${tickOf(latest.tick)} · ${esc(latest.data?.model || '')}</div>${esc(latest.data?.assessment || latest.summary)}</div>` : ''}
+      <div class="eyebrow" style="margin:8px 0 6px">Interventions (${ivs.length})</div>
+      <div class="ivs">${ivs.map((i) => `<div class="iv ${i.applied ? '' : 'rejected'}"><span class="t">${tickOf(i.tick)}</span><div><div class="tg">${ivText(i)}${i.applied ? '' : ' <span class="chip soft">rejected</span>'}</div><div class="why">${esc(i.reason || '')}</div></div></div>`).join('') || '<div class="empty">No interventions yet. The town is running itself.</div>'}</div>
+      <div class="eyebrow" style="margin:14px 0 6px">What the Watcher saw (${anoms.length})</div>
+      <div>${anoms.map((a) => `<div class="anom ${a.status === 'open' ? '' : 'fixed'}"><span class="t">${tickOf(a.tick)}</span><span><strong>${esc(a.kind.replace(/_/g, ' '))}</strong> ${a.agent_id ? name(a.agent_id) : ''}<br><span style="color:var(--muted)">${esc(a.detail)}</span></span><span class="sev ${a.severity >= 4 ? 'hi' : ''}" title="severity ${a.severity} of 5">sev ${a.severity}</span></div>`).join('') || '<div class="empty">Nothing flagged.</div>'}</div>`;
+    $('tab-angels').querySelectorAll('button[data-id]').forEach((b) => b.addEventListener('click', () => select(Number(b.dataset.id))));
+  }
+
   // ---------------------------------------------------------------- render all
   function render() {
-    renderClock(); renderTimeline(); renderMap(); renderCitizens(); renderEvents(); renderCosts(); renderDrawer();
+    renderClock(); renderTimeline(); renderMap(); renderCitizens(); renderEvents(); renderTown(); renderAngels(); renderDrawer();
+    $('tab-town').querySelectorAll('button[data-id]').forEach((b) => b.addEventListener('click', () => select(Number(b.dataset.id))));
   }
   function goTo(k, { byUser = false } = {}) {
     k = Math.max(0, Math.min(S.frames.length - 1, k));
@@ -703,6 +809,8 @@ td.num, th.num { text-align: right; }
     if (u.events?.length) { const have = new Set(S.events.map((e) => e.id)); for (const e of u.events) if (!have.has(e.id)) S.events.push(e); changed = true; }
     if (u.world) S.data.world = u.world;
     if (u.cost) S.data.cost = u.cost;
+    if (u.economy) S.data.economy = u.economy;
+    if (u.angels) S.data.angels = u.angels;
     if (S.follow) S.cur = S.frames.length - 1;
     render();
     if (changed && u.frames?.length && !S.follow) toast(`New hour lived: day ${u.frames[u.frames.length - 1].day} ${hourLabel(u.frames[u.frames.length - 1].hour)}`);
@@ -757,7 +865,7 @@ td.num, th.num { text-align: right; }
   $('speedSel').addEventListener('change', (e) => control('speed', Number(e.target.value)));
   document.querySelectorAll('.tab').forEach((t) => t.addEventListener('click', () => {
     document.querySelectorAll('.tab').forEach((x) => x.setAttribute('aria-selected', x === t));
-    ['citizens', 'events', 'costs'].forEach((n) => { $('tab-' + n).hidden = n !== t.dataset.tab; });
+    ['citizens', 'events', 'town', 'angels'].forEach((n) => { $('tab-' + n).hidden = n !== t.dataset.tab; });
     S.tab = t.dataset.tab;
     try { localStorage.setItem('asapville.tab', S.tab); } catch (e) { /* private window */ }
   }));

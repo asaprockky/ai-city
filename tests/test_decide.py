@@ -31,7 +31,7 @@ async def test_invalid_json_retries_once_then_hesitates(world, fake, sessions):
     rep = await world.step()
     assert rep.hesitations == rep.llm_calls // 2 > 0
     with sessions() as s:
-        anomalies = list(s.scalars(select(Anomaly)))
+        anomalies = list(s.scalars(select(Anomaly).where(Anomaly.source == "engine")))
         assert anomalies and all(a.kind == "json_parse_failure" for a in anomalies)
         retry = [r for r in fake.requests if r.purpose == "decide" and len(r.messages) == 3]
         assert retry and "invalid" in retry[0].messages[-1].content
@@ -42,7 +42,7 @@ async def test_retry_success_is_not_an_anomaly(world, fake, sessions):
     rep = await world.step()
     assert rep.hesitations == 0
     with sessions() as s:
-        assert s.scalars(select(Anomaly)).first() is None
+        assert s.scalars(select(Anomaly).where(Anomaly.source == "engine")).first() is None
 
 
 async def test_opus_requires_reason(gateway):

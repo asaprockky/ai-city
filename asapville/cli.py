@@ -22,6 +22,7 @@ from asapville.llm.budget import BudgetGuard
 from asapville.llm.client import LLMGateway, make_backend
 from asapville.llm.routing import TIER_NAMES
 from asapville.world.clock import Clock
+from asapville.world.economy import open_economy
 from asapville.world.map import seed_locations
 
 log = logging.getLogger("asapville.cli")
@@ -68,6 +69,7 @@ async def init_world(settings: Settings, *, population: int | None = None,
             log.info("born: %s (%s)", agents[-1].name, seed.moral_alignment)
             if home is not None:
                 home.owner_id = agents[-1].id
+        open_economy(s, settings, tick=0)
         gateway.flush(s)
         s.commit()
         return agents
@@ -100,7 +102,8 @@ def world_report(session: Session, settings: Settings, *, events: int = 15) -> s
     t = Clock(settings.clock).at(ws.tick)
     locs = {loc.id: loc for loc in session.scalars(select(Location))}
     lines = [f"WORLD: {t.label()} | tick {ws.tick} | mode {ws.mode} | "
-             f"{'PAUSED' if ws.paused else 'running'} | weather {ws.weather}", "",
+             f"{'PAUSED' if ws.paused else 'running'} | weather {ws.weather} | "
+             f"fund {ws.treasury_cents / 100:.2f}", "",
              f"{'id':>3} {'name':<16} {'tier':<8} {'where':<22} {'hun':>4} {'nrg':>4} {'hp':>4} "
              f"{'asaps':>8} {'state':<8} mood"]
     for a in session.scalars(select(Agent).order_by(Agent.id)):

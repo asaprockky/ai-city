@@ -14,7 +14,7 @@ from sqlalchemy.orm import Session
 
 from asapville.agents.schemas import ActionName, Decision
 from asapville.config import Settings
-from asapville.db.models import Agent, Location
+from asapville.db.models import Agent, Location, WorldState
 from asapville.world import needs as needs_rules
 from asapville.world.clock import WorldTime
 from asapville.world.events import emit
@@ -280,3 +280,258 @@ class Idle:
 
 def available_usages() -> list[str]:
     return [spec.usage for spec in REGISTRY.values()]
+
+
+# --------------------------------------------------------------------------- economy
+def _job_of(ctx: TickContext, agent: Agent):
+    return ctx.settings.economy.jobs.get(agent.role)
+
+
+APPLY_USAGE = 'apply {"job": "<job name>"}  -- take a job where you stand (the place lists its jobs)'
+
+
+@register(ActionName.APPLY, APPLY_USAGE)
+class Apply:
+    @staticmethod
+    def validate(ctx: TickContext, agent: Agent, d: Decision, perceived: set[int]) -> str | None:
+        job = str(d.action_args.get("job", "")).strip().lower()
+        spec = ctx.settings.economy.jobs.get(job)
+        if spec is None:
+            return f"There is no job called '{job}'."
+        here = _here(ctx, agent)
+        if here is None or here.key != spec.workplace:
+            return f"You apply for {job} at {ctx.by_key[spec.workplace].name}, not here."
+        if agent.role == job:
+            return f"You already work here as a {job}."
+        return None
+
+    @staticmethod
+    def execute(ctx: TickContext, agent: Agent, d: Decision) -> ActionResult:
+        job = str(d.action_args["job"]).strip().lower()
+        spec = ctx.settings.economy.jobs[job]
+        here = _here(ctx, agent)
+        assert here is not None
+        agent.role = job
+        emit(ctx.session, tick=ctx.tick, kind="hired", actor=agent, location_id=here.id,
+             summary=f"{agent.name} took a job as {job} at {here.name} ({spec.wage_cents / 100:.2f}/h)",
+             data={"job": job, "wage_cents": spec.wage_cents},
+             actor_memory=f"I took a job as {job} at {here.name}; it pays {spec.wage_cents / 100:.2f} "
+                          f"asaps an hour. I work by choosing 'work' here.",
+             witness_memory=f"{{actor}} signed on as a {job} here.", importance=4)
+        return ActionResult(ok=True)
+
+
+@register(ActionName.QUIT, "quit {}  -- leave your job")
+class Quit:
+    @staticmethod
+    def validate(ctx: TickContext, agent: Agent, d: Decision, perceived: set[int]) -> str | None:
+        return None if _job_of(ctx, agent) else "You have no job to quit."
+
+    @staticmethod
+    def execute(ctx: TickContext, agent: Agent, d: Decision) -> ActionResult:
+        old = agent.role
+        agent.role = "unemployed"
+        emit(ctx.session, tick=ctx.tick, kind="quit", actor=agent, location_id=agent.location_id,
+             summary=f"{agent.name} quit as {old}", data={"job": old},
+             actor_memory=f"I quit my job as {old}.", importance=3)
+        return ActionResult(ok=True)
+
+
+@register(ActionName.WORK, "work {}  -- an hour at your job (you need one: apply at a workplace first)")
+class Work:
+    @staticmethod
+    def validate(ctx: TickContext, agent: Agent, d: Decision, perceived: set[int]) -> str | None:
+        spec = _job_of(ctx, agent)
+        if spec is None:
+            return "You have no job. Apply at a workplace first (the farm, mill, bakery or quarry)."
+        here = _here(ctx, agent)
+        if here is None or here.key != spec.workplace:
+            return f"Your job is at {ctx.by_key[spec.workplace].name}; you are not there."
+        if agent.energy < ctx.settings.economy.work_energy_cost:
+            return "You are too exhausted to work."
+        return None
+
+    @staticmethod
+    def execute(ctx: TickContext, agent: Agent, d: Decision) -> ActionResult:
+        from asapville.world import economy
+
+        spec = _job_of(ctx, agent)
+        here = _here(ctx, agent)
+        assert spec is not None and here is not None
+        ws = ctx.session.get(WorldState, 1)
+        assert ws is not None
+        agent.energy = needs_rules.clamp(agent.energy - ctx.settings.economy.work_energy_cost)
+        source = ctx.by_key.get(spec.source) if spec.source else None
+        for item, qty in spec.uses.items():
+            have = economy.stock_qty(ctx.session, source.id, item) if source else 0
+            if have < qty:
+                where = source.name if source else "anywhere"
+                emit(ctx.session, tick=ctx.tick, kind="work", actor=agent, location_id=here.id,
+                     summary=f"{agent.name} could not work as {agent.role}: no {item} at {where}",
+                     data={"job": agent.role, "success": False, "missing": item},
+                     actor_memory=f"I went to work as {agent.role} but there was no {item} from "
+                                  f"{where}; nothing to do until someone makes some.",
+                     witness_memory="{actor} stood idle at work; the supplies had run out.", importance=3)
+                return ActionResult(ok=True)
+        if ws.treasury_cents < spec.wage_cents:
+            emit(ctx.session, tick=ctx.tick, kind="work", actor=agent, location_id=here.id,
+                 summary=f"{agent.name} worked as {agent.role} but the town fund could not pay",
+                 data={"job": agent.role, "success": False, "missing": "wages"},
+                 actor_memory="The town could not pay my wages today; the fund is empty.", importance=4)
+            return ActionResult(ok=True)
+        for item, qty in spec.uses.items():
+            economy.stock_add(ctx.session, source.id, item, -qty)  # type: ignore[union-attr]
+        made = []
+        for item, qty in spec.makes.items():
+            dest = ctx.by_key.get(spec.deliver.get(item, spec.workplace), here)
+            economy.stock_add(ctx.session, dest.id, item, qty)
+            made.append(f"{qty} {item}" + (f" to {dest.name}" if dest.id != here.id else ""))
+        ws.treasury_cents -= spec.wage_cents
+        agent.money_cents += spec.wage_cents
+        what = ", ".join(made) or "an hour's labour"
+        emit(ctx.session, tick=ctx.tick, kind="work", actor=agent, location_id=here.id,
+             summary=f"{agent.name} worked as {agent.role}: {what}, earned {spec.wage_cents / 100:.2f}",
+             data={"job": agent.role, "success": True, "made": spec.makes, "wage_cents": spec.wage_cents},
+             actor_memory=f"I worked an hour as {agent.role} ({what}) and earned "
+                          f"{spec.wage_cents / 100:.2f} asaps.",
+             witness_memory="{actor} was hard at work.", importance=2)
+        return ActionResult(ok=True)
+
+
+def _qty(d: Decision) -> int:
+    try:
+        return max(1, min(10, int(d.action_args.get("qty", 1))))
+    except (TypeError, ValueError):
+        return 1
+
+
+@register(ActionName.BUY, 'buy {"item": "<item>", "qty": 1}  -- at a shop that sells it; prices are listed')
+class Buy:
+    @staticmethod
+    def validate(ctx: TickContext, agent: Agent, d: Decision, perceived: set[int]) -> str | None:
+        from asapville.world import economy
+
+        here = _here(ctx, agent)
+        item = str(d.action_args.get("item", "")).strip().lower()
+        if here is None or item not in economy.shop_items(ctx.settings, here.key):
+            sellers = [ctx.by_key[k].name for k, items in ctx.settings.economy.shops.items()
+                       if item in items and k in ctx.by_key]
+            hint = f" {sellers[0]} sells it." if sellers else ""
+            return f"Nobody sells {item or 'that'} here.{hint}"
+        qty = _qty(d)
+        price = economy.price_of(ctx.settings, item) or 0
+        if agent.money_cents < price * qty:
+            return (f"{qty} {item} costs {price * qty / 100:.2f} asaps; "
+                    f"you have {agent.money_cents / 100:.2f}.")
+        left = economy.stock_qty(ctx.session, here.id, item)
+        if item not in ctx.settings.economy.unlimited and left < qty:
+            if left:
+                return f"The shelf is nearly empty: only {left} {item} left."
+            return f"There is no {item} left; someone has to make more."
+        return None
+
+    @staticmethod
+    def execute(ctx: TickContext, agent: Agent, d: Decision) -> ActionResult:
+        from asapville.world import economy
+
+        here = _here(ctx, agent)
+        assert here is not None
+        item = str(d.action_args["item"]).strip().lower()
+        qty = _qty(d)
+        price = economy.price_of(ctx.settings, item) or 0
+        ws = ctx.session.get(WorldState, 1)
+        assert ws is not None
+        agent.money_cents -= price * qty
+        ws.treasury_cents += price * qty
+        if item not in ctx.settings.economy.unlimited:
+            economy.stock_add(ctx.session, here.id, item, -qty)
+        if item in ctx.settings.economy.served:
+            agent.hunger = needs_rules.eat(agent.hunger, ctx.settings.food[item].nutrition * qty)
+            what = f"ate {qty} {item} at {here.name}"
+            mem = f"I paid {price * qty / 100:.2f} asaps for {item} at {here.name} and ate it there."
+        else:
+            inv = dict(agent.inventory or {})
+            inv[item] = inv.get(item, 0) + qty
+            agent.inventory = inv
+            what = f"bought {qty} {item} at {here.name}"
+            mem = f"I bought {qty} {item} at {here.name} for {price * qty / 100:.2f} asaps."
+        emit(ctx.session, tick=ctx.tick, kind="buy", actor=agent, location_id=here.id,
+             summary=f"{agent.name} {what} for {price * qty / 100:.2f}",
+             data={"item": item, "qty": qty, "cents": price * qty}, actor_memory=mem,
+             witness_memory=f"{{actor}} bought some {item}.", importance=2)
+        return ActionResult(ok=True)
+
+
+SELL_USAGE = 'sell {"item": "<item>", "qty": 1}  -- to a shop that trades it; it pays part of the shelf price'
+
+
+@register(ActionName.SELL, SELL_USAGE)
+class Sell:
+    @staticmethod
+    def validate(ctx: TickContext, agent: Agent, d: Decision, perceived: set[int]) -> str | None:
+        from asapville.world import economy
+
+        here = _here(ctx, agent)
+        item = str(d.action_args.get("item", "")).strip().lower()
+        if here is None or item not in economy.shop_items(ctx.settings, here.key) \
+                or item in ctx.settings.economy.unlimited:
+            return f"Nobody here buys {item or 'that'}."
+        if (agent.inventory or {}).get(item, 0) < _qty(d):
+            return f"You don't have {_qty(d)} {item} to sell."
+        return None
+
+    @staticmethod
+    def execute(ctx: TickContext, agent: Agent, d: Decision) -> ActionResult:
+        from asapville.world import economy
+
+        here = _here(ctx, agent)
+        assert here is not None
+        item = str(d.action_args["item"]).strip().lower()
+        qty = _qty(d)
+        cents = int((economy.price_of(ctx.settings, item) or 0) * ctx.settings.economy.buyback) * qty
+        ws = ctx.session.get(WorldState, 1)
+        assert ws is not None
+        if ws.treasury_cents < cents:
+            cents = ws.treasury_cents  # the town pays what it can
+        inv = dict(agent.inventory or {})
+        inv[item] -= qty
+        if inv[item] <= 0:
+            del inv[item]
+        agent.inventory = inv
+        agent.money_cents += cents
+        ws.treasury_cents -= cents
+        economy.stock_add(ctx.session, here.id, item, qty)
+        emit(ctx.session, tick=ctx.tick, kind="sell", actor=agent, location_id=here.id,
+             summary=f"{agent.name} sold {qty} {item} at {here.name} for {cents / 100:.2f}",
+             data={"item": item, "qty": qty, "cents": cents},
+             actor_memory=f"I sold {qty} {item} at {here.name} for {cents / 100:.2f} asaps.",
+             witness_memory=f"{{actor}} sold some {item} to the shop.", importance=2)
+        return ActionResult(ok=True)
+
+
+NOTICE_USAGE = ('write_notice {"text": "<message for the whole town>"}  -- at the town hall or square; '
+                'everyone reads it for a day')
+
+
+@register(ActionName.WRITE_NOTICE, NOTICE_USAGE)
+class WriteNotice:
+    @staticmethod
+    def validate(ctx: TickContext, agent: Agent, d: Decision, perceived: set[int]) -> str | None:
+        here = _here(ctx, agent)
+        if here is None or here.kind not in ("town_hall", "square"):
+            return "Notices go on the board at the Town Hall or the Town Square."
+        if not str(d.action_args.get("text", "")).strip():
+            return "Write something in 'text'."
+        return None
+
+    @staticmethod
+    def execute(ctx: TickContext, agent: Agent, d: Decision) -> ActionResult:
+        here = _here(ctx, agent)
+        assert here is not None
+        text = str(d.action_args["text"]).strip()[:300]
+        emit(ctx.session, tick=ctx.tick, kind="notice", actor=agent, location_id=here.id,
+             visibility="public", summary=f'{agent.name} pinned a notice: "{text}"',
+             data={"text": text, "author_id": agent.id},
+             actor_memory=f'I pinned a notice on the town board: "{text}"',
+             witness_memory="{actor} pinned a notice on the board.", importance=3)
+        return ActionResult(ok=True)

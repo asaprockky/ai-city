@@ -9,21 +9,26 @@ from __future__ import annotations
 
 from typing import Any
 
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from asapville.agents.persona import unpleasant_reasons
 from asapville.agents.schemas import Personality
 from asapville.config import Settings
-from asapville.db.models import Agent, AgentTick, Event, LLMCall, Location, WorldState
+from asapville.db.models import (
+    Agent, AgentTick, Anomaly, Event, Intervention, LLMCall, Location, WorldState, WorldTick,
+)
 from asapville.engine import get_world_state
 from asapville.llm.routing import TIER_NAMES, model_for
 from asapville.world.clock import Clock
+from asapville.world import economy as econ
 from asapville.world.events import event_payload
 from asapville.world.timeline import tick_payload
 
-# Events the simulation layer writes for itself (budget, tiers); the feed hides them.
+# Events the simulation layer writes for itself (budget, tiers); the feed hides them,
+# except the angels' own entries, which the observer should see.
 HIDDEN_VISIBILITY = ("system",)
+SHOWN_SYSTEM_KINDS = ("angel",)
 
 
 def location_payload(loc: Location) -> dict[str, Any]:
@@ -65,18 +70,24 @@ def frames(session: Session, settings: Settings, *, since_tick: int = -1) -> lis
     clock = Clock(settings.clock)
     rows = session.scalars(select(AgentTick).where(AgentTick.tick > since_tick)
                            .order_by(AgentTick.tick, AgentTick.agent_id))
+    town = {w.tick: w for w in session.scalars(select(WorldTick).where(WorldTick.tick > since_tick))}
     out: list[dict[str, Any]] = []
     for r in rows:
         if not out or out[-1]["tick"] != r.tick:
             t = clock.at(r.tick)
+            w = town.get(r.tick)
             out.append({"tick": r.tick, "label": t.label(), "hour": t.hour, "day": t.day,
-                        "season": t.season, "part_of_day": t.part_of_day, "agents": []})
+                        "season": t.season, "part_of_day": t.part_of_day,
+                        "treasury": w.treasury_cents if w else None, "stocks": (w.stocks or {}) if w else None,
+                        "agents": []})
         out[-1]["agents"].append(tick_payload(r))
     return out
 
 
 def events(session: Session, *, after_id: int = 0, limit: int | None = None) -> list[dict[str, Any]]:
-    q = (select(Event).where(Event.id > after_id, Event.visibility.not_in(HIDDEN_VISIBILITY))
+    q = (select(Event).where(Event.id > after_id,
+                             or_(Event.visibility.not_in(HIDDEN_VISIBILITY),
+                                 Event.kind.in_(SHOWN_SYSTEM_KINDS)))
          .order_by(Event.id))
     if limit:
         q = q.limit(limit)
@@ -96,6 +107,32 @@ def cost(session: Session) -> dict[str, Any]:
             "calls": sum(r["calls"] for r in by_model), "by_model": by_model}
 
 
+def economy_payload(session: Session, settings: Settings) -> dict[str, Any]:
+    ws = get_world_state(session)
+    locations = {loc.id: loc for loc in session.scalars(select(Location))}
+    e = settings.economy
+    return {
+        "treasury": ws.treasury_cents,
+        "stocks": econ.stocks_by_location(session, locations),
+        "prices": e.prices, "shops": e.shops, "served": e.served, "unlimited": e.unlimited,
+        "jobs": {name: {"workplace": j.workplace, "wage_cents": j.wage_cents, "uses": j.uses,
+                        "makes": j.makes, "workers": [a.id for a in econ.workers_in(session, name)]}
+                 for name, j in e.jobs.items()},
+    }
+
+
+def angels_payload(session: Session) -> dict[str, Any]:
+    anomalies = [{"id": a.id, "tick": a.tick, "kind": a.kind, "severity": a.severity, "status": a.status,
+                  "agent_id": a.agent_id, "detail": a.detail, "source": a.source,
+                  "fix_attempts": a.fix_attempts}
+                 for a in session.scalars(select(Anomaly).order_by(Anomaly.id))]
+    interventions = [{"id": i.id, "tick": i.tick, "anomaly_id": i.anomaly_id, "target": i.target,
+                      "applied": i.applied, "reason": i.reason, "model": i.model,
+                      "before": i.before, "after": i.after}
+                     for i in session.scalars(select(Intervention).order_by(Intervention.id))]
+    return {"anomalies": anomalies, "interventions": interventions}
+
+
 def world_payload(ws: WorldState, settings: Settings) -> dict[str, Any]:
     t = Clock(settings.clock).at(ws.tick)
     return {"name": settings.world.name, "tick": ws.tick, "paused": ws.paused, "mode": ws.mode,
@@ -111,8 +148,10 @@ def bootstrap(session: Session, settings: Settings) -> dict[str, Any]:
     timeline = frames(session, settings)
     if not timeline:  # nothing has happened yet: show everyone where they were born
         t = Clock(settings.clock).at(ws.tick)
+        locations = {loc.id: loc for loc in session.scalars(select(Location))}
         timeline = [{"tick": ws.tick, "label": t.label(), "hour": t.hour, "day": t.day,
                      "season": t.season, "part_of_day": t.part_of_day,
+                     "treasury": ws.treasury_cents, "stocks": econ.stocks_by_location(session, locations),
                      "agents": _frame_from_agents(agents, ws.tick)}]
     return {
         "world": world_payload(ws, settings),
@@ -124,4 +163,6 @@ def bootstrap(session: Session, settings: Settings) -> dict[str, Any]:
         "frames": timeline,
         "events": events(session),
         "cost": cost(session),
+        "economy": economy_payload(session, settings),
+        "angels": angels_payload(session),
     }

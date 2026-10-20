@@ -61,6 +61,7 @@ class WorldState(Base):
     weather: Mapped[str] = mapped_column(String(32), default="clear")
     temperature_c: Mapped[float] = mapped_column(Float, default=15.0)
     seed: Mapped[int] = mapped_column(Integer, default=0)
+    treasury_cents: Mapped[int] = mapped_column(Integer, default=0)  # the town fund (AsapBank)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, onupdate=utcnow)
 
 
@@ -77,6 +78,30 @@ class Location(Base):
     # Owner / tenant are agents; plain ints (no FK) to avoid an agents<->locations cycle.
     owner_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
     condition: Mapped[float] = mapped_column(Float, default=100.0)  # 0 = ruined
+
+
+class Stock(Base):
+    """Goods on a shelf or in a store room at a location."""
+
+    __tablename__ = "stocks"
+    __table_args__ = (UniqueConstraint("location_id", "item", name="uq_stocks_pair"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    location_id: Mapped[int] = mapped_column(ForeignKey("locations.id"), index=True)
+    item: Mapped[str] = mapped_column(String(32))
+    qty: Mapped[int] = mapped_column(Integer, default=0)
+
+
+class WorldTick(Base):
+    """Per-tick snapshot of the town's shelves and fund (dashboard timeline)."""
+
+    __tablename__ = "world_ticks"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    tick: Mapped[int] = mapped_column(Integer, unique=True)
+    treasury_cents: Mapped[int] = mapped_column(Integer, default=0)
+    stocks: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)  # location key -> {item: qty}
+    weather: Mapped[str] = mapped_column(String(32), default="clear")
 
 
 class Agent(Base):

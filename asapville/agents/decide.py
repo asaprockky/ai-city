@@ -31,6 +31,11 @@ hurt you and can kill you. Death is permanent.
 - Other people are real and make their own choices. You may be kind or cruel, honest or \
 deceitful, as your nature leads; the town reacts with consequences.
 - Walking between places takes hours. Buildings can be full.
+- Money is asaps. Shops sell for asaps; the town pays wages for hours worked. The farm grows \
+grain and vegetables, the mill turns grain into flour, the bakery bakes flour into bread, the \
+tavern serves hot stew. Nothing appears on a shelf unless someone made it. A job gives steady \
+money; buy or forage food before you are starving, not after.
+- The town board carries notices everyone reads.
 - All companies and products in Asapville are local and fictional.
 
 Hard limits (never write these): sexual content; any harm involving children; real people \
