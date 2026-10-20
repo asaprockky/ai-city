@@ -40,6 +40,8 @@ from asapville.world.timeline import record_tick, tick_payload
 log = logging.getLogger("asapville.engine")
 
 WAKE_ENERGY = 70.0
+LASTING_IMPORTANCE = 7  # memories this important stay with a citizen beyond the last few hours
+LASTING_MEMORIES = 5
 REFLEX_HUNGER = 60.0  # without an LLM turn, a body this hungry eats what it carries
 REFLEX_ENERGY = 15.0
 # Actions an agent keeps doing on its own when it doesn't get an LLM turn (slow mode / capped).
@@ -200,6 +202,24 @@ class World:
         ctx.session.flush()
         return made
 
+    def _lasting_memories(self, ctx: TickContext, agent: Agent) -> list[str]:
+        """The few most important things a citizen remembers from before the last hours: deals,
+        debts, betrayals, purchases. Without them every day starts from scratch."""
+        from asapville.db.models import Memory
+        from asapville.world.clock import Clock
+        from asapville.world.perception import RECENT_TICKS
+
+        rows = ctx.session.scalars(
+            select(Memory).where(Memory.agent_id == agent.id, Memory.importance >= LASTING_IMPORTANCE,
+                                 Memory.created_at_tick < ctx.tick - RECENT_TICKS)
+            .order_by(Memory.importance.desc(), Memory.created_at_tick.desc()).limit(LASTING_MEMORIES))
+        clock = Clock(self.settings.clock)
+        out = []
+        for m in sorted(rows, key=lambda m: m.created_at_tick):
+            t = clock.at(m.created_at_tick)
+            out.append(f"(day {t.day}, {t.hour:02d}:00) {m.content}")
+        return out
+
     async def _decide_all(self, ctx: TickContext, deciders: list[Agent],
                           mode: str) -> dict[int, DecideOutcome]:
         perceptions = {a.id: build_perception(ctx, a) for a in deciders}
@@ -211,7 +231,8 @@ class World:
             out = await decide(
                 gateway=self.gateway, agent_id=a.id, tier=a.tier,
                 model=model_for(a, cfg.models), effort=effort_for(a, cfg.effort),
-                persona=self.persona_for(a), perception=perceptions[a.id], memories=[],
+                persona=self.persona_for(a), perception=perceptions[a.id],
+                memories=self._lasting_memories(ctx, a),
                 tick=ctx.tick, retries=cfg.json_retries, max_tokens=cfg.max_output_tokens,
             )
             return a.id, out

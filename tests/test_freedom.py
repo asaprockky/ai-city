@@ -255,3 +255,19 @@ async def test_a_worker_at_their_workplace_is_told_to_work_not_apply(world, sess
         text = render_perception(build_perception(ctx, a))
         assert "this is YOUR job: choose 'work'" in text and "apply' to take" not in text
         assert "makes goods the town sells for 12.00 asaps" in text and "propose_law" in text
+
+
+async def test_a_secret_deal_is_not_forgotten_after_a_day(world, sessions, settings, gateway, fake):
+    from asapville.cli import arrive
+
+    with sessions() as s:
+        s.get(Agent, 1).money_cents = 10_000
+        name = s.get(Agent, 1).name.split()[0]
+        s.commit()
+    await arrive(settings, sessions, gateway, preset="informer", works_for=name, advance_cents=1000)
+    with sessions() as s:
+        s.get(WorldState, 1).tick = 40  # a day and more later
+        s.commit()
+    await world.step()
+    req = next(r for r in fake.requests if r.purpose == "decide" and r.agent_id == 1)
+    assert "Things you remember" in req.messages[0].content and "paid" in req.messages[0].content
