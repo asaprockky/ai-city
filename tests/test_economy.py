@@ -12,7 +12,8 @@ def _ctx(world, session, tick=0):
     from asapville.world.actions import TickContext
 
     return TickContext(session=session, settings=world.settings, tick=tick, time=world.clock.at(tick),
-                       rng=random.Random(1), locations={loc.id: loc for loc in session.scalars(select(Location))})
+                       rng=random.Random(1),
+                       locations={loc.id: loc for loc in session.scalars(select(Location))})
 
 
 def _put(ctx, agent, key):

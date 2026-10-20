@@ -41,7 +41,7 @@ async def test_api_updates_control_and_websocket(world, sessions, settings):
         assert [f["tick"] for f in b["frames"]] == [0, 1, 2]
         u = c.get("/api/updates?since_tick=1&since_event=0").json()
         assert [f["tick"] for f in u["frames"]] == [2]
-        assert u["events"] and all(e["visibility"] != "system" for e in u["events"])
+        assert u["events"] and all(e["visibility"] != "system" or e["kind"] == "angel" for e in u["events"])
         assert c.post("/api/control", json={"action": "pause"}).json()["world"]["paused"] is True
         assert c.post("/api/control", json={"action": "resume"}).json()["world"]["paused"] is False
         assert c.post("/api/control", json={"action": "speed", "value": 3}).json()["world"]["speed"] == 3

@@ -16,12 +16,20 @@ from asapville.agents.persona import unpleasant_reasons
 from asapville.agents.schemas import Personality
 from asapville.config import Settings
 from asapville.db.models import (
-    Agent, AgentTick, Anomaly, Event, Intervention, LLMCall, Location, WorldState, WorldTick,
+    Agent,
+    AgentTick,
+    Anomaly,
+    Event,
+    Intervention,
+    LLMCall,
+    Location,
+    WorldState,
+    WorldTick,
 )
 from asapville.engine import get_world_state
 from asapville.llm.routing import TIER_NAMES, model_for
-from asapville.world.clock import Clock
 from asapville.world import economy as econ
+from asapville.world.clock import Clock
 from asapville.world.events import event_payload
 from asapville.world.timeline import tick_payload
 
@@ -78,7 +86,8 @@ def frames(session: Session, settings: Settings, *, since_tick: int = -1) -> lis
             w = town.get(r.tick)
             out.append({"tick": r.tick, "label": t.label(), "hour": t.hour, "day": t.day,
                         "season": t.season, "part_of_day": t.part_of_day,
-                        "treasury": w.treasury_cents if w else None, "stocks": (w.stocks or {}) if w else None,
+                        "treasury": w.treasury_cents if w else None,
+                        "stocks": (w.stocks or {}) if w else None,
                         "agents": []})
         out[-1]["agents"].append(tick_payload(r))
     return out
