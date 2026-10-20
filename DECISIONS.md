@@ -111,3 +111,9 @@ Choices made where the brief left room. Newest phase at the bottom.
 - **"Unpleasant" is defined in code** (`persona.unpleasant_reasons`): a dark moral baseline, or any
   dark trait ≥0.6, or agreeableness ≤0.25. `asapville personas --out FILE` writes markdown persona
   cards with the flagged citizens listed at the top.
+- **Two ways to supply the key** (`llm.auth`): `env` reads `ANTHROPIC_API_KEY`. `proxy` is for
+  cloud "network secrets", where an egress proxy adds `x-api-key` to requests to
+  `api.anthropic.com`. In proxy mode the SDK gets a placeholder key (so it never looks for other
+  credentials) and the `X-Api-Key` header is left out, so the proxy's header is the only one sent.
+- **`init-world` checks credentials before touching the database**, so a missing key no longer
+  leaves a half-made database file.

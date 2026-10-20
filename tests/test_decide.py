@@ -116,3 +116,35 @@ async def test_anthropic_backend_parses_usage(monkeypatch):
     raw = await backend.complete(req)
     assert raw.text == GOOD and raw.cache_read_tokens == 300 and raw.output_tokens == 22
     assert sent["model"] == "claude-haiku-5-5"
+
+
+async def test_proxy_auth_sends_no_key_header(monkeypatch):
+    import anthropic
+
+    from asapville.llm.client import AnthropicBackend
+
+    try:
+        import httpx2 as httpx
+    except ImportError:  # older SDKs use httpx
+        import httpx
+
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    monkeypatch.setenv("ANTHROPIC_AUTH_TOKEN", "ambient-token-must-not-be-used")
+    seen = {}
+
+    def handler(request):
+        seen.update({k.lower(): v for k, v in request.headers.items()})
+        return httpx.Response(200, json={
+            "id": "m", "type": "message", "role": "assistant", "model": "claude-haiku-5-5",
+            "content": [{"type": "text", "text": GOOD}], "stop_reason": "end_turn",
+            "stop_sequence": None, "usage": {"input_tokens": 3, "output_tokens": 4}})
+
+    backend = AnthropicBackend(auth="proxy")
+    backend.client = backend.client.with_options(
+        http_client=httpx.AsyncClient(transport=httpx.MockTransport(handler)))
+    assert isinstance(backend.client, anthropic.AsyncAnthropic)
+    req = LLMRequest(purpose="decide", model="claude-haiku-5-5", tier=3, system_rules="R",
+                     messages=[ChatMessage(role="user", content="x")])
+    raw = await backend.complete(req)
+    assert raw.text == GOOD and raw.input_tokens == 3
+    assert "x-api-key" not in seen and "authorization" not in seen

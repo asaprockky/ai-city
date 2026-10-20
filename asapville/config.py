@@ -48,6 +48,9 @@ class EffortCfg(BaseModel):
 
 class LLMCfg(BaseModel):
     backend: Literal["fake", "anthropic"] = "fake"
+    # env: send ANTHROPIC_API_KEY from the environment.
+    # proxy: send no key; an egress proxy (e.g. a cloud "network secret") adds x-api-key.
+    auth: Literal["env", "proxy"] = "env"
     max_concurrency: int = 8
     max_output_tokens: int = 2048
     json_retries: int = 1
@@ -180,4 +183,6 @@ def load_settings(path: str | Path | None = None) -> Settings:
         settings.db_url = db_url
     if backend := os.environ.get("ASAPVILLE_LLM_BACKEND"):
         settings.llm.backend = backend  # type: ignore[assignment]
+    if auth := os.environ.get("ASAPVILLE_LLM_AUTH"):
+        settings.llm.auth = auth  # type: ignore[assignment]
     return settings

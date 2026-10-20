@@ -34,15 +34,25 @@ class AnthropicBackend:
     name = "anthropic"
     billable = True
 
-    def __init__(self) -> None:
+    def __init__(self, auth: str = "env") -> None:
         import anthropic  # local import: tests never need it
 
+        # Explicit key + base URL: never fall back to other ambient credentials or a host-set
+        # ANTHROPIC_BASE_URL. ASAPVILLE_ANTHROPIC_BASE_URL overrides the URL on purpose.
+        base_url = os.environ.get("ASAPVILLE_ANTHROPIC_BASE_URL", "https://api.anthropic.com")
+        if auth == "proxy":
+            # The key lives outside this process; the egress proxy adds x-api-key. The
+            # placeholder only stops the SDK from looking for other credentials, and the
+            # header itself is omitted so the proxy's value is the only one sent.
+            self.client = anthropic.AsyncAnthropic(
+                api_key="injected-by-proxy", base_url=base_url,
+                default_headers={"X-Api-Key": anthropic.omit})
+            return
         api_key = os.environ.get("ANTHROPIC_API_KEY")
         if not api_key:
-            raise RuntimeError("ANTHROPIC_API_KEY is not set; the anthropic backend needs it")
-        # Explicit key + base URL: never fall back to other ambient credentials or a host-set
-        # ANTHROPIC_BASE_URL. ASAPVILLE_ANTHROPIC_BASE_URL overrides for proxies.
-        base_url = os.environ.get("ASAPVILLE_ANTHROPIC_BASE_URL", "https://api.anthropic.com")
+            raise RuntimeError(
+                "ANTHROPIC_API_KEY is not set; the anthropic backend needs it "
+                "(or set llm.auth=proxy / ASAPVILLE_LLM_AUTH=proxy if a proxy adds the key)")
         self.client = anthropic.AsyncAnthropic(api_key=api_key, base_url=base_url)
 
     @staticmethod
@@ -140,7 +150,7 @@ class LLMGateway:
 
 def make_backend(cfg: LLMCfg) -> LLMBackend:
     if cfg.backend == "anthropic":
-        return AnthropicBackend()
+        return AnthropicBackend(auth=cfg.auth)
     from asapville.llm.fake import FakeLLM
 
     return FakeLLM()

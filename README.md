@@ -23,6 +23,13 @@ export ANTHROPIC_API_KEY=...         # never put it in config.yaml
 export ASAPVILLE_LLM_BACKEND=anthropic
 ```
 
+If the key is stored as a cloud **network secret** (the proxy adds the `x-api-key` header, so the
+key never enters the container), use proxy mode instead of the env var:
+
+```bash
+export ASAPVILLE_LLM_AUTH=proxy      # secret: header x-api-key, no prefix, host api.anthropic.com
+```
+
 Phase 2 demo (10 real births, then the persona cards):
 
 ```bash

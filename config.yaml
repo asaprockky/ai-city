@@ -14,6 +14,7 @@ clock:
 
 llm:
   backend: fake              # fake | anthropic
+  auth: env                  # env: ANTHROPIC_API_KEY | proxy: an egress proxy adds x-api-key
   max_concurrency: 8         # semaphore for concurrent decide calls
   max_output_tokens: 2048     # includes adaptive thinking tokens
   json_retries: 1            # one retry with the parse error, then "hesitate"
