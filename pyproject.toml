@@ -1,0 +1,40 @@
+[project]
+name = "asapville"
+version = "0.1.0"
+description = "Asapville - a reality-grade LLM agent society simulation"
+requires-python = ">=3.12"
+dependencies = [
+    "pydantic>=2.7",
+    "PyYAML>=6.0",
+    "SQLAlchemy>=2.0",
+    "alembic>=1.13",
+    "anthropic>=1.0",
+    "fastapi>=0.110",
+    "uvicorn>=0.29",
+]
+
+[project.optional-dependencies]
+mssql = ["pyodbc>=5.0"]
+dev = ["pytest>=8", "pytest-asyncio>=0.23", "httpx>=0.27"]
+
+[project.scripts]
+asapville = "asapville.cli:main"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["asapville*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+
+[tool.ruff]
+line-length = 110
+extend-exclude = ["asapville/db/migrations/versions"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I"]

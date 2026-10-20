@@ -1,0 +1,113 @@
+# Asapville world configuration. Every tunable lives here.
+# DB_URL and ANTHROPIC_API_KEY come from the environment, never from this file.
+
+world:
+  name: Asapville
+  seed: 1337                 # master RNG seed; same seed + FakeLLM = same world
+  population: 5              # citizens created by `init-world`
+
+clock:
+  ticks_per_day: 24          # 1 tick = 1 simulated hour
+  start_hour: 6              # tick 0 is day 1 at 06:00
+  days_per_season: 28        # spring -> summer -> autumn -> winter
+  tick_seconds: 2.0          # real seconds between ticks in normal mode
+
+llm:
+  backend: fake              # fake | anthropic
+  max_concurrency: 8         # semaphore for concurrent decide calls
+  max_output_tokens: 1024
+  json_retries: 1            # one retry with the parse error, then "hesitate"
+  # Model strings are fixed by the brief. Routing logic lives in llm/routing.py.
+  models:
+    opus: claude-opus-5-5
+    sonnet: claude-sonnet-5-5
+    haiku: claude-haiku-5-5
+  effort:                    # output_config.effort per tier; null = model default
+    angel: high
+    notable: medium
+    manager: low
+    worker: null
+  # USD per million tokens. cache_write is the 5-minute TTL write price.
+  pricing:
+    claude-opus-5-5:   {input: 4.00, output: 20.00, cache_read: 0.20, cache_write: 5.00}
+    claude-sonnet-5-5: {input: 2.00, output: 10.00, cache_read: 0.20, cache_write: 2.50}
+    claude-haiku-5-5:  {input: 0.10, output: 0.50,  cache_read: 0.01, cache_write: 0.125}
+
+budget:
+  daily_usd: 5.00            # hard cap for all calls in one real (UTC) day
+  per_agent_daily_usd: 0.50  # hard cap per citizen per real day
+  angel_opus_monthly_usd: 10.00
+  slow_mode_threshold: 0.90  # fraction of daily cap that triggers slow mode
+  slow_mode:
+    tick_multiplier: 4       # ticks are this many times longer in real time
+    worker_decide_every: 3   # workers only call the LLM every Nth tick
+
+tiers:                       # promotion rules, re-evaluated each simulated day
+  notable_roles: [mayor, sheriff, banker, editor]
+  manager_roles: [shopkeeper, foreman, doctor, teacher, priest, gang_leader]
+  notable_wealth_cents: 500000
+  manager_wealth_cents: 100000
+
+needs:                       # all needs are 0..100
+  hunger_per_tick_awake: 4.0     # hunger rises (100 = starving)
+  hunger_per_tick_asleep: 2.0
+  energy_per_tick_awake: 4.0     # energy falls while awake
+  energy_per_tick_rest: 3.0      # "rest" action while awake
+  energy_per_tick_sleep_home: 13.0
+  energy_per_tick_sleep_rough: 7.0
+  social_per_tick_awake: 2.0     # social need falls while alone
+  social_gain_talk: 15.0
+  starving_threshold: 80.0       # above this hunger, health is damaged
+  starving_damage: 1.5
+  famished_damage: 4.0           # at hunger 100
+  exhaustion_damage: 1.0         # at energy 0 (and the agent collapses)
+  health_regen: 0.5              # when fed and rested
+  collapse_energy: 0.0
+  rough_sleep_mood_penalty: 10.0
+
+sleep:
+  hours: 7
+  default_bedtime: 22        # seed card shifts this per agent (early birds / night owls)
+  bedtime_jitter: 2
+
+food:                        # nutrition = hunger reduced per item
+  bread: {nutrition: 35}
+  berries: {nutrition: 15}
+  fish: {nutrition: 30}
+  vegetables: {nutrition: 20}
+
+forage:                      # free food costs time + energy and is never guaranteed
+  forest: {item: berries, chance: 0.55, max_qty: 3, energy_cost: 6}
+  river:  {item: fish, chance: 0.35, max_qty: 2, energy_cost: 8}
+
+conversation:
+  max_turns: 6
+
+memory:
+  default_importance: 3      # Phase 1 placeholder until importance rating lands (Phase 3)
+
+map:
+  width: 20
+  height: 20
+  cells_per_tick: 4          # walking speed (Manhattan cells per simulated hour)
+  locations:
+    - {key: square,     name: "Town Square",   kind: square,     x: 10, y: 10, capacity: 200}
+    - {key: market,     name: "Market",        kind: market,     x: 12, y: 10, capacity: 60}
+    - {key: bank,       name: "AsapBank",      kind: bank,       x: 10, y: 8,  capacity: 20}
+    - {key: town_hall,  name: "Town Hall",     kind: town_hall,  x: 8,  y: 10, capacity: 40}
+    - {key: church,     name: "Chapel of the Hill", kind: church, x: 8, y: 7, capacity: 80}
+    - {key: clinic,     name: "Clinic",        kind: clinic,     x: 12, y: 8,  capacity: 12}
+    - {key: tavern,     name: "The Crooked Lantern", kind: tavern, x: 11, y: 12, capacity: 40}
+    - {key: bakery,     name: "Bakery",        kind: workplace,  x: 13, y: 11, capacity: 8}
+    - {key: mill,       name: "Mill",          kind: workplace,  x: 16, y: 13, capacity: 8}
+    - {key: farm,       name: "Greenfield Farm", kind: farm,     x: 17, y: 16, capacity: 30}
+    - {key: forest,     name: "Pinewood Forest", kind: forest,   x: 2,  y: 3,  capacity: 500}
+    - {key: quarry,     name: "Grey Quarry",   kind: quarry,     x: 3,  y: 16, capacity: 30}
+    - {key: river,      name: "Silt River Bank", kind: river,    x: 18, y: 5,  capacity: 200}
+    - {key: jail,       name: "Jail",          kind: jail,       x: 9,  y: 12, capacity: 6}
+  home_plots:                # one home per plot, laid out in a residential block
+    count: 12
+    origin: {x: 4, y: 9}
+    columns: 4
+    spacing: 1
+    capacity: 4
