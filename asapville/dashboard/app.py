@@ -64,6 +64,7 @@ class Feed:
                 "cost": snapshot.cost(s),
                 "economy": snapshot.economy_payload(s, self.settings),
                 "angels": snapshot.angels_payload(s),
+                "relations": snapshot.relations_payload(s),
             }
 
     def _refresh(self) -> dict[str, Any] | None:

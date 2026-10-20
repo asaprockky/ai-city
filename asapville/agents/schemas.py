@@ -198,6 +198,7 @@ class Perception(BaseModel):
     businesses: list[str] = Field(default_factory=list)  # the citizen's own stalls, in words
     proposals: list[str] = Field(default_factory=list)  # open votes, in words (incl. your vote)
     decisions: list[str] = Field(default_factory=list)  # what the town decided lately
+    people: list[str] = Field(default_factory=list)  # how you stand with the people you know
     recent_dialogue: list[str] = Field(default_factory=list)
     recent_events: list[str] = Field(default_factory=list)
     available_actions: list[str] = Field(default_factory=list)

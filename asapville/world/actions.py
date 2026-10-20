@@ -20,7 +20,7 @@ from asapville.world import needs as needs_rules
 from asapville.world.clock import WorldTime
 from asapville.world.events import emit
 from asapville.world.map import has_room, travel_ticks
-from asapville.world.social import introduce
+from asapville.world.social import introduce, nudge_reputation, record_deed
 
 
 @dataclass
@@ -522,6 +522,8 @@ def _buy_from_stall(ctx: TickContext, agent: Agent, stall, qty: int) -> ActionRe
     if owner is not None and owner.id != agent.id:
         from asapville.world.social import describe
 
+        record_deed(ctx.session, owner.id, agent, ctx.tick, f"bought {stall.item} from my stall", trust=0.05)
+
         remember(ctx.session, owner.id, ctx.tick, "outcome",
                  f"{stall.name} sold {qty} {stall.item} to {describe(ctx.session, owner.id, agent)} "
                  f"for {cents / 100:.2f} asaps ({stall.qty} left).", importance=3, event_id=ev.id)
@@ -777,6 +779,8 @@ class Give:
              actor_memory=f"I gave {{target}} {what}.", target_memory=f"{{actor}} gave me {what}.",
              witness_memory=f"{{actor}} handed {{target}} {what}.", importance=3)
         introduce(ctx.session, agent, target, ctx.tick)
+        record_deed(ctx.session, target.id, agent, ctx.tick, f"gave me {what}", trust=0.15, affinity=0.2)
+        nudge_reputation(agent, 0.02)
         return ActionResult(ok=True, socialised={agent.id, target.id})
 
 
@@ -884,4 +888,154 @@ class CastVote:
         assert p is not None
         democracy.cast(ctx.session, agent, p,
                        str(d.action_args["choice"]).strip().lower() == "yes", ctx.tick, agent.location_id)
+        return ActionResult(ok=True)
+
+
+# --------------------------------------------------------------------------- wrongs
+def _victim(ctx: TickContext, agent: Agent, ref: Any, perceived: set[int]) -> Agent | str:
+    """Someone here, awake or asleep (sleepers are easy marks)."""
+    try:
+        target_id = int(ref)
+    except (TypeError, ValueError):
+        return "Give the ref of someone who is here."
+    if target_id not in perceived or target_id == agent.id:
+        return "There's nobody like that here."
+    target = ctx.session.get(Agent, target_id)
+    if target is None or not target.alive or target.location_id != agent.location_id \
+            or target.travel_ticks_left > 0:
+        return "They're not here any more."
+    return target
+
+
+def _onlookers(ctx: TickContext, agent: Agent, victim: Agent) -> list[Agent]:
+    from sqlalchemy import select as _select
+
+    return list(ctx.session.scalars(_select(Agent).where(
+        Agent.location_id == agent.location_id, Agent.alive.is_(True), Agent.asleep.is_(False),
+        Agent.travel_ticks_left == 0, Agent.id.not_in((agent.id, victim.id)))))
+
+
+STEAL_USAGE = ('steal {"from": <ref of someone here>, "item": "<item>", "qty": 1}  or  '
+               'steal {"from": <ref>, "asaps": 5}  -- take it without asking; you may be seen')
+NOTICE_AWAKE, NOTICE_ASLEEP, NOTICE_WITNESS = 0.6, 0.15, 0.4
+
+
+@register(ActionName.STEAL, STEAL_USAGE)
+class Steal:
+    @staticmethod
+    def validate(ctx: TickContext, agent: Agent, d: Decision, perceived: set[int]) -> str | None:
+        victim = _victim(ctx, agent, d.action_args.get("from"), perceived)
+        if isinstance(victim, str):
+            return victim
+        if "asaps" not in d.action_args and not str(d.action_args.get("item", "")).strip():
+            return "Steal what? Name an item or an amount of asaps."
+        return None
+
+    @staticmethod
+    def execute(ctx: TickContext, agent: Agent, d: Decision) -> ActionResult:
+        from asapville.world.events import remember
+        from asapville.world.social import describe
+
+        victim = ctx.session.get(Agent, int(d.action_args["from"]))
+        assert victim is not None
+        if "asaps" in d.action_args:
+            try:
+                want = round(float(d.action_args["asaps"]) * 100)
+            except (TypeError, ValueError):
+                want = 0
+            got = max(0, min(want, victim.money_cents))
+            victim.money_cents -= got
+            agent.money_cents += got
+            what, data = f"{got / 100:.2f} asaps", {"cents": got}
+        else:
+            item = str(d.action_args["item"]).strip().lower()
+            theirs = dict(victim.inventory or {})
+            got = max(0, min(_qty(d), theirs.get(item, 0)))
+            if got:
+                theirs[item] -= got
+                if theirs[item] <= 0:
+                    del theirs[item]
+                mine = dict(agent.inventory or {})
+                mine[item] = mine.get(item, 0) + got
+                victim.inventory, agent.inventory = theirs, mine
+            what, data = f"{got} {item}", {"item": item, "qty": got}
+        if not got:
+            emit(ctx.session, tick=ctx.tick, kind="steal", actor=agent, target=victim,
+                 location_id=agent.location_id, visibility="private",
+                 summary=f"{agent.name} tried to rob {victim.name} but found nothing to take",
+                 data={**data, "noticed": False, "empty": True},
+                 actor_memory="I tried to rob {target}, but they had nothing like that on them.",
+                 importance=3)
+            return ActionResult(ok=True)
+        noticed = ctx.rng.random() < (NOTICE_ASLEEP if victim.asleep else NOTICE_AWAKE)
+        seen_by = [w for w in _onlookers(ctx, agent, victim) if ctx.rng.random() < NOTICE_WITNESS]
+        ev = emit(ctx.session, tick=ctx.tick, kind="steal", actor=agent, target=victim,
+                  location_id=agent.location_id, visibility="local" if noticed or seen_by else "private",
+                  summary=f"{agent.name} stole {what} from {victim.name}"
+                          + (" and was caught" if noticed else " unseen" if not seen_by else " (seen)"),
+                  data={**data, "noticed": noticed, "witnesses": [w.id for w in seen_by]},
+                  actor_memory=f"I stole {what} from {{target}}" + (" and they caught me at it." if noticed
+                                                                    else "."),
+                  target_memory=(f"{{actor}} stole {what} from me; I caught them at it." if noticed
+                                 else f"I found {what} missing from my things; someone took it."),
+                  importance=7 if noticed else 5)
+        if noticed:
+            record_deed(ctx.session, victim.id, agent, ctx.tick, f"stole {what} from me",
+                        trust=-0.5, affinity=-0.4)
+        for w in seen_by:
+            remember(ctx.session, w.id, ctx.tick, "observation",
+                     f"I saw {describe(ctx.session, w.id, agent)} steal {what} from "
+                     f"{describe(ctx.session, w.id, victim)}.", importance=6, event_id=ev.id)
+            record_deed(ctx.session, w.id, agent, ctx.tick,
+                        f"stole from {victim.name.split()[0]} before my eyes", trust=-0.3, affinity=-0.15)
+        if noticed or seen_by:
+            nudge_reputation(agent, -0.1 * (1 + len(seen_by)))
+        return ActionResult(ok=True)
+
+
+ATTACK_USAGE = 'attack {"to": <ref of someone here>}  -- hit them; it hurts both of you, and people remember'
+ATTACK_DAMAGE, ATTACK_COST = 12.0, 8.0
+
+
+@register(ActionName.ATTACK, ATTACK_USAGE)
+class Attack:
+    @staticmethod
+    def validate(ctx: TickContext, agent: Agent, d: Decision, perceived: set[int]) -> str | None:
+        victim = _victim(ctx, agent, d.action_args.get("to"), perceived)
+        if isinstance(victim, str):
+            return victim
+        if agent.energy < ATTACK_COST:
+            return "You are too exhausted to fight."
+        return None
+
+    @staticmethod
+    def execute(ctx: TickContext, agent: Agent, d: Decision) -> ActionResult:
+        from asapville.world.events import remember
+        from asapville.world.social import describe
+
+        victim = ctx.session.get(Agent, int(d.action_args["to"]))
+        assert victim is not None
+        victim.health = needs_rules.clamp(victim.health - ATTACK_DAMAGE)
+        victim.mood = needs_rules.clamp(victim.mood - 15)
+        agent.energy = needs_rules.clamp(agent.energy - ATTACK_COST)
+        was_asleep = victim.asleep
+        victim.asleep = False
+        onlookers = _onlookers(ctx, agent, victim)
+        ev = emit(ctx.session, tick=ctx.tick, kind="attack", actor=agent, target=victim,
+                  location_id=agent.location_id, visibility="local",
+                  summary=f"{agent.name} attacked {victim.name}" + (" in their sleep" if was_asleep else ""),
+                  data={"damage": ATTACK_DAMAGE, "asleep": was_asleep},
+                  actor_memory="I attacked {target}.",
+                  target_memory="{actor} attacked me" + (" while I slept." if was_asleep else "."),
+                  importance=8)
+        introduce(ctx.session, agent, victim, ctx.tick)
+        record_deed(ctx.session, victim.id, agent, ctx.tick, "attacked me", trust=-0.6, affinity=-0.6)
+        for w in onlookers:
+            remember(ctx.session, w.id, ctx.tick, "observation",
+                     f"I saw {describe(ctx.session, w.id, agent)} attack "
+                     f"{describe(ctx.session, w.id, victim)}.",
+                     importance=7, event_id=ev.id)
+            record_deed(ctx.session, w.id, agent, ctx.tick,
+                        f"attacked {victim.name.split()[0]} before my eyes", trust=-0.3, affinity=-0.3)
+        nudge_reputation(agent, -0.1 * (1 + len(onlookers)))
         return ActionResult(ok=True)

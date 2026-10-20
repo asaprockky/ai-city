@@ -11,7 +11,7 @@ from asapville.world import economy
 from asapville.world.actions import TickContext, available_usages
 from asapville.world.map import travel_ticks
 from asapville.world.needs import describe_needs, sick_of
-from asapville.world.social import describe, knows_name, looks_of
+from asapville.world.social import describe, knows_name, looks_of, standing
 
 _DOING = {
     "rest": "resting", "eat": "eating", "talk": "talking", "forage": "searching for food",
@@ -141,6 +141,7 @@ def build_perception(ctx: TickContext, agent: Agent) -> Perception:
         businesses=mine,
         proposals=proposals,
         decisions=decisions,
+        people=standing(s, agent),
         recent_dialogue=[m.content for m in recent if m.kind == "dialogue"][-8:],
         recent_events=[m.content for m in recent if m.kind in ("observation", "outcome", "action")][-8:],
         available_actions=available_usages(),
@@ -200,6 +201,9 @@ def render_perception(p: Perception) -> str:
             extra.append("hires " + ", ".join(d.jobs))
         tail = " — " + "; ".join(extra) if extra else ""
         lines.append(f"  - {d.key}: {d.name} ({d.travel_hours}h){tail}")
+    if p.people:
+        lines.append("People you know and what they have done to you:")
+        lines.extend(f"  - {x}" for x in p.people)
     if p.plan:
         lines.append(f"Your own plan for today (you wrote it this morning): {p.plan}")
     if p.hunger < 50 and p.energy > 35 and p.health > 40:

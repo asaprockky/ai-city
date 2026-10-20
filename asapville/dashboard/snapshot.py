@@ -23,6 +23,7 @@ from asapville.db.models import (
     Intervention,
     LLMCall,
     Location,
+    Relationship,
     Stall,
     WorldState,
     WorldTick,
@@ -134,6 +135,18 @@ def economy_payload(session: Session, settings: Settings) -> dict[str, Any]:
     }
 
 
+def relations_payload(session: Session) -> list[dict[str, Any]]:
+    """Who feels what about whom, and why (only pairs with something to say)."""
+    out = []
+    for r in session.scalars(select(Relationship)):
+        if not (r.history or abs(r.trust) > 0.1 or abs(r.affinity) > 0.1):
+            continue
+        out.append({"a": r.agent_id, "b": r.other_id, "trust": round(r.trust, 2),
+                    "affinity": round(r.affinity, 2), "knows": r.knows_name,
+                    "history": (r.history or [])[-4:]})
+    return out
+
+
 def angels_payload(session: Session) -> dict[str, Any]:
     anomalies = [{"id": a.id, "tick": a.tick, "kind": a.kind, "severity": a.severity, "status": a.status,
                   "agent_id": a.agent_id, "detail": a.detail, "source": a.source,
@@ -178,6 +191,7 @@ def bootstrap(session: Session, settings: Settings) -> dict[str, Any]:
         "cost": cost(session),
         "economy": economy_payload(session, settings),
         "angels": angels_payload(session),
+        "relations": relations_payload(session),
     }
 
 
@@ -191,4 +205,5 @@ def tick_bundle(session: Session, settings: Settings, tick: int) -> dict[str, An
         .order_by(Event.id))]
     return {"tick": tick, "frame": frame[0] if frame else None, "events": evs,
             "world": world_payload(ws, settings), "cost": cost(session),
-            "economy": economy_payload(session, settings), "angels": angels_payload(session)}
+            "economy": economy_payload(session, settings), "angels": angels_payload(session),
+            "relations": relations_payload(session)}

@@ -273,6 +273,7 @@ class Relationship(Base):
     debt_cents: Mapped[int] = mapped_column(Integer, default=0)  # >0: other owes agent
     last_interaction_tick: Mapped[int | None] = mapped_column(Integer, nullable=True)
     opinion: Mapped[str] = mapped_column(UnicodeText, default="")
+    history: Mapped[list[dict[str, Any]]] = mapped_column(JSON, default=list)  # what they did to me
 
 
 class LLMCall(Base):

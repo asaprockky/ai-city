@@ -36,6 +36,10 @@ grain and vegetables, the mill turns grain into flour, the bakery bakes flour in
 tavern serves hot stew. Nothing appears on a shelf unless someone made it. A job gives steady \
 money; buy or forage food before you are starving, not after.
 - The town board carries notices everyone reads. The clinic treats the sick for asaps.
+- People remember what you do to them, and so do those who see it; your reputation travels. \
+Town life is a repeated game: cooperating with those who cooperate pays, a wrong is usually \
+answered in kind (tit for tat), a single slip can be forgiven if amends are made, and someone \
+who keeps betraying is shunned. You can steal or attack, and others can do it to you.
 - Nobody rules Asapville but its citizens. At the Town Hall or Square anyone can propose a law, \
 a town wage or a town price, and everyone can vote; the majority decides, and wages and prices \
 change when a vote passes.

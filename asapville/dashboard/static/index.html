@@ -401,11 +401,11 @@ td.num, th.num { text-align: right; }
     talk: '💬', depart: '🚶', arrive: '📍', turned_away: '🚪', sleep: '🌙', wake: '☀️', eat: '🍞',
     forage: '🌿', collapse: '💫', death: '✝', invalid_action: '✗', budget_paused: '⏸', buy: '🛒',
     sell: '💰', work: '🔨', hired: '📋', quit: '🚪', notice: '📜', angel: '👁', relief: '🎁',
-    delivery: '🛻', give: '🤝', improvise: '✨', plan: '📝', open_stall: '🏪', stock_stall: '📦', wages: '⚖', proposal: '🗳', vote: '✋', law: '🏛', arrival: '🧳', secret_deal: '🕵',
+    delivery: '🛻', give: '🤝', improvise: '✨', plan: '📝', open_stall: '🏪', stock_stall: '📦', wages: '⚖', proposal: '🗳', vote: '✋', law: '🏛', arrival: '🧳', secret_deal: '🕵', steal: '🫳', attack: '👊',
   };
   const FILTERS = {
     all: null, talk: ['talk'], deeds: ['plan', 'proposal', 'vote', 'law', 'improvise', 'open_stall', 'stock_stall', 'wages', 'give', 'buy', 'sell', 'work', 'hired', 'quit', 'notice'],
-    trouble: ['collapse', 'death', 'invalid_action', 'turned_away', 'budget_paused', 'secret_deal'],
+    trouble: ['collapse', 'death', 'steal', 'attack', 'invalid_action', 'turned_away', 'budget_paused', 'secret_deal'],
     angels: ['angel', 'relief', 'delivery'],
   };
   const ROUTINE = new Set(['sleep', 'wake', 'arrive', 'eat']);
@@ -444,7 +444,7 @@ td.num, th.num { text-align: right; }
       drawer: { now: 'Сейчас', where: 'Где', doing: 'Занят', job: 'Работа', mood: 'Настроение', money: 'Деньги', carrying: 'Несёт',
         body: 'Тело', who: 'Кто это', values: 'Ценности · страхи · мечты', secrets: 'Секреты (видите только вы)', traits: 'Черты (с рождения)',
         backstory: 'Прошлое', hours: 'Последние часы', identity: 'Паспорт', homeL: 'Дом', bedtime: 'Отбой', speech: 'Речь',
-        plan: 'План на сегодня (своими словами)', unpleasant: 'неприятный', years: 'лет', from: 'из', family: 'семья', thought: 'Мысли (по-английски, как он думает)',
+        plan: 'План на сегодня (своими словами)', rel: 'Отношения · кому верит, на кого зол и почему', noRel: 'Пока ни с кем не сложилось.', trustW: (t) => t > .35 ? 'доверяет' : t > .1 ? 'немного доверяет' : t < -.35 ? 'не верит' : t < -.1 ? 'настороже' : '', likeW: (a) => a > .3 ? 'симпатия' : a < -.3 ? 'обида' : '', unpleasant: 'неприятный', years: 'лет', from: 'из', family: 'семья', thought: 'Мысли (по-английски, как он думает)',
         close: 'Закрыть (Esc)', look: (h, b, c, s) => `Волосы: ${h}. Сложение: ${b}. Одежда: ${c}. Всегда с собой: ${s}.` },
       asaps: 'асапов',
       onRoad: (p) => `в пути → ${p}`, at: (p) => p, deadOf: (c) => `погиб: ${c}`,
@@ -492,6 +492,8 @@ td.num, th.num { text-align: right; }
         wages: (t) => `Новые зарплаты: ${t}`,
         arrival: (a, h) => `В город приехал новый житель: ${a}${h ? ` (поселился: ${h})` : ''}`,
         secretDeal: (a, t, c) => `Тайно: ${a} заплатил ${t} ${c} асапов, чтобы шпионить за городом (знают только они)`,
+        steal: (a, t, w, how) => `${a} крадёт у ${t}: ${w} — ${how}`, stealHow: { caught: 'пойман за руку', seen: 'кто-то видел', unseen: 'никто не заметил', empty: 'красть было нечего' },
+        attack: (a, t, z) => `${a} нападает на ${t}${z ? ' во сне' : ''}`,
         proposal: (a, n, t, c) => `${a} выносит на голосование №${n}: <q>${t}</q>${c}`,
         vote: (a, n, y, t) => `${a} голосует ${y ? 'ЗА' : 'ПРОТИВ'} №${n} (сейчас ${t[0]}–${t[1]})`,
         law: (n, t, y, no, ok) => `Город проголосовал по №${n} <q>${t}</q>: ${y}–${no}, ${ok ? 'ПРИНЯТО' : 'не принято'}`,
@@ -534,7 +536,7 @@ td.num, th.num { text-align: right; }
       drawer: { now: 'Right now', where: 'Where', doing: 'Doing', job: 'Job', mood: 'Mood', money: 'Money', carrying: 'Carrying',
         body: 'Body', who: 'Who they are', values: 'Values · fears · ambitions', secrets: 'Secrets (only you can see these)', traits: 'Traits (fixed at birth)',
         backstory: 'Backstory', hours: 'Their recent hours', identity: 'Identity', homeL: 'Home', bedtime: 'Bedtime', speech: 'Speech',
-        plan: 'Plan for today (in their own words)', unpleasant: 'unpleasant', years: 'years', from: 'from', family: 'family', thought: 'Thinking',
+        plan: 'Plan for today (in their own words)', rel: 'Relationships · whom they trust, resent, and why', noRel: 'No ties yet.', trustW: (t) => t > .35 ? 'trusts' : t > .1 ? 'somewhat trusts' : t < -.35 ? 'distrusts' : t < -.1 ? 'wary' : '', likeW: (a) => a > .3 ? 'likes' : a < -.3 ? 'resents' : '', unpleasant: 'unpleasant', years: 'years', from: 'from', family: 'family', thought: 'Thinking',
         close: 'Close (Esc)', look: (h, b, c, s) => `Hair ${h}; build ${b}; wears ${c}; never without ${s}.` },
       asaps: 'asaps',
       onRoad: (p) => `on the road to ${p}`, at: (p) => p, deadOf: (c) => `died: ${c}`,
@@ -572,6 +574,8 @@ td.num, th.num { text-align: right; }
         wages: (t) => `New wages: ${t}`,
         arrival: (a, h) => `A newcomer moved to town: ${a}${h ? ` (lives at ${h})` : ''}`,
         secretDeal: (a, t, c) => `Secretly: ${a} paid ${t} ${c} asaps to spy on the town (only the two know)`,
+        steal: (a, t, w, how) => `${a} steals ${w} from ${t} — ${how}`, stealHow: { caught: 'caught in the act', seen: 'someone saw', unseen: 'nobody noticed', empty: 'nothing to take' },
+        attack: (a, t, z) => `${a} attacks ${t}${z ? ' in their sleep' : ''}`,
         proposal: (a, n, t, c) => `${a} puts #${n} to a vote: <q>${t}</q>${c}`,
         vote: (a, n, y, t) => `${a} votes ${y ? 'YES' : 'NO'} on #${n} (now ${t[0]}–${t[1]})`,
         law: (n, t, y, no, ok) => `The town voted on #${n} <q>${t}</q>: ${y}–${no}, ${ok ? 'PASSED' : 'not passed'}`,
@@ -701,6 +705,8 @@ td.num, th.num { text-align: right; }
       case 'wages': return w.wages(esc(Object.entries(d.changes || {}).map(([j, [o, n]]) => `${jobName(j)} ${money(n)} (${n > o ? '↑' : '↓'} ${money(o)})`).join(' · ')));
       case 'arrival': return w.arrival(A, place);
       case 'secret_deal': return w.secretDeal(A, T, money(d.cents || 0));
+      case 'steal': return w.steal(A, T, esc(d.cents ? `${money(d.cents)} ${W().asaps}` : `${d.qty || 0} × ${item(d.item)}`), w.stealHow[d.empty ? 'empty' : d.noticed ? 'caught' : (d.witnesses || []).length ? 'seen' : 'unseen']);
+      case 'attack': return w.attack(A, T, d.asleep);
       case 'proposal': return w.proposal(A, d.proposal, esc(d.text), d.kind === 'wage' ? w.changeWage(esc(jobName(d.target)), money(d.value)) : d.kind === 'price' ? w.changePrice(esc(item(d.target)), money(d.value)) : '');
       case 'vote': return w.vote(A, d.proposal, d.yes, d.tally || [0, 0]);
       case 'law': return w.law(d.proposal, esc(d.text), d.yes, d.no, d.passed);
@@ -1127,6 +1133,8 @@ td.num, th.num { text-align: right; }
           ${fa.thought ? `<div class="eyebrow" style="margin-top:10px">${esc(D.thought)}</div><p class="thought">${esc(fa.thought)}</p>` : ''}
         </div>
         <div class="sec"><h3>${esc(D.body)}</h3><div class="needs">${need('hunger', true)}${need('energy')}${need('health')}${need('social')}</div></div>
+        <div class="sec"><h3>${esc(D.rel)}</h3>${(() => { const rs = (S.data.relations || []).filter((r) => r.a === a.id).sort((x, y) => (Math.abs(y.trust) + Math.abs(y.affinity)) - (Math.abs(x.trust) + Math.abs(x.affinity))).slice(0, 8);
+          return rs.length ? `<div style="display:grid;gap:6px">${rs.map((r) => { const words = [D.trustW(r.trust), D.likeW(r.affinity)].filter(Boolean).join(' · '); const tone = r.trust + r.affinity; return `<div style="display:grid;grid-template-columns:auto 1fr;gap:8px;align-items:start">${face(r.b)}<div><strong>${esc(S.agents.get(r.b)?.name || '?')}</strong>${words ? ` <span class="chip ${tone < -0.2 ? 'criminal' : tone > 0.2 ? 'lawful-good' : 'soft'}">${esc(words)}</span>` : ''}<div class="muted" style="font-size:13px">${esc((r.history || []).map((h) => h.did).join(' · '))}</div></div></div>`; }).join('')}</div>` : `<p class="note">${esc(D.noRel)}</p>`; })()}</div>
         <div class="sec"><h3>${esc(D.hours)}</h3><div style="display:grid;gap:2px">${minifeed}</div></div>
         <div class="sec"><h3>${esc(D.who)}</h3><div class="prose">
           <p><em>${esc(ap.self_description || '')}</em></p>
@@ -1271,6 +1279,7 @@ td.num, th.num { text-align: right; }
     if (u.cost) S.data.cost = u.cost;
     if (u.economy) S.data.economy = u.economy;
     if (u.angels) S.data.angels = u.angels;
+    if (u.relations) S.data.relations = u.relations;
     if (S.follow) S.cur = S.frames.length - 1;
     render();
     if (newHour && !S.follow) toast(W().toastNew(newHour.day, hh(newHour.hour)));
@@ -1288,7 +1297,7 @@ td.num, th.num { text-align: right; }
         if (!bundles.length) return;
         if (bundles.some((b) => b.tick > (S.frames[S.frames.length - 1]?.tick ?? -1))) S.lastLive = Date.now();
         const last = bundles[bundles.length - 1];
-        applyUpdate({ frames: bundles.map((b) => b.frame), events: bundles.flatMap((b) => b.events || []), world: last.world, cost: last.cost, economy: last.economy, angels: last.angels });
+        applyUpdate({ frames: bundles.map((b) => b.frame), events: bundles.flatMap((b) => b.events || []), world: last.world, cost: last.cost, economy: last.economy, angels: last.angels, relations: last.relations });
       }, () => { /* the feed is optional: the recording still works */ });
     } catch (e) { /* ignore */ }
   }

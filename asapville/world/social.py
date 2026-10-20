@@ -50,3 +50,62 @@ def introduce(session: Session, a: Agent, b: Agent, tick: int) -> None:
         assert rel is not None
         rel.knows_name = True
         rel.last_interaction_tick = tick
+
+
+# --------------------------------------------------------------------------- reciprocity
+HISTORY = 6  # deeds remembered per relationship
+
+
+def _clamp(v: float) -> float:
+    return max(-1.0, min(1.0, v))
+
+
+def record_deed(session: Session, observer_id: int, actor: Agent, tick: int, text: str, *,
+                trust: float = 0.0, affinity: float = 0.0) -> None:
+    """`observer` remembers what `actor` did to them (or before their eyes): it moves trust and liking."""
+    if observer_id == actor.id:
+        return
+    rel = get_relationship(session, observer_id, actor.id, create=True)
+    assert rel is not None
+    rel.trust = _clamp(rel.trust + trust)
+    rel.affinity = _clamp(rel.affinity + affinity)
+    rel.last_interaction_tick = tick
+    sign = 1 if trust + affinity > 0 else -1 if trust + affinity < 0 else 0
+    rel.history = (list(rel.history or []) + [{"tick": tick, "did": text, "sign": sign}])[-HISTORY:]
+
+
+def reputation(agent: Agent) -> float:
+    return float((agent.reputation or {}).get("town", 0.0))
+
+
+def nudge_reputation(agent: Agent, delta: float) -> None:
+    rep = dict(agent.reputation or {})
+    rep["town"] = round(_clamp(rep.get("town", 0.0) + delta), 3)
+    agent.reputation = rep
+
+
+def _words(trust: float, affinity: float) -> str:
+    t = ("you trust them" if trust > 0.35 else "you somewhat trust them" if trust > 0.1
+         else "you don't trust them at all" if trust < -0.35 else "you are wary of them" if trust < -0.1
+         else "")
+    a = ("you like them" if affinity > 0.3 else "you resent them" if affinity < -0.3 else "")
+    return "; ".join(x for x in (t, a) if x)
+
+
+def standing(session: Session, agent: Agent, *, limit: int = 6) -> list[str]:
+    """How this citizen stands with the people they know, with what those people did to them."""
+    rels = [r for r in session.scalars(select(Relationship).where(Relationship.agent_id == agent.id))
+            if r.history or abs(r.trust) > 0.1 or abs(r.affinity) > 0.1]
+    rels.sort(key=lambda r: (abs(r.trust) + abs(r.affinity), r.last_interaction_tick or 0), reverse=True)
+    out = []
+    for r in rels[:limit]:
+        other = session.get(Agent, r.other_id)
+        if other is None:
+            continue
+        who = other.name if r.knows_name else f"a stranger ({looks_of(other)})"
+        if not other.alive:
+            who += " (dead)"
+        deeds = "; ".join(h["did"] for h in (r.history or [])[-3:])
+        feel = _words(r.trust, r.affinity)
+        out.append(who + (f": {feel}" if feel else "") + (f". They: {deeds}" if deeds else ""))
+    return out

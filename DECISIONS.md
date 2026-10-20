@@ -179,3 +179,31 @@ Choices made where the brief left room. Newest phase at the bottom.
   held bread they hadn't eaten, the supply chain had nobody in it), posted a precise notice with
   prices and wages, gave a parcel only to the one citizen at health 8, and appointed a baker and a
   miller. Cost of the round: about three cents.
+
+## Freedom, markets, votes, reciprocity (run-time changes, day 6-10)
+
+Each of these came from watching the real town:
+
+- **Morning plans** (one short call per citizen per waking day, from 05:00) and a "this hour is
+  yours" line when the body is fine. In 24 hours nobody had used `improvise`.
+- **Angels only inform and save lives** (`angels.allow: [notice, give_food]`). The Fixer may not
+  appoint anyone to a job; carts and relief money are off by default.
+- **Citizens' stalls** (`open_stall`, `stock_stall`): own name, own price, own till. The first one
+  opened on day 6: a citizen buying loaves at the Bakery and reselling them at the tavern.
+- **Labour market**: each midnight a job nobody holds, or whose output others idled for (3+ failed
+  hours in a day), pays 25% more; a crowded job pays 10% less (0.5x-3x the base wage). Farming paid
+  least and nobody farmed until it paid more; a miller who didn't mill got a raise until a
+  newcomer took the post.
+- **Direct democracy** (`propose_law`, `vote` at the Town Hall or Square): 12-hour votes, majority
+  with a quorum of 3; wages and town prices change when a vote passes. Citizens had been writing
+  petitions to a council that does not exist.
+- **Fullness, not hunger.** Citizens read "hunger 4/100" as an empty stomach; every gauge they see
+  now reads higher-is-better.
+- **Taste**: the same food three times running costs mood, something new lifts it.
+- **Reciprocity**: relationships keep the last six deeds (gifts, purchases, thefts, attacks, and
+  the Judge's verdict on improvised acts toward someone), moving trust and liking; witnesses
+  remember too, and a public reputation travels. `steal` (often unnoticed, especially from
+  sleepers) and `attack` exist. World rules describe town life as a repeated game (tit for tat,
+  forgive a single slip, shun repeat betrayers), but each citizen still chooses.
+- **Newcomers** (`asapville arrive --preset NAME [--works-for NAME]`): fictional presets only (a
+  would-be strongman; an informer with a secret patron). No real people, no real ideologies.

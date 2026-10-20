@@ -56,6 +56,8 @@ where the person's name would go (and {{target}} for the person they did it with
   energy_cost: 0-20, consume: {{item: qty}} (only from their "uses"), produce: {{item: qty}} \
 (at most {max_made} units in total, plain lowercase names such as "wooden stool"),
   mood: -10..10, health: -5..5,
+  toward_target: -1..1, how this treated the other person (if any): -1 harm, betrayal or cruelty, \
+0 neutral, 1 real help or kindness,
   notice: text for the town board, or null (only if they wrote or posted something public).
 
 Reply with ONLY a JSON object: {{"results": [ ... one object per attempt ... ]}}"""
@@ -72,6 +74,7 @@ class Verdict(BaseModel):
     mood: float = 0
     health: float = 0
     notice: str | None = None
+    toward_target: float = 0.0
 
 
 def rules(ctx: TickContext) -> str:
@@ -173,6 +176,11 @@ def _apply(ctx: TickContext, a: dict[str, Any], v: Verdict | None) -> None:
          actor_memory=v.memory.strip() or f"I tried to {a['what'][:150]}.",
          target_memory=outcome if other else None, witness_memory=outcome,
          importance=4 if v.success else 3)
+    if other is not None and abs(v.toward_target) >= 0.2:
+        from asapville.world.social import record_deed
+
+        t = max(-1.0, min(1.0, v.toward_target))
+        record_deed(s, other.id, agent, ctx.tick, a["what"][:80], trust=0.3 * t, affinity=0.3 * t)
     if v.notice and v.notice.strip():
         text = v.notice.strip()[:300]
         emit(s, tick=ctx.tick, kind="notice", actor=agent, location_id=a["location_id"],
