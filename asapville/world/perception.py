@@ -24,16 +24,25 @@ RECENT_TICKS = 3
 PLAN_DAY_START = 5  # hours after midnight when a new day of plans begins
 
 
-def _ownership(ctx: TickContext, agent: Agent, loc) -> str | None:
+def _ownership(ctx: TickContext, agent: Agent, loc, here_now: bool = False) -> str | None:
     cfg = ctx.settings
     if not economy.is_business(cfg, loc):
         return None
     price = economy.business_price(cfg, loc) / 100
     shop_only = loc.kind == "shop" and not economy.jobs_at(cfg, loc.key) and loc.key not in cfg.economy.shops
     if loc.owner_id is None:
+        money = ""
+        if here_now:  # standing in it: can they actually buy it?
+            short = economy.business_price(cfg, loc) - agent.money_cents
+            if short <= 0:
+                money = "; you can buy it now with buy_property"
+            else:
+                credit = bank.can_borrow(ctx.session, cfg, agent, ctx.tick)
+                money = (f"; you have {agent.money_cents / 100:.2f}, {short / 100:.2f} short"
+                         + (f"; AsapBank would lend you up to {credit / 100:.2f}" if credit else ""))
         if shop_only:
-            return f"empty shop for sale, {price:.0f} asaps"
-        return f"run by the town; for sale, {price:.0f} asaps (buy_property there)"
+            return f"empty shop for sale, {price:.0f} asaps{money}"
+        return f"run by the town; for sale, {price:.0f} asaps (buy_property there){money}"
     if loc.owner_id == agent.id:
         return "your own shop" if shop_only else "your own business"
     owner = ctx.session.get(Agent, loc.owner_id)
@@ -198,7 +207,7 @@ def build_perception(ctx: TickContext, agent: Agent) -> Perception:
         location_key=here.key,
         location_name=here.name,
         location_kind=here.kind,
-        location_note=_ownership(ctx, agent, here),
+        location_note=_ownership(ctx, agent, here, here_now=True),
         is_home=here.id == agent.home_id,
         here=seen,
         destinations=dests,

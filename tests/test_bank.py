@@ -97,3 +97,16 @@ async def test_a_default_freezes_credit(world, sessions, settings):
         assert acc.defaulted and acc.loan_cents > 0
         assert bank.can_borrow(s, settings, a, 7 * 24) == 0
         assert "defaulted" in render_perception(build_perception(ctx, a))
+
+
+async def test_a_would_be_buyer_is_told_what_the_bank_would_lend(world, sessions, settings):
+    with sessions() as s:
+        ctx = _ctx(world, s, tick=50)
+        a = s.get(Agent, 1)
+        a.location_id, a.destination_id, a.travel_ticks_left = ctx.by_key["corner_shop"].id, None, 0
+        a.role, a.money_cents = "miller", 20_000
+        for t in range(10):
+            emit(s, tick=40 + t, kind="work", actor=a, summary="worked",
+                 data={"job": "miller", "success": True, "wage_cents": 800})
+        text = render_perception(build_perception(ctx, a))
+        assert "100.00 short" in text and "AsapBank would lend you up to 180.00" in text
