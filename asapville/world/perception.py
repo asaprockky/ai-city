@@ -147,6 +147,29 @@ def setbacks(ctx: TickContext, agent: Agent) -> list[str]:
     return out
 
 
+GIVEN_HOURS = 72
+
+
+def money_given(ctx: TickContext, agent: Agent) -> list[str]:
+    """Money this citizen handed over lately, per person, so a debt is never paid twice."""
+    paid: dict[int, list[int]] = {}
+    last: dict[int, int] = {}
+    for e in ctx.session.scalars(select(Event).where(
+            Event.agent_id == agent.id, Event.kind == "give", Event.tick >= ctx.tick - GIVEN_HOURS)):
+        cents = int((e.data or {}).get("cents") or 0)
+        if cents and e.target_id is not None:
+            paid.setdefault(e.target_id, []).append(cents)
+            last[e.target_id] = max(last.get(e.target_id, e.tick), e.tick)
+    out = []
+    for other_id, sums in paid.items():
+        other = ctx.session.get(Agent, other_id)
+        if other is not None:
+            times = f"{len(sums)} times" if len(sums) > 1 else "once"
+            out.append(f"{other.name} {sum(sums) / 100:.2f} asaps ({times}, last {ctx.tick - last[other_id]} "
+                       "hours ago)")
+    return out
+
+
 def todays_plan(ctx: TickContext, agent: Agent) -> str | None:
     """The plan this citizen wrote this simulated day, if any."""
     from asapville.world.clock import Clock
@@ -289,6 +312,7 @@ def build_perception(ctx: TickContext, agent: Agent) -> Perception:
         routine=routine_line(ctx, agent),
         civic=elections.describe(s, agent, ctx.tick),
         setbacks=setbacks(ctx, agent),
+        given=money_given(ctx, agent),
         bank_offer=(f"AsapBank: deposit savings (they earn {cfg.bank.deposit_rate:.1%} a day), withdraw, "
                     f"borrow up to {bank.can_borrow(s, cfg, agent, ctx.tick) / 100:.2f} asaps more "
                     f"({cfg.bank.loan_rate:.0%} a day, due in {cfg.bank.loan_days} days), or repay"
@@ -335,6 +359,9 @@ def render_perception(p: Perception) -> str:
         lines.append(p.routine)
     for line in p.civic:
         lines.append(line)
+    if p.given:
+        lines.append(f"Money you have already handed over in the last {GIVEN_HOURS} hours: "
+                     + "; ".join(p.given) + ". A debt you paid is settled: don't pay it again.")
     if p.setbacks:
         lines.append("What went wrong for you lately (don't repeat it; find another way): "
                      + " | ".join(p.setbacks) + ".")

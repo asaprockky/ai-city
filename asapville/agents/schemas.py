@@ -213,6 +213,7 @@ class Perception(BaseModel):
     routine: str | None = None  # set when their days have been nothing but routine
     civic: list[str] = Field(default_factory=list)  # the council and any election under way
     setbacks: list[str] = Field(default_factory=list)  # what went wrong for them lately, and why
+    given: list[str] = Field(default_factory=list)  # money they handed to each person lately
     shop: list[ShopItem] = Field(default_factory=list)  # for sale where the agent stands
     jobs_here: list[JobHere] = Field(default_factory=list)
     plan: str | None = None  # the citizen's own plan for today, in their words

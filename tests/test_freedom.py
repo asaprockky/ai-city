@@ -322,3 +322,17 @@ async def test_the_same_attempt_four_times_is_called_out(world, sessions):
                  data={"what": f"read the written lease against the summary again, pass {t}"})
         ctx = _ctx(world, s, tick=5)
         assert "same thing four times" in render_perception(build_perception(ctx, a))
+
+
+async def test_a_citizen_sees_the_money_they_already_handed_over(world, sessions):
+    from asapville.world import perception
+
+    with sessions() as s:
+        ctx = _ctx(world, s, tick=10)
+        a, b = _two_at(ctx, s, "square")
+        a.money_cents = 1000
+        pay = Decision(thought="", action=ActionName.GIVE, action_args={"to": b.id, "asaps": 3.5})
+        actions.execute(ctx, a, pay)
+        actions.execute(_ctx(world, s, tick=12), a, pay)
+        lines = perception.money_given(_ctx(world, s, tick=14), a)
+    assert lines == [f"{b.name} 7.00 asaps (2 times, last 2 hours ago)"]

@@ -293,3 +293,7 @@ improvising moves nothing, so the coins stayed in his purse and Ruth found only 
 paid her twice with `give`. Now the Judge is told that coins left, slipped or "paid" by improvising
 stay with the citizen, and in code any improvised attempt that mentions money adds to the memory
 that the money never left the purse and must be given in person.
+Even with that, Abner paid Ruth the same 3.50 four times (hours 994, 1017, 1022, 1033): each `give`
+left only a small memory, and his morning plan kept saying "pay Ruth". Now every citizen sees the
+money they handed to each person in the last 72 hours ("Ruth Caddick 14.00 asaps, 4 times, last 2
+hours ago") with a reminder that a debt paid is settled.
