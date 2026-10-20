@@ -243,3 +243,9 @@ Each of these came from watching the real town:
 - **Problem solving.** World rules ask each citizen to name their most pressing problem, weigh
   two or three ways to solve it and never repeat what just failed; perception lists the last
   three setbacks with their reasons, and morning plans start from the biggest problem or goal.
+- **Manga** (`asapville comic --hours 24 [--post]`). One call to the stronger model writes a page
+  (title, 4-6 panels, captions, bubbles, sound effects) from the real events; code draws it in
+  black ink and screentone with a fixed face per citizen (hair tone from their own words, style
+  from their name, a sly brow for the scheming), and headless Chromium makes the PNG. `--post`
+  sends it to Telegram (`ASAPVILLE_TELEGRAM_TOKEN`, `ASAPVILLE_TELEGRAM_CHAT`). Chapters go
+  to `manga/`.

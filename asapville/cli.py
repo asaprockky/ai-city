@@ -352,6 +352,12 @@ def main(argv: list[str] | None = None) -> int:
     p_arr.add_argument("--advance", type=float, default=40.0, help="asaps the patron already paid them")
     p_exp = sub.add_parser("export", help="write a self-contained replay page of the town")
     p_exp.add_argument("--out", default="asapville.html")
+    p_com = sub.add_parser("comic", help="draw the last hours as a manga page (and post it to Telegram)")
+    p_com.add_argument("--hours", type=int, default=24, help="how many past hours the chapter covers")
+    p_com.add_argument("--out", default="asapville-manga.png")
+    p_com.add_argument("--script", help="redraw from a saved script JSON instead of writing a new one")
+    p_com.add_argument("--post", action="store_true",
+                       help="send it to Telegram (ASAPVILLE_TELEGRAM_TOKEN, ASAPVILLE_TELEGRAM_CHAT)")
     args = parser.parse_args(argv)
 
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
@@ -397,6 +403,33 @@ def main(argv: list[str] | None = None) -> int:
         agent = asyncio.run(arrive(settings, sessions, gateway, preset=args.preset,
                                    works_for=args.works_for, advance_cents=round(args.advance * 100)))
         print(f"{agent.name} arrived in {settings.world.name}")
+        return 0
+    if args.cmd == "comic":
+        import os
+        from pathlib import Path
+
+        from asapville import comic
+
+        with sessions() as s:
+            tick = get_world_state(s).tick
+            if args.script:
+                script = comic.Script.model_validate_json(Path(args.script).read_text(encoding="utf-8"))
+            else:
+                script = asyncio.run(comic.write_script(s, gateway, settings.llm.models.sonnet,
+                                                        max(0, tick - args.hours), tick))
+                Path(args.out).with_suffix(".json").write_text(script.model_dump_json(indent=1),
+                                                                encoding="utf-8")
+            day = Clock(settings.clock).at(tick).day
+            page = comic.render_html(s, script, chapter=f"· ДЕНЬ {day}")
+        out = comic.render_png(page, Path(args.out))
+        print(f"wrote {out}: {script.title}")
+        if args.post:
+            token = os.environ.get("ASAPVILLE_TELEGRAM_TOKEN")
+            chat = os.environ.get("ASAPVILLE_TELEGRAM_CHAT")
+            if not token or not chat:
+                raise SystemExit("set ASAPVILLE_TELEGRAM_TOKEN and ASAPVILLE_TELEGRAM_CHAT to post")
+            res = comic.post_telegram(out, f"Асапвиль, день {day}: {script.title}", token=token, chat=chat)
+            print("posted" if res.get("ok") else f"telegram said: {res}")
         return 0
     if args.cmd == "export":
         from pathlib import Path
