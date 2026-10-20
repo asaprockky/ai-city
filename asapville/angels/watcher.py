@@ -17,6 +17,7 @@ STUCK_COUNT = 3  # turned away / invalid actions inside the window
 LOW_STOCK = 8  # units of a job's product below which a missing worker matters
 FAILING_HEALTH = 25  # below this a citizen is in danger even when fed
 STALL_WINDOW = 12  # ticks without one productive hour of work
+COOLDOWN = 12  # a handled problem isn't filed again for this many ticks (deaths never repeat)
 
 
 def open_anomalies(session) -> list[Anomaly]:
@@ -28,6 +29,9 @@ def scan(ctx: TickContext, agents: list[Agent]) -> list[Anomaly]:
     s = ctx.session
     cfg = ctx.settings
     already = {(a.kind, a.agent_id) for a in open_anomalies(s)}
+    already |= {(a.kind, a.agent_id) for a in s.scalars(
+        select(Anomaly).where(Anomaly.source == "watcher", Anomaly.tick > ctx.tick - COOLDOWN))}
+    already |= {("death", a.agent_id) for a in s.scalars(select(Anomaly).where(Anomaly.kind == "death"))}
     found: list[Anomaly] = []
 
     def add(kind: str, severity: int, detail: str, agent: Agent | None = None,

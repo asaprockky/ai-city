@@ -320,7 +320,9 @@ class World:
             if self.settings.angels.enabled:
                 report.anomalies = len(watcher.scan(ctx, agents))
                 pending = watcher.open_anomalies(s)
-                if pending and ws.tick % max(1, self.settings.angels.fixer_every) == 0:
+                everyone_asleep = all(a.asleep or not a.alive for a in agents)
+                due = ws.tick % max(1, self.settings.angels.fixer_every) == 0
+                if pending and due and not everyone_asleep:
                     fix = await fixer.run(ctx, self.gateway, pending, agents)
                     report.interventions = sum(1 for r in fix.applied if r.applied)
                     if fix.note:

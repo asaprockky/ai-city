@@ -137,3 +137,27 @@ async def test_by_default_angels_only_inform_and_save_lives(world, sessions, set
         ivs = list(s.scalars(select(Intervention).order_by(Intervention.id)))
         assert [i.applied for i in ivs] == [False, False, True]
         assert all("decide this themselves" in i.reason for i in ivs[:2])
+
+
+async def test_watcher_cools_down_and_fixer_rests_while_all_sleep(world, sessions, settings, fake):
+    with sessions() as s:
+        import random
+
+        from asapville.world.actions import TickContext
+
+        ws = s.get(WorldState, 1)
+        ctx = TickContext(session=s, settings=settings, tick=ws.tick, time=world.clock.at(ws.tick),
+                          rng=random.Random(1),
+                          locations={loc.id: loc for loc in s.scalars(select(Location))})
+        agents = list(s.scalars(select(Agent)))
+        first = watcher.scan(ctx, agents)
+        for a in first:
+            a.status = "fixed"
+        s.flush()
+        assert watcher.scan(ctx, agents) == []  # handled within the cooldown: not filed again
+        for a in agents:
+            a.asleep, a.hunger, a.health, a.energy = True, 95, 15, 10  # too tired to wake
+        s.commit()
+    before = sum(1 for r in fake.requests if r.purpose == "fixer")
+    await world.step()
+    assert sum(1 for r in fake.requests if r.purpose == "fixer") == before
