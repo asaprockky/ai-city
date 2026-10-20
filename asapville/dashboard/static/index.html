@@ -401,10 +401,10 @@ td.num, th.num { text-align: right; }
     talk: '💬', depart: '🚶', arrive: '📍', turned_away: '🚪', sleep: '🌙', wake: '☀️', eat: '🍞',
     forage: '🌿', collapse: '💫', death: '✝', invalid_action: '✗', budget_paused: '⏸', buy: '🛒',
     sell: '💰', work: '🔨', hired: '📋', quit: '🚪', notice: '📜', angel: '👁', relief: '🎁',
-    delivery: '🛻', give: '🤝', improvise: '✨', plan: '📝', open_stall: '🏪', stock_stall: '📦', wages: '⚖',
+    delivery: '🛻', give: '🤝', improvise: '✨', plan: '📝', open_stall: '🏪', stock_stall: '📦', wages: '⚖', proposal: '🗳', vote: '✋', law: '🏛',
   };
   const FILTERS = {
-    all: null, talk: ['talk'], deeds: ['plan', 'improvise', 'open_stall', 'stock_stall', 'wages', 'give', 'buy', 'sell', 'work', 'hired', 'quit', 'notice'],
+    all: null, talk: ['talk'], deeds: ['plan', 'proposal', 'vote', 'law', 'improvise', 'open_stall', 'stock_stall', 'wages', 'give', 'buy', 'sell', 'work', 'hired', 'quit', 'notice'],
     trouble: ['collapse', 'death', 'invalid_action', 'turned_away', 'budget_paused'],
     angels: ['angel', 'relief', 'delivery'],
   };
@@ -490,6 +490,10 @@ td.num, th.num { text-align: right; }
         turned: (a, p) => `${a}: ${p} переполнено`, invalid: (a, x, e) => `${a} пытается ${x}, но: ${e}`,
         plan: (a, p) => `${a} задумал на день: <q>${p}</q>`,
         wages: (t) => `Новые зарплаты: ${t}`,
+        proposal: (a, n, t, c) => `${a} выносит на голосование №${n}: <q>${t}</q>${c}`,
+        vote: (a, n, y, t) => `${a} голосует ${y ? 'ЗА' : 'ПРОТИВ'} №${n} (сейчас ${t[0]}–${t[1]})`,
+        law: (n, t, y, no, ok) => `Город проголосовал по №${n} <q>${t}</q>: ${y}–${no}, ${ok ? 'ПРИНЯТО' : 'не принято'}`,
+        changeWage: (j, v) => ` (зарплата ${j} → ${v})`, changePrice: (i, v) => ` (цена ${i} → ${v})`,
         openStall: (a, n, i, c, p) => `${a} открывает своё дело «${n}» (${p}): ${i} по ${c}`,
         stockStall: (a, n, q, i, c) => `${a} выкладывает товар в «${n}»: ${q} × ${i} по ${c}`,
         buyStall: (a, q, i, n, c) => `${a} покупает ${q} × ${i} в «${n}» за ${c}`,
@@ -564,6 +568,10 @@ td.num, th.num { text-align: right; }
         turned: (a, p) => `${a} finds ${p} full`, invalid: (a, x, e) => `${a} tries to ${x}, but: ${e}`,
         plan: (a, p) => `${a} plans the day: <q>${p}</q>`,
         wages: (t) => `New wages: ${t}`,
+        proposal: (a, n, t, c) => `${a} puts #${n} to a vote: <q>${t}</q>${c}`,
+        vote: (a, n, y, t) => `${a} votes ${y ? 'YES' : 'NO'} on #${n} (now ${t[0]}–${t[1]})`,
+        law: (n, t, y, no, ok) => `The town voted on #${n} <q>${t}</q>: ${y}–${no}, ${ok ? 'PASSED' : 'not passed'}`,
+        changeWage: (j, v) => ` (${j} wage → ${v})`, changePrice: (i, v) => ` (${i} price → ${v})`,
         openStall: (a, n, i, c, p) => `${a} opens a business, “${n}” (${p}): ${i} at ${c}`,
         stockStall: (a, n, q, i, c) => `${a} stocks “${n}”: ${q} ${i} at ${c}`,
         buyStall: (a, q, i, n, c) => `${a} buys ${q} ${i} from “${n}” for ${c}`,
@@ -687,6 +695,9 @@ td.num, th.num { text-align: right; }
       case 'eat': { const m = /ate (.+)$/.exec(e.summary); return w.eat(A, esc(item(m ? m[1] : '?'))); }
       case 'buy': return d.stall ? w.buyStall(A, d.qty, esc(item(d.item)), esc(d.stall), money(d.cents || 0)) : w.buy(A, d.qty, esc(item(d.item)), money(d.cents || 0));
       case 'wages': return w.wages(esc(Object.entries(d.changes || {}).map(([j, [o, n]]) => `${jobName(j)} ${money(n)} (${n > o ? '↑' : '↓'} ${money(o)})`).join(' · ')));
+      case 'proposal': return w.proposal(A, d.proposal, esc(d.text), d.kind === 'wage' ? w.changeWage(esc(jobName(d.target)), money(d.value)) : d.kind === 'price' ? w.changePrice(esc(item(d.target)), money(d.value)) : '');
+      case 'vote': return w.vote(A, d.proposal, d.yes, d.tally || [0, 0]);
+      case 'law': return w.law(d.proposal, esc(d.text), d.yes, d.no, d.passed);
       case 'open_stall': return w.openStall(A, esc(d.stall), esc(item(d.item)), money(d.price || 0), place);
       case 'stock_stall': return w.stockStall(A, esc(d.stall), d.qty, esc(item(d.item)), money(d.price || 0));
       case 'sell': return w.sell(A, d.qty, esc(item(d.item)), money(d.cents || 0));
@@ -714,7 +725,7 @@ td.num, th.num { text-align: right; }
       default: return esc(e.summary);
     }
   }
-  const evClass = (e) => ['improvise', 'plan', 'open_stall'].includes(e.kind) ? 'idea' : FILTERS.trouble.includes(e.kind) ? 'trouble' : FILTERS.angels.includes(e.kind) || (e.kind === 'notice' && !e.agent_id) ? 'angel' : '';
+  const evClass = (e) => ['improvise', 'plan', 'open_stall', 'proposal', 'law'].includes(e.kind) ? 'idea' : FILTERS.trouble.includes(e.kind) ? 'trouble' : FILTERS.angels.includes(e.kind) || (e.kind === 'notice' && !e.agent_id) ? 'angel' : '';
   const evLine = (e, cls) => `<div class="ev ${evClass(e)} ${cls || ''}"><span class="ic">${ICON[e.kind] || '•'}</span><span>${evText(e)}</span></div>`;
 
   // ---------------------------------------------------------------- map
@@ -924,7 +935,7 @@ td.num, th.num { text-align: right; }
     const st = frameStocks(); const sum = (it) => Object.values(st).reduce((n, s) => n + (s[it] || 0), 0);
     cards.push({ cls: worked ? 'good' : 'crit', lab: T.now.econ, ttl: T.econTtl(worked), det: T.econDet(sum('bread'), sum('flour'), sum('grain')), act: () => openTab('town') });
     // 4. the newest notable thing
-    const notable = S.events.filter((e) => e.tick <= f.tick && !ROUTINE.has(e.kind) && !['talk', 'depart', 'invalid_action', 'buy', 'plan'].includes(e.kind)).slice(-1)[0];
+    const notable = S.events.filter((e) => e.tick <= f.tick && !ROUTINE.has(e.kind) && !['talk', 'depart', 'invalid_action', 'buy', 'plan', 'vote'].includes(e.kind)).slice(-1)[0];
     if (notable) cards.push({ cls: notable.kind === 'death' ? 'crit' : notable.kind === 'improvise' ? 'warn' : '', lab: `${T.now.just} · ${hh(frameAt(notable.tick)?.hour ?? 0)}`, ttl: '', det: '', html: evText(notable), act: () => { openTab('story'); } });
     // 5. the last thing said
     const said = S.events.filter((e) => e.tick <= f.tick && e.kind === 'talk').slice(-1)[0];
@@ -962,7 +973,7 @@ td.num, th.num { text-align: right; }
       const fr = frameAt(t); const list = byTick.get(t);
       const convos = new Map(); const rest = [];
       for (const e of list) { if (e.kind === 'talk') { const k = e.location_id ?? 0; if (!convos.has(k)) convos.set(k, []); convos.get(k).push(e); } else rest.push(e); }
-      const order = { death: 0, open_stall: 1, improvise: 2, plan: 3, angel: 4, notice: 5, give: 6 };
+      const order = { death: 0, law: 1, proposal: 1, open_stall: 1, improvise: 2, plan: 3, angel: 4, notice: 5, give: 6 };
       rest.sort((a, b) => (order[a.kind] ?? 9) - (order[b.kind] ?? 9));
       const convoHTML = [...convos.entries()].map(([loc, lines]) => `<div class="convo"><div class="where">${esc(T.story.convoAt(locName(loc)))}</div>${lines.map((e) =>
         `<div class="line ${e.id > S.seenEvent ? 'new' : ''}">${face(e.agent_id)}<div><span class="who">${esc(S.agents.get(e.agent_id)?.name || '?')} <span class="to">${T.ev.to} ${esc(S.agents.get(e.target_id)?.name || '')}</span></span><q>${esc(e.data?.line || '')}</q></div></div>`).join('')}</div>`).join('');

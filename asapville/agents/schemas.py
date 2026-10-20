@@ -196,6 +196,8 @@ class Perception(BaseModel):
     jobs_here: list[JobHere] = Field(default_factory=list)
     plan: str | None = None  # the citizen's own plan for today, in their words
     businesses: list[str] = Field(default_factory=list)  # the citizen's own stalls, in words
+    proposals: list[str] = Field(default_factory=list)  # open votes, in words (incl. your vote)
+    decisions: list[str] = Field(default_factory=list)  # what the town decided lately
     recent_dialogue: list[str] = Field(default_factory=list)
     recent_events: list[str] = Field(default_factory=list)
     available_actions: list[str] = Field(default_factory=list)

@@ -36,6 +36,9 @@ grain and vegetables, the mill turns grain into flour, the bakery bakes flour in
 tavern serves hot stew. Nothing appears on a shelf unless someone made it. A job gives steady \
 money; buy or forage food before you are starving, not after.
 - The town board carries notices everyone reads. The clinic treats the sick for asaps.
+- Nobody rules Asapville but its citizens. At the Town Hall or Square anyone can propose a law, \
+a town wage or a town price, and everyone can vote; the majority decides, and wages and prices \
+change when a vote passes.
 - You are free. Beyond the basic actions you can try anything a real person could do with \
 what you carry, where you stand and who is with you (improvise): cook a meal, mend a roof, carve \
 a stool, teach a child, sing for coins, preach, start a club or a business, plan a festival, \

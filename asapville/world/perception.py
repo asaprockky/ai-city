@@ -64,7 +64,7 @@ def build_perception(ctx: TickContext, agent: Agent) -> Perception:
         for loc in sorted(ctx.locations.values(), key=lambda x: x.id)
         if loc.id != here.id and (loc.kind != "home" or loc.id == agent.home_id)
     ]
-    shop = [ShopItem(item=item, price_cents=economy.price_of(cfg, item) or 0,
+    shop = [ShopItem(item=item, price_cents=economy.price_of(cfg, item, s) or 0,
                      qty=None if item in cfg.economy.unlimited else economy.stock_qty(s, here.id, item))
             for item in economy.shop_items(cfg, here.key)]
     for st in economy.stalls_at(s, here.id):
@@ -84,7 +84,7 @@ def build_perception(ctx: TickContext, agent: Agent) -> Perception:
                  for name, job in economy.jobs_at(cfg, here.key).items()]
     my_job = cfg.economy.jobs.get(agent.role)
     notices = []
-    for ev in s.scalars(select(Event).where(Event.kind.in_(("notice", "wages")),
+    for ev in s.scalars(select(Event).where(Event.kind.in_(("notice", "wages", "law")),
                                             Event.tick >= ctx.tick - cfg.economy.notice_ticks)
                         .order_by(Event.id.desc()).limit(5)):
         author_id = ev.data.get("author_id")
@@ -92,9 +92,22 @@ def build_perception(ctx: TickContext, agent: Agent) -> Perception:
         if author_id:
             author_agent = s.get(Agent, author_id)
             author = describe(s, agent.id, author_agent) if author_agent else author
-        notices.append(Notice(text=ev.data.get("text", ev.summary), author=author,
+        notices.append(Notice(text=ev.data.get("notice") or ev.data.get("text", ev.summary), author=author,
                               hours_ago=ctx.tick - ev.tick))
     plan = todays_plan(ctx, agent)
+    from asapville.db.models import Vote
+    from asapville.world import democracy
+
+    proposals = []
+    for pr in democracy.open_proposals(s):
+        author = s.get(Agent, pr.author_id)
+        my_vote = s.scalar(select(Vote).where(Vote.proposal_id == pr.id, Vote.agent_id == agent.id))
+        voted = f"; you voted {'yes' if my_vote.yes else 'no'}" if my_vote else "; you haven't voted"
+        by = describe(s, agent.id, author) if author else "someone"
+        proposals.append(f"{democracy.describe(pr)} by {by}"
+                         f": {pr.yes} yes, {pr.no} no, closes in {max(0, pr.closes_tick - ctx.tick)}h{voted}")
+    decisions = [f"{democracy.describe(pr)}: {pr.status} {pr.yes}-{pr.no}"
+                 for pr in democracy.recent_decisions(s)]
     recent = list(s.scalars(
         select(Memory).where(Memory.agent_id == agent.id,
                              Memory.created_at_tick >= ctx.tick - RECENT_TICKS)
@@ -125,6 +138,8 @@ def build_perception(ctx: TickContext, agent: Agent) -> Perception:
         jobs_here=jobs_here,
         plan=plan,
         businesses=mine,
+        proposals=proposals,
+        decisions=decisions,
         recent_dialogue=[m.content for m in recent if m.kind == "dialogue"][-8:],
         recent_events=[m.content for m in recent if m.kind in ("observation", "outcome", "action")][-8:],
         available_actions=available_usages(),
@@ -187,6 +202,11 @@ def render_perception(p: Perception) -> str:
         lines.append("Your body is fine right now: this hour is yours. Follow your plan, chase what "
                      "you want from life, or try something new of your own (improvise). Nobody "
                      "decides for you.")
+    if p.proposals:
+        lines.append("Open proposals (the town decides by majority; vote at the Town Hall or Square): "
+                     + " | ".join(p.proposals))
+    if p.decisions:
+        lines.append("Recently decided by the town: " + " | ".join(p.decisions))
     if p.notices:
         lines.append("On the town board:")
         lines.extend(f'  - "{n.text}" — {n.author}, {n.hours_ago}h ago' for n in p.notices)

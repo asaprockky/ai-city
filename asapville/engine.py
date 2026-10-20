@@ -29,7 +29,7 @@ from asapville.db.models import Agent, Anomaly, Event, Location, WorldState
 from asapville.llm.budget import NORMAL, PAUSED, SLOW
 from asapville.llm.client import LLMGateway
 from asapville.llm.routing import WORKER, effort_for, model_for, tier_for
-from asapville.world import actions, economy
+from asapville.world import actions, democracy, economy
 from asapville.world.actions import ActionResult, TickContext, arrive
 from asapville.world.clock import Clock, in_sleep_window
 from asapville.world.events import EventBus, emit, event_payload, remember
@@ -317,6 +317,7 @@ class World:
                 report.improvised = len(ctx.improvised)
                 await judge.run(ctx, self.gateway, ctx.improvised)
             self._needs(ctx, agents, results, report)
+            democracy.close_due(s, ws.tick)
             if self.settings.angels.enabled:
                 report.anomalies = len(watcher.scan(ctx, agents))
                 pending = watcher.open_anomalies(s)

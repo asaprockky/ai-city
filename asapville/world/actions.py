@@ -438,7 +438,7 @@ class Buy:
             hint = f" {sellers[0]} sells it." if sellers else ""
             return f"Nobody sells {item or 'that'} here.{hint}"
         qty = _qty(d)
-        price = economy.price_of(ctx.settings, item) or 0
+        price = economy.price_of(ctx.settings, item, ctx.session) or 0
         if agent.money_cents < price * qty:
             return (f"{qty} {item} costs {price * qty / 100:.2f} asaps; "
                     f"you have {agent.money_cents / 100:.2f}.")
@@ -460,7 +460,7 @@ class Buy:
         stall = economy.stall_for(ctx.session, here, item, d.action_args.get("from"), buyer=agent)
         if stall is not None and not isinstance(stall, str):
             return _buy_from_stall(ctx, agent, stall, qty)
-        price = economy.price_of(ctx.settings, item) or 0
+        price = economy.price_of(ctx.settings, item, ctx.session) or 0
         ws = ctx.session.get(WorldState, 1)
         assert ws is not None
         agent.money_cents -= price * qty
@@ -645,7 +645,8 @@ class Sell:
         assert here is not None
         item = str(d.action_args["item"]).strip().lower()
         qty = _qty(d)
-        cents = int((economy.price_of(ctx.settings, item) or 0) * ctx.settings.economy.buyback) * qty
+        shelf = economy.price_of(ctx.settings, item, ctx.session) or 0
+        cents = int(shelf * ctx.settings.economy.buyback) * qty
         ws = ctx.session.get(WorldState, 1)
         assert ws is not None
         if ws.treasury_cents < cents:
@@ -804,3 +805,70 @@ class Improvise:
         ctx.improvised.append({"agent_id": agent.id, "what": str(d.action_args["what"]).strip()[:300],
                                "uses": uses, "with_id": with_id, "location_id": agent.location_id})
         return ActionResult(ok=True, socialised={agent.id, with_id} if with_id else set())
+
+
+# --------------------------------------------------------------------------- democracy
+PROPOSE_USAGE = ('propose_law {"text": "<your proposal in words>", "change": {"wage": "<job>", "to": 4.0} '
+                 'or {"price": "<item>", "to": 2.5} or null}  -- at the Town Hall or Square; the town votes '
+                 'for 12 hours and the majority decides')
+
+
+@register(ActionName.PROPOSE_LAW, PROPOSE_USAGE)
+class ProposeLaw:
+    @staticmethod
+    def validate(ctx: TickContext, agent: Agent, d: Decision, perceived: set[int]) -> str | None:
+        from asapville.world import democracy
+
+        here = _here(ctx, agent)
+        if here is None or here.key not in democracy.VOTING_PLACES:
+            return "Proposals are made at the Town Hall or the Town Square."
+        text = str(d.action_args.get("text", "")).strip()
+        if len(text) < 5:
+            return "Write your proposal in 'text'."
+        if any(p.author_id == agent.id for p in democracy.open_proposals(ctx.session)):
+            return "You already have a proposal open; wait for the vote."
+        parsed = democracy.parse_change(ctx.settings, d.action_args.get("change"))
+        return parsed if isinstance(parsed, str) else None
+
+    @staticmethod
+    def execute(ctx: TickContext, agent: Agent, d: Decision) -> ActionResult:
+        from asapville.world import democracy
+
+        democracy.propose(ctx.session, ctx.settings, agent, str(d.action_args["text"]).strip(),
+                          d.action_args.get("change"), ctx.tick, agent.location_id)
+        return ActionResult(ok=True)
+
+
+VOTE_USAGE = 'vote {"proposal": <number>, "choice": "yes" or "no"}  -- at the Town Hall or Square'
+
+
+@register(ActionName.VOTE, VOTE_USAGE)
+class CastVote:
+    @staticmethod
+    def validate(ctx: TickContext, agent: Agent, d: Decision, perceived: set[int]) -> str | None:
+        from asapville.db.models import Proposal
+        from asapville.world import democracy
+
+        here = _here(ctx, agent)
+        if here is None or here.key not in democracy.VOTING_PLACES:
+            return "Votes are cast at the Town Hall or the Town Square."
+        try:
+            p = ctx.session.get(Proposal, int(d.action_args.get("proposal")))
+        except (TypeError, ValueError):
+            p = None
+        if p is None or p.status != "open":
+            return "There's no open proposal with that number."
+        if str(d.action_args.get("choice", "")).strip().lower() not in ("yes", "no"):
+            return 'Choose "yes" or "no".'
+        return None
+
+    @staticmethod
+    def execute(ctx: TickContext, agent: Agent, d: Decision) -> ActionResult:
+        from asapville.db.models import Proposal
+        from asapville.world import democracy
+
+        p = ctx.session.get(Proposal, int(d.action_args["proposal"]))
+        assert p is not None
+        democracy.cast(ctx.session, agent, p,
+                       str(d.action_args["choice"]).strip().lower() == "yes", ctx.tick, agent.location_id)
+        return ActionResult(ok=True)

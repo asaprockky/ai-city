@@ -45,8 +45,17 @@ def stocks_by_location(session: Session, locations: dict[int, Location]) -> dict
     return out
 
 
-def price_of(settings: Settings, item: str) -> int | None:
+def price_of(settings: Settings, item: str, session: Session | None = None) -> int | None:
+    """Shelf price in cents: the town's vote if there was one, else config."""
+    if session is not None:
+        ws = session.get(WorldState, 1)
+        if ws is not None and item in (ws.prices or {}):
+            return int(ws.prices[item])
     return settings.economy.prices.get(item)
+
+
+def prices_now(session: Session, settings: Settings) -> dict[str, int]:
+    return {item: price_of(settings, item, session) or 0 for item in settings.economy.prices}
 
 
 def shop_items(settings: Settings, location_key: str) -> list[str]:

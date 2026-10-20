@@ -124,7 +124,8 @@ def economy_payload(session: Session, settings: Settings) -> dict[str, Any]:
     return {
         "treasury": ws.treasury_cents,
         "stocks": econ.stocks_by_location(session, locations),
-        "prices": e.prices, "shops": e.shops, "served": e.served, "unlimited": e.unlimited,
+        "prices": econ.prices_now(session, settings), "shops": e.shops, "served": e.served,
+        "unlimited": e.unlimited,
         "stalls": [econ.stall_payload(st) for st in session.scalars(select(Stall).order_by(Stall.id))],
         "jobs": {name: {"workplace": j.workplace, "wage_cents": econ.wage_of(session, settings, name),
                         "base_cents": j.wage_cents, "uses": j.uses,

@@ -63,6 +63,7 @@ class WorldState(Base):
     seed: Mapped[int] = mapped_column(Integer, default=0)
     treasury_cents: Mapped[int] = mapped_column(Integer, default=0)  # the town fund (AsapBank)
     wages: Mapped[dict[str, int]] = mapped_column(JSON, default=dict)  # job -> cents/h today
+    prices: Mapped[dict[str, int]] = mapped_column(JSON, default=dict)  # item -> cents, set by vote
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, onupdate=utcnow)
 
 
@@ -109,6 +110,36 @@ class Stall(Base):
     qty: Mapped[int] = mapped_column(Integer, default=0)
     sold: Mapped[int] = mapped_column(Integer, default=0)
     opened_tick: Mapped[int] = mapped_column(Integer, default=0)
+
+
+class Proposal(Base):
+    """A citizen's proposal at the Town Hall: a law, a wage or a price, decided by vote."""
+
+    __tablename__ = "proposals"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    author_id: Mapped[int] = mapped_column(ForeignKey("agents.id"), index=True)
+    tick: Mapped[int] = mapped_column(Integer)
+    closes_tick: Mapped[int] = mapped_column(Integer, index=True)
+    text: Mapped[str] = mapped_column(UnicodeText)
+    kind: Mapped[str] = mapped_column(String(16), default="law")  # law | wage | price
+    target: Mapped[str | None] = mapped_column(String(32), nullable=True)  # job or item
+    value_cents: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    status: Mapped[str] = mapped_column(String(16), default="open")  # open | passed | failed
+    yes: Mapped[int] = mapped_column(Integer, default=0)
+    no: Mapped[int] = mapped_column(Integer, default=0)
+    decided_tick: Mapped[int | None] = mapped_column(Integer, nullable=True)
+
+
+class Vote(Base):
+    __tablename__ = "votes"
+    __table_args__ = (UniqueConstraint("proposal_id", "agent_id", name="uq_votes_pair"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    proposal_id: Mapped[int] = mapped_column(ForeignKey("proposals.id"), index=True)
+    agent_id: Mapped[int] = mapped_column(ForeignKey("agents.id"))
+    yes: Mapped[bool] = mapped_column(Boolean)
+    tick: Mapped[int] = mapped_column(Integer)
 
 
 class WorldTick(Base):

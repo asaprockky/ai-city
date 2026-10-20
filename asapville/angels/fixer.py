@@ -128,6 +128,11 @@ def town_status(ctx: TickContext, agents: list[Agent]) -> str:
         lines.append("Citizens' own businesses: " + "; ".join(
             f'"{st.name}" ({s.get(Agent, st.owner_id).name}) at {ctx.locations[st.location_id].key}: '
             f"{st.item} {st.price_cents / 100:.2f}, {st.qty} left" for st in stalls))
+    from asapville.world import democracy
+
+    for pr in democracy.open_proposals(s):
+        lines.append(f"Open vote: {democracy.describe(pr)} {pr.yes} yes, {pr.no} no, "
+                     f"closes tick {pr.closes_tick}")
     lines.append("Citizens (id, name, job, where, hunger/energy/health, money, carrying, mood, thought):")
     for a in agents:
         if not a.alive:
