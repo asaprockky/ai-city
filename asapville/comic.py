@@ -384,6 +384,15 @@ def draw_missing_portraits(session: Session, *, key: str | None = None) -> list[
     return done
 
 
+def post_text(text: str, *, token: str, chat: str) -> dict[str, Any]:
+    """Send a written update to the Telegram channel."""
+    body = json.dumps({"chat_id": chat, "text": text[:4000], "disable_web_page_preview": True}).encode()
+    req = urllib.request.Request(f"https://api.telegram.org/bot{token}/sendMessage", data=body,
+                                 headers={"Content-Type": "application/json"})
+    with urllib.request.urlopen(req, timeout=60) as resp:
+        return json.loads(resp.read())
+
+
 def post_telegram(png: Path, caption: str, *, token: str, chat: str) -> dict[str, Any]:
     """Send the page to a Telegram chat or channel (the bot must be an admin there)."""
     boundary = "asapville" + hashlib.sha1(png.read_bytes()[:64]).hexdigest()[:16]
