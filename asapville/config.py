@@ -182,6 +182,8 @@ class EconomyCfg(BaseModel):
 
 class AngelsCfg(BaseModel):
     enabled: bool = True
+    # what the Fixer may do; the fewer, the more the town's fate is the citizens' own
+    allow: list[str] = Field(default_factory=lambda: ["notice", "restock", "grant", "give_food"])
     fixer_every: int = 3  # at most one Fixer call per N ticks
     max_restock: int = 50
     max_grant_cents: int = 5000

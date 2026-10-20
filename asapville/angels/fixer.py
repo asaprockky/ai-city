@@ -32,30 +32,33 @@ FIXER_RULES = """You are the Fixer, a guardian angel of Asapville: a simulated s
 citizens are LLM-driven people with real needs, real money and permanent death. You belong to the \
 simulation layer. Citizens never see you; they only see effects in their world.
 
-The Watcher has flagged problems. Keep the town alive and working with the LIGHTEST touch that \
-works, so that the citizens' own choices still matter. Prefer information over hand-outs, and \
-hand-outs over miracles.
+The Watcher has flagged problems. Keep the town alive with the LIGHTEST touch that works, so \
+that the citizens' own choices decide what happens. The town's fate is theirs: shortages, \
+failures and bad choices are part of their story. Prefer telling them what is true over doing \
+anything for them.
 
 What you can do:
-- notice {{"text": "..."}}: pin a notice on the town board, signed "the town council". Everyone \
-reads it for a day. Be concrete: name the place, the price, the job, the wage.
-- restock {{"location": "<place key>", "item": "...", "qty": N}}: a cart delivers goods to a shelf \
-(max {max_restock}). Use when a shelf is empty and nobody can fill it within a few hours.
-- grant {{"agent_id": N, "cents": N}}: relief money from the town fund (max {max_grant} cents).
-- give_food {{"agent_id": N, "item": "...", "qty": N}}: a food parcel from the town stores (max \
-{max_food}). Only for someone about to die.
+{tools}
+Citizens are free. Never assign anyone a job or tell people how to live; a notice may say \
+what is for sale, what work is open and what it pays, and they choose.
 
-Citizens are free. Never assign anyone a job or tell people how to live: shape the world \
-(supplies, information, relief) and let them choose. A notice may say what work is open and \
-what it pays.
-
-Rules: at most {max_n} interventions. Do not fix what citizens can fix themselves within a few \
+Rules: at most {{max_n}} interventions. Do not fix what citizens can fix themselves within a few \
 hours. The dead cannot be helped; a notice may mourn or warn. Never invent places, items or \
 people that are not in the status report.
 
 Reply with ONLY a JSON object:
-{{"assessment": "<2-3 sentences: what is wrong and why>",
-  "interventions": [{{"kind": "<notice|restock|grant|give_food>", ..., "why": "<one sentence>"}}]}}"""
+{{{{"assessment": "<2-3 sentences: what is wrong and why>",
+  "interventions": [{{{{"kind": "<{kinds}>", ..., "why": "<one sentence>"}}}}]}}}}"""
+
+TOOLS = {
+    "notice": 'notice {{"text": "..."}}: pin a notice on the town board, signed "the town council". '
+              'Everyone reads it for a day. Be concrete: name the place, the price, the job, the wage.',
+    "restock": 'restock {{"location": "<place key>", "item": "...", "qty": N}}: a cart delivers goods '
+               'to a shelf (max {max_restock}). Only when nobody in town can make or fetch it.',
+    "grant": 'grant {{"agent_id": N, "cents": N}}: relief money from the town fund (max {max_grant} cents).',
+    "give_food": 'give_food {{"agent_id": N, "item": "...", "qty": N}}: a food parcel from the town '
+                 'stores (max {max_food}). ONLY for someone who will die within hours otherwise.',
+}
 
 _FENCE = re.compile(r"^```(?:json)?\s*|\s*```$", re.MULTILINE)
 
@@ -75,8 +78,11 @@ class FixReport:
 
 def rules(settings: Settings) -> str:
     a = settings.angels
-    return FIXER_RULES.format(max_restock=a.max_restock, max_grant=a.max_grant_cents,
-                              max_food=a.max_food, max_n=MAX_INTERVENTIONS)
+    allowed = [k for k in TOOLS if k in a.allow]
+    tools = "".join(f"- {TOOLS[k]}\n" for k in allowed)
+    return FIXER_RULES.format(tools=tools, kinds="|".join(allowed)).format(
+        max_restock=a.max_restock, max_grant=a.max_grant_cents, max_food=a.max_food,
+        max_n=MAX_INTERVENTIONS)
 
 
 def parse_reply(text: str) -> FixerReply:
@@ -149,6 +155,8 @@ def _apply(ctx: TickContext, iv: dict[str, Any], model: str, anomaly_id: int | N
         return a
 
     try:
+        if kind not in cfg.angels.allow:
+            raise ValueError("not allowed: the citizens decide this themselves")
         if kind == "notice":
             text = str(iv.get("text", "")).strip()[:400]
             if not text:

@@ -160,5 +160,5 @@ async def test_the_fixer_cannot_assign_jobs(world, sessions, fake):
         from asapville.db.models import Intervention
 
         iv = s.scalar(select(Intervention))
-        assert iv.applied is False and "choose their own work" in iv.reason
+        assert iv.applied is False and "themselves" in iv.reason
         assert s.get(Agent, 1).role != "farmer"

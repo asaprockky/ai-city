@@ -41,6 +41,7 @@ async def test_watcher_sees_starvation_and_empty_shelves(world, sessions, settin
 
 
 async def test_fixer_intervenes_within_limits(world, sessions, settings, fake):
+    settings.angels.allow = ["notice", "restock", "grant", "give_food"]
     with sessions() as s:
         victim = s.scalars(select(Agent).order_by(Agent.id)).first()
         victim.hunger, victim.health, victim.inventory = 95, 15, {}
@@ -73,6 +74,7 @@ async def test_fixer_intervenes_within_limits(world, sessions, settings, fake):
 
 
 async def test_fixer_rejects_bad_interventions(world, sessions, settings, fake):
+    settings.angels.allow = ["notice", "restock", "grant", "give_food"]
     fake.script("fixer", '{"assessment": "x", "interventions": ['
                          '{"kind": "grant", "agent_id": 1, "cents": 999999, "why": "too much"},'
                          '{"kind": "restock", "location": "moon", "item": "bread", "qty": 5, "why": "no"},'
@@ -107,7 +109,7 @@ async def test_fixer_unreadable_reply_keeps_anomalies_open(world, sessions, sett
 
 def test_fixer_prompt_is_static_and_parse_is_strict(settings):
     assert fixer.rules(settings) == fixer.rules(settings)
-    assert "max 50" in fixer.rules(settings)
+    assert "(max 5)" in fixer.rules(settings)
     r = fixer.parse_reply('```json\n{"assessment": "fine", "interventions": []}\n```')
     assert r.assessment == "fine" and r.interventions == []
     try:
@@ -117,3 +119,21 @@ def test_fixer_prompt_is_static_and_parse_is_strict(settings):
     else:
         raise AssertionError("should have failed")
     assert watcher.STUCK_COUNT == 3
+
+
+async def test_by_default_angels_only_inform_and_save_lives(world, sessions, settings, fake):
+    assert settings.angels.allow == ["notice", "give_food"]
+    assert "restock" not in fixer.rules(settings) and "grant {" not in fixer.rules(settings)
+    fake.script("fixer", '{"assessment": "x", "interventions": ['
+                         '{"kind": "restock", "location": "bakery", "item": "bread", "qty": 5, "why": "a"},'
+                         '{"kind": "grant", "agent_id": 1, "cents": 500, "why": "b"},'
+                         '{"kind": "notice", "text": "Bread is 3.00 at the Bakery", "why": "c"}]}')
+    with sessions() as s:
+        a = s.get(Agent, 1)
+        a.hunger, a.health = 95, 15
+        s.commit()
+    await world.step()
+    with sessions() as s:
+        ivs = list(s.scalars(select(Intervention).order_by(Intervention.id)))
+        assert [i.applied for i in ivs] == [False, False, True]
+        assert all("decide this themselves" in i.reason for i in ivs[:2])

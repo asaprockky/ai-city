@@ -110,6 +110,8 @@ economy:
 
 angels:                        # the simulation's guardians (never citizens)
   enabled: true
+  allow: [notice, give_food]   # inform, and save a life at the last moment; never decide for them
+                               # (also possible: restock, grant)
   fixer_every: 3               # at most one Fixer call every N ticks
   max_restock: 50
   max_grant_cents: 5000
