@@ -335,7 +335,7 @@ td.num, th.num { text-align: right; }
     <div class="tl-left">
       <button class="btn icon" id="btnFirst" title="First hour (Home)">⏮</button>
       <button class="btn icon" id="btnPrev" title="Previous hour (←)">◀</button>
-      <button class="btn icon" id="btnPlay" title="Replay (Space)">▶</button>
+      <button class="btn" id="btnPlay" title="Play back the recorded hours (Space)">▶ Replay</button>
       <button class="btn icon" id="btnNext" title="Next hour (→)">▶|</button>
     </div>
     <div class="tl-mid">
@@ -387,6 +387,17 @@ td.num, th.num { text-align: right; }
   const needClass = (v, inverted) => { const x = inverted ? 100 - v : v; return x <= 20 ? 'crit' : x <= 40 ? 'warn' : ''; };
   const locName = (id) => (S.locs.get(id) || {}).name || '?';
   const curFrame = () => S.frames[S.cur];
+  // The job someone held at the shown hour, rebuilt from hired/quit events (everyone is born unemployed).
+  function roleAt(id) {
+    const f = curFrame(); let role = 'unemployed';
+    for (const e of S.events) {
+      if (f && e.tick > f.tick) break;
+      if (e.agent_id !== id) continue;
+      if (e.kind === 'hired') role = e.data?.job || role; else if (e.kind === 'quit') role = 'unemployed';
+    }
+    return role;
+  }
+  const jobOf = (id) => { const r = roleAt(id); return (S.data.economy?.jobs || {})[r] ? r : null; };
 
   function toast(msg) {
     let t = document.querySelector('.toast');
@@ -568,7 +579,7 @@ td.num, th.num { text-align: right; }
     $('daystrip').innerHTML = bands;
     $('btnLive').classList.toggle('primary', S.follow);
     $('btnLive').textContent = S.follow ? '● Latest' : '○ Jump to latest';
-    $('btnPlay').textContent = S.playing ? '❚❚' : '▶';
+    $('btnPlay').textContent = S.playing ? '❚❚ Pause replay' : '▶ Replay';
   }
 
   // ---------------------------------------------------------------- citizens
@@ -588,7 +599,7 @@ td.num, th.num { text-align: right; }
       return `<button class="cit ${fa.alive ? '' : 'dead'} ${S.selected === a.id ? 'selected' : ''}" data-id="${a.id}">
         <span class="avatar ${fa.asleep ? 'asleep' : ''}" style="background:${alignColor(a.alignment)}">${esc(initials(a.name))}</span>
         <span>
-          <span class="name">${esc(a.name)} <span class="chip ${a.alignment}">${a.alignment}</span>${(S.data.economy?.jobs || {})[a.role] ? ` <span class="chip job">${esc(a.role)}</span>` : ''}</span>
+          <span class="name">${esc(a.name)} <span class="chip ${a.alignment}">${a.alignment}</span>${jobOf(a.id) ? ` <span class="chip job">${esc(jobOf(a.id))}</span>` : ''}</span>
           <span class="where"><span>${esc(stateOf(fa, pos))} · ${esc(where)}</span><span class="mood">· ${esc(fa.mood_label)}</span></span>
         </span>
         <span class="bars">
@@ -659,11 +670,11 @@ td.num, th.num { text-align: right; }
       return `<div class="shelf"><div class="nm">${esc(l.name)}</div>${lines}${served}</div>`;
     }).join('');
     const jobs = Object.entries(e.jobs || {}).map(([name, j]) => {
-      const workers = (j.workers || []).map((id) => { const a = S.agents.get(id); const fa = f && frameAgent(f, id); return a && (!fa || fa.alive) ? `<button data-id="${id}" class="chip job">${esc(a.name)}</button>` : ''; }).join(' ') || '<span class="chip soft">nobody</span>';
+      const workers = [...S.agents.keys()].filter((id) => roleAt(id) === name).map((id) => { const a = S.agents.get(id); const fa = f && frameAgent(f, id); return a && (!fa || fa.alive) ? `<button data-id="${id}" class="chip job">${esc(a.name)}</button>` : ''; }).join(' ') || '<span class="chip soft">nobody</span>';
       const chain = [Object.keys(j.uses || {}).length ? `uses ${Object.entries(j.uses).map(([k, v]) => `${v} ${k}`).join(', ')}` : '', Object.keys(j.makes || {}).length ? `makes ${Object.entries(j.makes).map(([k, v]) => `${v} ${k}`).join(', ')}` : ''].filter(Boolean).join(' → ');
       return `<tr><td><strong>${esc(name)}</strong><br><span style="color:var(--muted);font-size:12px">${esc(byKey[j.workplace]?.name || j.workplace)} · ${(j.wage_cents / 100).toFixed(2)}/h${chain ? ' · ' + esc(chain) : ''}</span></td><td class="chips">${workers}</td></tr>`;
     }).join('');
-    const employed = Object.values(e.jobs || {}).reduce((n, j) => n + (j.workers || []).length, 0);
+    const employed = [...S.agents.keys()].filter((id) => jobOf(id) && (!f || frameAgent(f, id)?.alive)).length;
     const bread = Object.values(stocks).reduce((n, s) => n + (s.bread || 0), 0);
     $('tab-town').innerHTML = `
       <div class="stats">
@@ -712,7 +723,7 @@ td.num, th.num { text-align: right; }
       </div>
       <div class="body">
         <div class="sec"><h3>Right now · day ${f.day} ${hourLabel(f.hour)}</h3>
-          <dl class="kv"><dt>Where</dt><dd>${esc(where)}</dd><dt>Doing</dt><dd>${esc(stateOf(fa, pos))}</dd><dt>Job</dt><dd>${(S.data.economy?.jobs || {})[a.role] ? `${esc(a.role)} at ${esc(locName((([...S.locs.values()].find((l) => l.key === S.data.economy.jobs[a.role].workplace)) || {}).id))} · ${(S.data.economy.jobs[a.role].wage_cents / 100).toFixed(2)}/h` : 'none'}</dd><dt>Mood</dt><dd>${esc(fa.mood_label)} (${fa.mood})</dd><dt>Money</dt><dd class="num">${money(fa.money || 0)} asaps</dd><dt>Carrying</dt><dd class="chips">${inv}</dd></dl>
+          <dl class="kv"><dt>Where</dt><dd>${esc(where)}</dd><dt>Doing</dt><dd>${esc(stateOf(fa, pos))}</dd><dt>Job</dt><dd>${jobOf(a.id) ? `${esc(jobOf(a.id))} at ${esc(locName((([...S.locs.values()].find((l) => l.key === S.data.economy.jobs[jobOf(a.id)].workplace)) || {}).id))} · ${(S.data.economy.jobs[jobOf(a.id)].wage_cents / 100).toFixed(2)}/h` : 'none'}</dd><dt>Mood</dt><dd>${esc(fa.mood_label)} (${fa.mood})</dd><dt>Money</dt><dd class="num">${money(fa.money || 0)} asaps</dd><dt>Carrying</dt><dd class="chips">${inv}</dd></dl>
           ${fa.thought ? `<p class="thought" style="margin:10px 0 0">${esc(fa.thought)}</p>` : ''}
         </div>
         <div class="sec"><h3>Body</h3><div class="needs">
