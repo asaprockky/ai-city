@@ -290,3 +290,16 @@ async def test_a_life_of_pure_routine_is_noticed_and_plans_ask_for_more(world, s
     req = next(r for r in fake.requests if r.purpose == "plan" and r.agent_id == 1)
     assert "work 15" in req.messages[0].content and "wearing on you" in req.messages[0].content
     assert "not done before" in req.system_rules and req.model == world.settings.llm.models.sonnet
+
+
+async def test_the_same_attempt_four_times_is_called_out(world, sessions):
+    from asapville.world.events import emit
+    from asapville.world.perception import build_perception, render_perception
+
+    with sessions() as s:
+        a = s.get(Agent, 1)
+        for t in range(4):
+            emit(s, tick=t, kind="improvise", actor=a, summary="reads",
+                 data={"what": f"read the written lease against the summary again, pass {t}"})
+        ctx = _ctx(world, s, tick=5)
+        assert "same thing four times" in render_perception(build_perception(ctx, a))

@@ -86,7 +86,30 @@ def routine(ctx: TickContext, agent: Agent) -> tuple[dict[str, int], bool]:
     return dict(counts.most_common()), total >= 20 and plain >= 0.85 * total
 
 
+def _words(text: str) -> set[str]:
+    return {w for w in "".join(c.lower() if c.isalpha() else " " for c in text).split() if len(w) > 3}
+
+
+def repeated_attempt(ctx: TickContext, agent: Agent) -> str | None:
+    """The thing a citizen keeps trying over and over (improvise), if their last tries are all alike."""
+    rows = list(ctx.session.scalars(select(Event).where(
+        Event.kind == "improvise", Event.agent_id == agent.id, Event.tick >= ctx.tick - ROUTINE_WINDOW)
+        .order_by(Event.id.desc()).limit(4)))
+    if len(rows) < 4:
+        return None
+    sets = [_words((e.data or {}).get("what", "")) for e in rows]
+    common = set.intersection(*sets) if all(sets) else set()
+    union = set.union(*sets)
+    if not union or len(common) / len(union) < 0.25:
+        return None
+    return (rows[0].data or {}).get("what", "")[:80]
+
+
 def routine_line(ctx: TickContext, agent: Agent) -> str | None:
+    again = repeated_attempt(ctx, agent)
+    if again:
+        return (f"You have done the same thing four times now (\"{again}\") and it has changed nothing. "
+                "Doing it again won't either: act on it (buy, sign, ask, build) or turn to something else.")
     counts, rut = routine(ctx, agent)
     if not rut:
         return None
