@@ -222,6 +222,26 @@ async def serve(settings: Settings, sessions: sessionmaker[Session], gateway: LL
         await asyncio.gather(end_task, return_exceptions=True)
 
 
+def _live_writer(settings: Settings, sessions: sessionmaker[Session], live_dir: str):
+    """after_step hook: write `t<tick>.json` (atomically) for whoever relays the live feed."""
+    import json
+    from pathlib import Path
+
+    from asapville.dashboard.snapshot import tick_bundle
+
+    out = Path(live_dir)
+    out.mkdir(parents=True, exist_ok=True)
+
+    async def write(report) -> None:
+        with sessions() as s:
+            bundle = tick_bundle(s, settings, report.tick)
+        tmp = out / f".t{report.tick:06d}.json"
+        tmp.write_text(json.dumps(bundle, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
+        tmp.rename(out / f"t{report.tick:06d}.json")
+
+    return write
+
+
 def _set_flag(settings: Settings, **values: object) -> None:
     sessions = make_session_factory(make_engine(settings.db_url))
     with sessions() as s:
@@ -241,6 +261,7 @@ def main(argv: list[str] | None = None) -> int:
     p_run.add_argument("--ticks", type=int, help="stop after N ticks")
     p_run.add_argument("--days", type=float, help="stop after N simulated days")
     p_run.add_argument("--fast", action="store_true", help="don't wait between ticks")
+    p_run.add_argument("--live-dir", help="write one JSON bundle per finished tick here (live feeds)")
     sub.add_parser("pause")
     sub.add_parser("resume")
     p_speed = sub.add_parser("speed", help="set tick speed multiplier")
@@ -325,8 +346,9 @@ def main(argv: list[str] | None = None) -> int:
             ticks = int(args.days * settings.clock.ticks_per_day)
         upgrade_to_head(settings.db_url)
         world = World(settings, sessions, gateway)
+        after_step = _live_writer(settings, sessions, args.live_dir) if args.live_dir else None
         try:
-            reports = asyncio.run(world.run(ticks=ticks, realtime=not args.fast))
+            reports = asyncio.run(world.run(ticks=ticks, realtime=not args.fast, after_step=after_step))
         except KeyboardInterrupt:
             print("stopped")
             return 0

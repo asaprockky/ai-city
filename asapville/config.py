@@ -105,6 +105,7 @@ class SleepCfg(BaseModel):
 
 class FoodItem(BaseModel):
     nutrition: float
+    health: float = 0.0  # medicine heals; ordinary food doesn't
 
 
 class ForageSpot(BaseModel):

@@ -9,6 +9,7 @@ from __future__ import annotations
 import random
 from collections.abc import Callable
 from dataclasses import dataclass, field
+from typing import Any
 
 from sqlalchemy.orm import Session
 
@@ -32,6 +33,7 @@ class TickContext:
     locations: dict[int, Location]
     weather: str = "clear"
     travel_slowdown: float = 1.0
+    improvised: list[dict[str, Any]] = field(default_factory=list)  # judged after everyone acts
 
     @property
     def by_key(self) -> dict[str, Location]:
@@ -188,7 +190,9 @@ class Eat:
         if inv[item] <= 0:
             del inv[item]
         agent.inventory = inv  # reassign so the JSON column is flagged dirty
-        agent.hunger = needs_rules.eat(agent.hunger, ctx.settings.food[item].nutrition)
+        food = ctx.settings.food[item]
+        agent.hunger = needs_rules.eat(agent.hunger, food.nutrition)
+        agent.health = needs_rules.clamp(agent.health + food.health)
         emit(ctx.session, tick=ctx.tick, kind="eat", actor=agent, location_id=agent.location_id,
              summary=f"{agent.name} ate {item}", actor_memory=f"I ate some {item}.",
              witness_memory=f"{{actor}} ate some {item}.", importance=1)
@@ -446,7 +450,9 @@ class Buy:
         if item not in ctx.settings.economy.unlimited:
             economy.stock_add(ctx.session, here.id, item, -qty)
         if item in ctx.settings.economy.served:
-            agent.hunger = needs_rules.eat(agent.hunger, ctx.settings.food[item].nutrition * qty)
+            food = ctx.settings.food[item]
+            agent.hunger = needs_rules.eat(agent.hunger, food.nutrition * qty)
+            agent.health = needs_rules.clamp(agent.health + food.health * qty)
             what = f"ate {qty} {item} at {here.name}"
             mem = f"I paid {price * qty / 100:.2f} asaps for {item} at {here.name} and ate it there."
         else:
@@ -535,3 +541,115 @@ class WriteNotice:
              actor_memory=f'I pinned a notice on the town board: "{text}"',
              witness_memory="{actor} pinned a notice on the board.", importance=3)
         return ActionResult(ok=True)
+
+
+# --------------------------------------------------------------------------- freedom
+def _person_here(ctx: TickContext, agent: Agent, ref: Any, perceived: set[int]) -> Agent | str:
+    """The awake person `ref` standing here, or why not."""
+    try:
+        target_id = int(ref)
+    except (TypeError, ValueError):
+        return "Give the ref of someone who is here."
+    if target_id not in perceived or target_id == agent.id:
+        return "There's nobody like that here."
+    target = ctx.session.get(Agent, target_id)
+    if target is None or not target.alive or target.location_id != agent.location_id \
+            or target.travel_ticks_left > 0:
+        return "They're not here any more."
+    if target.asleep:
+        return "They're asleep."
+    return target
+
+
+GIVE_USAGE = ('give {"to": <ref of someone here>, "item": "<item>", "qty": 1}  or  '
+              'give {"to": <ref>, "asaps": 2.5}  -- hand over goods or money')
+
+
+@register(ActionName.GIVE, GIVE_USAGE)
+class Give:
+    @staticmethod
+    def validate(ctx: TickContext, agent: Agent, d: Decision, perceived: set[int]) -> str | None:
+        target = _person_here(ctx, agent, d.action_args.get("to"), perceived)
+        if isinstance(target, str):
+            return target
+        if "asaps" in d.action_args:
+            try:
+                cents = round(float(d.action_args["asaps"]) * 100)
+            except (TypeError, ValueError):
+                return "How many asaps? Give a number."
+            if cents <= 0:
+                return "Give a positive amount."
+            if cents > agent.money_cents:
+                return f"You only have {agent.money_cents / 100:.2f} asaps."
+            return None
+        item = str(d.action_args.get("item", "")).strip().lower()
+        if not item:
+            return "Give what? Name an item or an amount of asaps."
+        if (agent.inventory or {}).get(item, 0) < _qty(d):
+            return f"You don't have {_qty(d)} {item}."
+        return None
+
+    @staticmethod
+    def execute(ctx: TickContext, agent: Agent, d: Decision) -> ActionResult:
+        target = ctx.session.get(Agent, int(d.action_args["to"]))
+        assert target is not None
+        if "asaps" in d.action_args:
+            cents = round(float(d.action_args["asaps"]) * 100)
+            agent.money_cents -= cents
+            target.money_cents += cents
+            what, data = f"{cents / 100:.2f} asaps", {"cents": cents}
+        else:
+            item, qty = str(d.action_args["item"]).strip().lower(), _qty(d)
+            mine, theirs = dict(agent.inventory or {}), dict(target.inventory or {})
+            mine[item] -= qty
+            if mine[item] <= 0:
+                del mine[item]
+            theirs[item] = theirs.get(item, 0) + qty
+            agent.inventory, target.inventory = mine, theirs
+            what, data = f"{qty} {item}", {"item": item, "qty": qty}
+        emit(ctx.session, tick=ctx.tick, kind="give", actor=agent, target=target,
+             location_id=agent.location_id, summary=f"{agent.name} gave {target.name} {what}", data=data,
+             actor_memory=f"I gave {{target}} {what}.", target_memory=f"{{actor}} gave me {what}.",
+             witness_memory=f"{{actor}} handed {{target}} {what}.", importance=3)
+        introduce(ctx.session, agent, target, ctx.tick)
+        return ActionResult(ok=True, socialised={agent.id, target.id})
+
+
+IMPROVISE_USAGE = ('improvise {"what": "<anything a real person could do here this hour: cook, craft, '
+                   'build, repair, teach, perform, preach, organise, invent, start a venture...>", '
+                   '"uses": {"<item from your inventory>": 1}, "with": <ref of someone here or null>}'
+                   '  -- the world decides how it turns out')
+
+
+@register(ActionName.IMPROVISE, IMPROVISE_USAGE)
+class Improvise:
+    @staticmethod
+    def validate(ctx: TickContext, agent: Agent, d: Decision, perceived: set[int]) -> str | None:
+        what = str(d.action_args.get("what", "")).strip()
+        if not what:
+            return "Say what you do in 'what'."
+        uses = d.action_args.get("uses") or {}
+        if not isinstance(uses, dict):
+            return "'uses' must map items from your inventory to quantities."
+        inv = agent.inventory or {}
+        for item, qty in uses.items():
+            try:
+                q = int(qty)
+            except (TypeError, ValueError):
+                return f"How many {item}?"
+            if q < 1 or inv.get(str(item).lower(), 0) < q:
+                return f"You don't have {qty} {item} to use."
+        if d.action_args.get("with") is not None:
+            target = _person_here(ctx, agent, d.action_args.get("with"), perceived)
+            if isinstance(target, str):
+                return target
+        return None
+
+    @staticmethod
+    def execute(ctx: TickContext, agent: Agent, d: Decision) -> ActionResult:
+        uses = {str(k).lower(): int(v) for k, v in (d.action_args.get("uses") or {}).items()}
+        with_id = d.action_args.get("with")
+        with_id = int(with_id) if with_id is not None else None
+        ctx.improvised.append({"agent_id": agent.id, "what": str(d.action_args["what"]).strip()[:300],
+                               "uses": uses, "with_id": with_id, "location_id": agent.location_id})
+        return ActionResult(ok=True, socialised={agent.id, with_id} if with_id else set())

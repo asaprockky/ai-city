@@ -15,6 +15,8 @@ from asapville.world.actions import TickContext
 STUCK_WINDOW = 6  # ticks
 STUCK_COUNT = 3  # turned away / invalid actions inside the window
 LOW_STOCK = 8  # units of a job's product below which a missing worker matters
+FAILING_HEALTH = 25  # below this a citizen is in danger even when fed
+STALL_WINDOW = 12  # ticks without one productive hour of work
 
 
 def open_anomalies(session) -> list[Anomaly]:
@@ -50,6 +52,19 @@ def scan(ctx: TickContext, agents: list[Agent]) -> list[Anomaly]:
                 f"{a.name} is starving (hunger {a.hunger:.0f}, health {a.health:.0f}) at {where} "
                 f"with {a.money_cents / 100:.2f} asaps, carrying {inv}; job: {a.role}", a,
                 {"hunger": a.hunger, "health": a.health, "money_cents": a.money_cents})
+        elif a.health < FAILING_HEALTH:
+            where = ctx.locations[a.location_id].name if a.location_id else "on the road"
+            add("failing_health", 4 if a.health < 12 else 3,
+                f"{a.name}'s health is {a.health:.0f} (hunger {a.hunger:.0f}) at {where}, "
+                f"{a.money_cents / 100:.2f} asaps; doing: {a.last_action}", a,
+                {"health": a.health, "money_cents": a.money_cents})
+        cheapest = min((p for item, p in cfg.economy.prices.items()
+                        if item in cfg.food and cfg.food[item].nutrition > 0), default=0)
+        has_food = any(k in cfg.food and v > 0 for k, v in (a.inventory or {}).items())
+        if a.hunger >= 50 and a.money_cents < cheapest and not has_food:
+            add("broke_and_hungry", 3,
+                f"{a.name} is hungry ({a.hunger:.0f}) with {a.money_cents / 100:.2f} asaps and no food; "
+                f"job: {a.role}", a, {"hunger": a.hunger, "money_cents": a.money_cents})
         stuck = s.scalar(select(func.count(Event.id)).where(
             Event.agent_id == a.id, Event.kind.in_(("turned_away", "invalid_action")),
             Event.tick > ctx.tick - STUCK_WINDOW)) or 0
@@ -61,6 +76,13 @@ def scan(ctx: TickContext, agents: list[Agent]) -> list[Anomaly]:
                 {"count": stuck})
 
     by_key = ctx.by_key
+    if ctx.tick >= STALL_WINDOW:
+        recent = s.scalars(select(Event).where(Event.kind == "work", Event.tick > ctx.tick - STALL_WINDOW))
+        if not any((e.data or {}).get("success") for e in recent):
+            bread = sum(economy.stock_qty(s, loc.id, "bread") for loc in by_key.values())
+            add("production_stalled", 3,
+                f"Nobody has done a productive hour of work in {STALL_WINDOW}h; bread on shelves: {bread}",
+                None, {"bread": bread})
     if economy.shelf_food(s, cfg, by_key) == 0:
         served = ", ".join(cfg.economy.served) or "nothing"
         add("no_food_for_sale", 4,

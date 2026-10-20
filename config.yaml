@@ -77,6 +77,7 @@ food:                        # nutrition = hunger reduced per item
   fish: {nutrition: 30}
   vegetables: {nutrition: 20}
   stew: {nutrition: 45}        # a hot meal at the tavern, eaten at the counter
+  treatment: {nutrition: 0, health: 30}   # an hour with the clinic's nurse
 
 economy:
   treasury_cents: 2000000      # 20,000 asaps in AsapBank: pays wages, takes what shops earn
@@ -86,13 +87,15 @@ economy:
     berries: 80
     fish: 200
     stew: 500
+    treatment: 800
   buyback: 0.6                 # the market pays 60% of the shelf price when citizens sell
   shops:                       # where things are sold
     bakery: [bread]
     market: [vegetables, berries, fish]
     tavern: [stew]
-  served: [stew]               # eaten at the counter, never carried
-  unlimited: [stew]            # the tavern kitchen never runs dry (the town's safety net)
+    clinic: [treatment]
+  served: [stew, treatment]    # used on the spot, never carried
+  unlimited: [stew, treatment] # the tavern kitchen and the clinic never run dry (the safety net)
   jobs:                        # take one with `apply` at the workplace; `work` there for wages
     farmer:    {workplace: farm,   wage_cents: 250, makes: {grain: 3, vegetables: 2}, deliver: {vegetables: market}}
     miller:    {workplace: mill,   wage_cents: 300, uses: {grain: 3}, source: farm, makes: {flour: 3}}

@@ -106,6 +106,7 @@ class ActionName(StrEnum):
     VOTE = "vote"
     FOUND_BUSINESS = "found_business"
     BORROW = "borrow"
+    IMPROVISE = "improvise"
     IDLE = "idle"
 
 

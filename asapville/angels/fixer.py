@@ -102,7 +102,11 @@ def town_status(ctx: TickContext, agents: list[Agent]) -> str:
         loc = ctx.by_key.get(key)
         if loc is None:
             continue
-        goods = ", ".join(f"{k} {v}" for k, v in sorted(stocks.get(key, {}).items())) or "empty"
+        goods = ", ".join(f"{k} {v}" for k, v in sorted(stocks.get(key, {}).items())
+                          if k not in cfg.economy.unlimited) or "empty"
+        always = [k for k in cfg.economy.shops.get(key, []) if k in cfg.economy.unlimited]
+        if always:
+            goods += "; always available: " + ", ".join(always)
         sells = cfg.economy.shops.get(key)
         tail = f" (sells {', '.join(sells)})" if sells else ""
         lines.append(f"  - {key} ({loc.name}): {goods}{tail}")

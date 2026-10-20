@@ -175,3 +175,16 @@ def bootstrap(session: Session, settings: Settings) -> dict[str, Any]:
         "economy": economy_payload(session, settings),
         "angels": angels_payload(session),
     }
+
+
+def tick_bundle(session: Session, settings: Settings, tick: int) -> dict[str, Any]:
+    """Everything the page needs to add one finished tick (the live feed's document)."""
+    ws = get_world_state(session)
+    frame = [f for f in frames(session, settings, since_tick=tick - 1) if f["tick"] == tick]
+    evs = [event_payload(e) for e in session.scalars(
+        select(Event).where(Event.tick == tick, or_(Event.visibility.not_in(HIDDEN_VISIBILITY),
+                                                    Event.kind.in_(SHOWN_SYSTEM_KINDS)))
+        .order_by(Event.id))]
+    return {"tick": tick, "frame": frame[0] if frame else None, "events": evs,
+            "world": world_payload(ws, settings), "cost": cost(session),
+            "economy": economy_payload(session, settings), "angels": angels_payload(session)}

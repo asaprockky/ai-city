@@ -126,6 +126,14 @@ def fake_decide(req: LLMRequest, rng: random.Random) -> str:
             return out("I need food. The wild might provide.", "move", {"to": target}, mood="anxious")
     if p.get("energy", 100) <= 25:
         return out("I'm worn out.", "rest", mood="tired")
+    if rng.random() < 0.08:
+        return out("I could make something of this hour.", "improvise",
+                   {"what": rng.choice(["whittle a spoon from a stick", "sing an old song",
+                                        "sweep the step outside", "sketch the square"])}, mood="curious")
+    if here and food and rng.random() < 0.05:
+        other = rng.choice(here)
+        return out("They look like they need it more.", "give",
+                   {"to": other["ref"], "item": food[0], "qty": 1}, mood="kind")
     if here and rng.random() < 0.4:
         other = rng.choice(here)
         greeting = "Hello there." if other.get("name") is None else f"Good to see you, {other['name']}."
@@ -161,13 +169,26 @@ def fake_fixer(req: LLMRequest, rng: random.Random) -> str:
                        "interventions": ivs[:6]})
 
 
+def fake_judge(req: LLMRequest, rng: random.Random) -> str:
+    """Ordinary attempts work: a little energy, a small mood lift, a whittled spoon now and then."""
+    results = []
+    for a in req.context.get("attempts", []):
+        made = {"wooden spoon": 1} if "spoon" in a["what"] else {}
+        results.append({"agent_id": a["agent_id"], "success": True,
+                        "outcome": "{actor} spends the hour on it: " + a["what"] + ".",
+                        "memory": "I spent an hour trying to " + a["what"] + ".",
+                        "energy_cost": 4, "consume": {}, "produce": made, "mood": 3, "health": 0,
+                        "notice": None})
+    return json.dumps({"results": results})
+
+
 class FakeLLM:
     name = "fake"
 
     def __init__(self, *, billable: bool = False, handlers: dict[str, Handler] | None = None) -> None:
         self.billable = billable  # True lets tests exercise the budget guard with fake spend
         self.handlers: dict[str, Handler] = {"birth": fake_birth, "decide": fake_decide,
-                                             "fixer": fake_fixer}
+                                             "fixer": fake_fixer, "judge": fake_judge}
         if handlers:
             self.handlers.update(handlers)
         self._scripts: dict[str, deque[str]] = defaultdict(deque)

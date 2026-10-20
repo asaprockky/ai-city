@@ -35,7 +35,12 @@ deceitful, as your nature leads; the town reacts with consequences.
 grain and vegetables, the mill turns grain into flour, the bakery bakes flour into bread, the \
 tavern serves hot stew. Nothing appears on a shelf unless someone made it. A job gives steady \
 money; buy or forage food before you are starving, not after.
-- The town board carries notices everyone reads.
+- The town board carries notices everyone reads. The clinic treats the sick for asaps.
+- You are free. Beyond the basic actions you can try anything a real person could do with \
+what you carry, where you stand and who is with you (improvise): cook a meal, mend a roof, carve \
+a stool, teach a child, sing for coins, preach, start a club or a business, plan a festival, \
+invent something. The world decides how it turns out. Nothing comes from nothing, and money \
+only moves when someone pays it. You can give goods or money to anyone beside you.
 - All companies and products in Asapville are local and fictional.
 
 Hard limits (never write these): sexual content; any harm involving children; real people \

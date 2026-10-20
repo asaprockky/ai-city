@@ -13,6 +13,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import random
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 
 from sqlalchemy import select
@@ -21,7 +22,7 @@ from sqlalchemy.orm import Session, sessionmaker
 from asapville.agents.decide import DecideOutcome, decide
 from asapville.agents.persona import persona_block
 from asapville.agents.schemas import ActionName, Decision, Personality
-from asapville.angels import fixer, watcher
+from asapville.angels import fixer, judge, watcher
 from asapville.config import Settings
 from asapville.db.models import Agent, Anomaly, Event, Location, WorldState
 from asapville.llm.budget import NORMAL, PAUSED, SLOW
@@ -56,6 +57,7 @@ class TickReport:
     events: int = 0
     anomalies: int = 0
     interventions: int = 0
+    improvised: int = 0
 
 
 def get_world_state(session: Session) -> WorldState:
@@ -273,6 +275,9 @@ class World:
             outcomes = await self._decide_all(ctx, deciders, mode)
             report.llm_calls = len(self.gateway.pending) - calls_before
             results = self._execute(ctx, agents, outcomes, report)
+            if ctx.improvised:
+                report.improvised = len(ctx.improvised)
+                await judge.run(ctx, self.gateway, ctx.improvised)
             self._needs(ctx, agents, results, report)
             if self.settings.angels.enabled:
                 report.anomalies = len(watcher.scan(ctx, agents))
@@ -304,12 +309,15 @@ class World:
             })
             return report
 
-    async def run(self, *, ticks: int | None = None, realtime: bool = True) -> list[TickReport]:
+    async def run(self, *, ticks: int | None = None, realtime: bool = True,
+                  after_step: Callable[[TickReport], Awaitable[None]] | None = None) -> list[TickReport]:
         reports: list[TickReport] = []
         done = 0
         while ticks is None or done < ticks:
             rep = await self.step()
             reports.append(rep)
+            if after_step is not None and not rep.paused:
+                await after_step(rep)
             if rep.paused:
                 if not realtime:
                     break
