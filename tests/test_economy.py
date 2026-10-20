@@ -146,3 +146,19 @@ async def test_wages_follow_the_labour_market(world, sessions, settings):
         _put(ctx, agents[4], "farm")
         text = render_perception(build_perception(ctx, agents[4]))
         assert "farmer (7.50/h, 0 working)" in text
+
+
+async def test_a_bottleneck_raises_its_own_wage(world, sessions, settings):
+    from asapville.world.events import emit
+
+    with sessions() as s:
+        agents = list(s.scalars(select(Agent).order_by(Agent.id)))
+        agents[0].role = "miller"
+        for a in agents[1:5]:
+            a.role = "baker"
+        for t in range(4):  # bakers idle for want of flour, while a miller is on the books
+            emit(s, tick=t, kind="work", actor=agents[1], visibility="local", summary="no flour",
+                 data={"job": "baker", "success": False, "missing": "flour"})
+        changed = economy.adjust_wages(s, settings, tick=10)
+        assert changed["miller"] == (300, 375)
+        assert "baker" not in changed or changed["baker"][1] < changed["baker"][0]

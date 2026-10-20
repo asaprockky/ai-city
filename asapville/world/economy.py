@@ -195,6 +195,7 @@ def stall_payload(s: Stall) -> dict[str, Any]:
 
 # The labour market: each midnight a job nobody holds pays more, a crowded one pays less.
 WAGE_UP, WAGE_DOWN, CROWDED = 1.25, 0.9, 3
+SHORT_HOURS = 3  # idle hours downstream, in a day, that count as a shortage of this job's output
 WAGE_MIN, WAGE_MAX = 0.5, 3.0  # bounds, as multiples of the base wage in config
 
 
@@ -204,16 +205,36 @@ def wage_of(session: Session, settings: Settings, job: str) -> int:
     return int((ws.wages or {}).get(job, base)) if ws is not None else base
 
 
-def adjust_wages(session: Session, settings: Settings) -> dict[str, tuple[int, int]]:
-    """Move every wage one step toward what the town needs. Returns {job: (old, new)} for changes."""
+def shortages(session: Session, settings: Settings, since_tick: int) -> dict[str, int]:
+    """Per job, how many hours others could not work for want of what this job makes."""
+    from asapville.db.models import Event
+
+    makers = {item: name for name, job in settings.economy.jobs.items() for item in job.makes}
+    out: dict[str, int] = {}
+    for e in session.scalars(select(Event).where(Event.kind == "work", Event.tick >= since_tick)):
+        missing = (e.data or {}).get("missing")
+        if missing in makers and not (e.data or {}).get("success"):
+            out[makers[missing]] = out.get(makers[missing], 0) + 1
+    return out
+
+
+def adjust_wages(session: Session, settings: Settings, *,
+                 tick: int | None = None) -> dict[str, tuple[int, int]]:
+    """Move every wage one step toward what the town needs. Returns {job: (old, new)} for changes.
+
+    A job pays more when nobody holds it, or when others stood idle waiting for what it makes
+    (a miller who doesn't mill raises the miller's wage); it pays less when crowded and not short.
+    """
     ws = session.get(WorldState, 1)
     assert ws is not None
     wages = dict(ws.wages or {})
+    short = shortages(session, settings, (tick if tick is not None else ws.tick) - 24)
     changed = {}
     for name, job in settings.economy.jobs.items():
         old = int(wages.get(name, job.wage_cents))
         n = len(workers_in(session, name))
-        factor = WAGE_UP if n == 0 else WAGE_DOWN if n > CROWDED else 1.0
+        needed = n == 0 or short.get(name, 0) >= SHORT_HOURS
+        factor = WAGE_UP if needed else WAGE_DOWN if n > CROWDED else 1.0
         new = round(min(job.wage_cents * WAGE_MAX, max(job.wage_cents * WAGE_MIN, old * factor)))
         wages[name] = new
         if new != old:
