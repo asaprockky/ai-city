@@ -110,6 +110,8 @@ def describe_needs(hunger: float, energy: float, social: float, health: float) -
         out.append("you are very hungry")
     elif hunger >= 40:
         out.append("you are getting hungry")
+    elif hunger <= 20:
+        out.append("you are well fed")
     if energy <= 10:
         out.append("you are about to collapse from exhaustion")
     elif energy <= 30:

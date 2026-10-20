@@ -160,8 +160,11 @@ def render_perception(p: Perception) -> str:
             lines.append(f"  - ref {a.ref}: {who}{state}")
     else:
         lines.append("Nobody else is here.")
-    lines.append(f"Your body: hunger {p.hunger}/100, energy {p.energy}/100, health {p.health}/100, "
-                 f"social {p.social}/100." + (" " + "; ".join(p.body).capitalize() + "." if p.body else ""))
+    # Every gauge reads the same way (higher is better): citizens read a raw "hunger 4" as an empty
+    # stomach and "hunger 89" as fed, the opposite of what it meant, so fullness is shown instead.
+    lines.append(f"Your body (each out of 100, higher is better): fed {100 - p.hunger}, energy {p.energy}, "
+                 f"health {p.health}, company {p.social}."
+                 + (" " + "; ".join(p.body).capitalize() + "." if p.body else ""))
     asaps = p.money_cents / 100
     inv = ", ".join(f"{k} x{v}" for k, v in sorted(p.inventory.items())) or "nothing"
     lines.append(f"You carry {asaps:.2f} asaps and: {inv}.")

@@ -178,3 +178,20 @@ async def test_a_newcomer_arrives_from_a_preset(world, sessions, settings, gatew
         ev = s.scalar(select(Event).where(Event.kind == "arrival"))
         assert ev.visibility == "public" and ev.data["preset"] == "demagogue"
         assert len(list(s.scalars(select(Agent)))) == 6
+
+
+async def test_every_gauge_reads_the_same_way(world, sessions):
+    with sessions() as s:
+        import random
+
+        from asapville.db.models import Location
+        from asapville.world.perception import build_perception, render_perception
+
+        a = s.get(Agent, 1)
+        a.hunger = 89
+        ctx = TickContext(session=s, settings=world.settings, tick=0, time=world.clock.at(0),
+                          rng=random.Random(1),
+                          locations={loc.id: loc for loc in s.scalars(select(Location))})
+        text = render_perception(build_perception(ctx, a))
+        assert "higher is better): fed 11," in text and "very hungry" in text
+        assert "hunger 89" not in text

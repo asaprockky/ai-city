@@ -133,7 +133,9 @@ def town_status(ctx: TickContext, agents: list[Agent]) -> str:
     for pr in democracy.open_proposals(s):
         lines.append(f"Open vote: {democracy.describe(pr)} {pr.yes} yes, {pr.no} no, "
                      f"closes tick {pr.closes_tick}")
-    lines.append("Citizens (id, name, job, where, hunger/energy/health, money, carrying, mood, thought):")
+    lines.append("Citizens (id, name, job, where, hunger/energy/health where hunger 100 = starving and "
+                 "energy/health 0 = collapse/death, money, carrying, mood, thought). Citizens see hunger "
+                 "as 'fed' = 100 - hunger, so their own words may quote that number:")
     for a in agents:
         if not a.alive:
             lines.append(f"  - {a.id} {a.name}: DEAD ({a.cause_of_death})")
