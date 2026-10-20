@@ -401,11 +401,11 @@ td.num, th.num { text-align: right; }
     talk: '💬', depart: '🚶', arrive: '📍', turned_away: '🚪', sleep: '🌙', wake: '☀️', eat: '🍞',
     forage: '🌿', collapse: '💫', death: '✝', invalid_action: '✗', budget_paused: '⏸', buy: '🛒',
     sell: '💰', work: '🔨', hired: '📋', quit: '🚪', notice: '📜', angel: '👁', relief: '🎁',
-    delivery: '🛻', give: '🤝', improvise: '✨', plan: '📝', open_stall: '🏪', stock_stall: '📦', wages: '⚖', proposal: '🗳', vote: '✋', law: '🏛', arrival: '🧳',
+    delivery: '🛻', give: '🤝', improvise: '✨', plan: '📝', open_stall: '🏪', stock_stall: '📦', wages: '⚖', proposal: '🗳', vote: '✋', law: '🏛', arrival: '🧳', secret_deal: '🕵',
   };
   const FILTERS = {
     all: null, talk: ['talk'], deeds: ['plan', 'proposal', 'vote', 'law', 'improvise', 'open_stall', 'stock_stall', 'wages', 'give', 'buy', 'sell', 'work', 'hired', 'quit', 'notice'],
-    trouble: ['collapse', 'death', 'invalid_action', 'turned_away', 'budget_paused'],
+    trouble: ['collapse', 'death', 'invalid_action', 'turned_away', 'budget_paused', 'secret_deal'],
     angels: ['angel', 'relief', 'delivery'],
   };
   const ROUTINE = new Set(['sleep', 'wake', 'arrive', 'eat']);
@@ -491,6 +491,7 @@ td.num, th.num { text-align: right; }
         plan: (a, p) => `${a} задумал на день: <q>${p}</q>`,
         wages: (t) => `Новые зарплаты: ${t}`,
         arrival: (a, h) => `В город приехал новый житель: ${a}${h ? ` (поселился: ${h})` : ''}`,
+        secretDeal: (a, t, c) => `Тайно: ${a} заплатил ${t} ${c} асапов, чтобы шпионить за городом (знают только они)`,
         proposal: (a, n, t, c) => `${a} выносит на голосование №${n}: <q>${t}</q>${c}`,
         vote: (a, n, y, t) => `${a} голосует ${y ? 'ЗА' : 'ПРОТИВ'} №${n} (сейчас ${t[0]}–${t[1]})`,
         law: (n, t, y, no, ok) => `Город проголосовал по №${n} <q>${t}</q>: ${y}–${no}, ${ok ? 'ПРИНЯТО' : 'не принято'}`,
@@ -570,6 +571,7 @@ td.num, th.num { text-align: right; }
         plan: (a, p) => `${a} plans the day: <q>${p}</q>`,
         wages: (t) => `New wages: ${t}`,
         arrival: (a, h) => `A newcomer moved to town: ${a}${h ? ` (lives at ${h})` : ''}`,
+        secretDeal: (a, t, c) => `Secretly: ${a} paid ${t} ${c} asaps to spy on the town (only the two know)`,
         proposal: (a, n, t, c) => `${a} puts #${n} to a vote: <q>${t}</q>${c}`,
         vote: (a, n, y, t) => `${a} votes ${y ? 'YES' : 'NO'} on #${n} (now ${t[0]}–${t[1]})`,
         law: (n, t, y, no, ok) => `The town voted on #${n} <q>${t}</q>: ${y}–${no}, ${ok ? 'PASSED' : 'not passed'}`,
@@ -698,6 +700,7 @@ td.num, th.num { text-align: right; }
       case 'buy': return d.stall ? w.buyStall(A, d.qty, esc(item(d.item)), esc(d.stall), money(d.cents || 0)) : w.buy(A, d.qty, esc(item(d.item)), money(d.cents || 0));
       case 'wages': return w.wages(esc(Object.entries(d.changes || {}).map(([j, [o, n]]) => `${jobName(j)} ${money(n)} (${n > o ? '↑' : '↓'} ${money(o)})`).join(' · ')));
       case 'arrival': return w.arrival(A, place);
+      case 'secret_deal': return w.secretDeal(A, T, money(d.cents || 0));
       case 'proposal': return w.proposal(A, d.proposal, esc(d.text), d.kind === 'wage' ? w.changeWage(esc(jobName(d.target)), money(d.value)) : d.kind === 'price' ? w.changePrice(esc(item(d.target)), money(d.value)) : '');
       case 'vote': return w.vote(A, d.proposal, d.yes, d.tally || [0, 0]);
       case 'law': return w.law(d.proposal, esc(d.text), d.yes, d.no, d.passed);

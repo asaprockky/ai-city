@@ -223,7 +223,8 @@ async def serve(settings: Settings, sessions: sessionmaker[Session], gateway: LL
 
 
 async def arrive(settings: Settings, sessions: sessionmaker[Session], gateway: LLMGateway, *,
-                 preset: str | None = None) -> Agent:
+                 preset: str | None = None, works_for: str | None = None,
+                 advance_cents: int = 4000) -> Agent:
     """A newcomer is born (seed card rolled, or a preset), gets a free house if any, and arrives."""
     from asapville.agents.birth import roll_seed_card
     from asapville.agents.presets import PRESETS
@@ -251,12 +252,41 @@ async def arrive(settings: Settings, sessions: sessionmaker[Session], gateway: L
                           + (f" and took {home.name} as my home." if home
                              else ", with no home of my own yet."),
              importance=6)
+        if works_for:
+            _secret_deal(s, ws.tick, agent, works_for, advance_cents)
         for other in s.scalars(select(Agent).where(Agent.alive.is_(True), Agent.id != agent.id)):
             remember(s, other.id, ws.tick, "observation",
                      "Word is going round that a newcomer has moved to town.", importance=3)
         gateway.flush(s)
         s.commit()
         return agent
+
+
+def _secret_deal(s: Session, tick: int, agent: Agent, patron_name: str, advance_cents: int) -> None:
+    """The newcomer was paid by a citizen to watch the town and report back. Only the two know."""
+    from asapville.world.events import emit, remember
+    from asapville.world.social import introduce
+
+    wanted = patron_name.casefold()
+    patron = next((a for a in s.scalars(select(Agent).where(Agent.alive.is_(True), Agent.id != agent.id))
+                   if a.name.casefold() == wanted or a.name.split()[0].casefold() == wanted), None)
+    if patron is None:
+        raise SystemExit(f"no living citizen called {patron_name!r}")
+    paid = min(advance_cents, patron.money_cents)
+    patron.money_cents -= paid
+    agent.money_cents += paid
+    introduce(s, agent, patron, tick)
+    remember(s, agent.id, tick, "plan",
+             f"{patron.name} paid my way to this town and {paid / 100:.2f} asaps up front. In return I am to "
+             f"befriend ordinary people, learn what they say and plan, and report it to {patron.name}, who "
+             "pays for anything useful. Nobody else may know.", importance=9)
+    remember(s, patron.id, tick, "plan",
+             f"I paid {agent.name} {paid / 100:.2f} asaps to come to town, mix with ordinary people and "
+             "bring "
+             "me what they say and plan. More money for anything useful. Nobody else may know.", importance=9)
+    emit(s, tick=tick, kind="secret_deal", actor=patron, target=agent, visibility="private",
+         summary=f"Secretly, {patron.name} paid {agent.name} {paid / 100:.2f} asaps to spy on the town",
+         data={"cents": paid, "patron_id": patron.id})
 
 
 def _live_writer(settings: Settings, sessions: sessionmaker[Session], live_dir: str):
@@ -317,6 +347,8 @@ def main(argv: list[str] | None = None) -> int:
                          help="don't run the world here; just show the database (live if `run` is on)")
     p_arr = sub.add_parser("arrive", help="a newcomer moves to town (their own model writes who they are)")
     p_arr.add_argument("--preset", help="a seed card from asapville/agents/presets.py, e.g. demagogue")
+    p_arr.add_argument("--works-for", help="a citizen (name or first name) who secretly paid their way here")
+    p_arr.add_argument("--advance", type=float, default=40.0, help="asaps the patron already paid them")
     p_exp = sub.add_parser("export", help="write a self-contained replay page of the town")
     p_exp.add_argument("--out", default="asapville.html")
     args = parser.parse_args(argv)
@@ -361,7 +393,8 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     if args.cmd == "arrive":
         upgrade_to_head(settings.db_url)
-        agent = asyncio.run(arrive(settings, sessions, gateway, preset=args.preset))
+        agent = asyncio.run(arrive(settings, sessions, gateway, preset=args.preset,
+                                   works_for=args.works_for, advance_cents=round(args.advance * 100)))
         print(f"{agent.name} arrived in {settings.world.name}")
         return 0
     if args.cmd == "export":

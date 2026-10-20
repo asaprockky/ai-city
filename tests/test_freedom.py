@@ -219,3 +219,26 @@ async def test_bread_gets_boring(world, sessions, settings):
         actions.execute(ctx, a, Decision(thought="", action=ActionName.EAT, action_args={"item": "bread"}))
         assert a.mood == 42 and a.diet == ["bread", "bread", "bread"]
         assert "sick of eating bread" in render_perception(build_perception(ctx, a))
+
+
+async def test_an_informer_arrives_with_a_secret_patron(world, sessions, settings, gateway):
+    from asapville.cli import arrive
+    from asapville.db.models import Memory
+    from asapville.world.social import knows_name
+
+    with sessions() as s:
+        patron = s.get(Agent, 1)
+        patron.money_cents = 10_000
+        patron_name = patron.name.split()[0]
+        s.commit()
+    spy = await arrive(settings, sessions, gateway, preset="informer", works_for=patron_name,
+                       advance_cents=4000)
+    with sessions() as s:
+        assert s.get(Agent, 1).money_cents == 6000
+        assert knows_name(s, spy.id, 1) and knows_name(s, 1, spy.id)
+        deal = s.scalar(select(Event).where(Event.kind == "secret_deal"))
+        assert deal.visibility == "private" and deal.agent_id == 1 and deal.target_id == spy.id
+        notes = [m.content for m in s.scalars(select(Memory).where(Memory.kind == "plan"))]
+        assert any("report it to" in n for n in notes) and any("Nobody else may know" in n for n in notes)
+        others = s.scalars(select(Memory).where(Memory.agent_id == 2, Memory.content.like("%paid%")))
+        assert list(others) == []  # the town doesn't know

@@ -26,4 +26,19 @@ PRESETS: dict[str, SeedCard] = {
         ],
         bedtime_hour=23,
     ),
+    # An informer: friendly on the surface, for sale underneath. Arrives with a patron
+    # (`arrive --preset informer --works-for NAME`); what they report, hide or sell twice is theirs.
+    "informer": SeedCard(
+        age=31, birthplace="a river barge", family_size=1, wealth_bracket="poor",
+        big_five=BigFive(openness=0.55, conscientiousness=0.45, extraversion=0.65, agreeableness=0.6,
+                         neuroticism=0.5),
+        dark_traits=DarkTraits(machiavellianism=0.82, narcissism=0.3, psychopathy=0.45),
+        moral_alignment="selfish",
+        formative_events=[
+            "grew up running messages for a smuggler and learned that a secret is worth more than bread",
+            "has never had a friend they could not sell",
+            "owes money in another town to people who do not forgive debts",
+        ],
+        bedtime_hour=22,
+    ),
 }
