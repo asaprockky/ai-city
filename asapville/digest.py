@@ -98,7 +98,8 @@ Write in Russian, in plain text (no markdown, no asterisks), exactly in this sha
 Write 6 to 9 bullets, the most dramatic first: deals and price wars, schemes, quarrels, kindness, \
 new businesses and dishes, the council and elections, hunger and illness. Name people by their \
 first names in Russian and keep numbers exact. Quote citizens' real words (translated into natural \
-Russian) in «». Never invent anything that is not in the material; if the hours were mostly night, \
+Russian) in «»; no English may remain in the text, and spell each name the same way every time. \
+Never invent anything that is not in the material; if the hours were mostly night, \
 say so and keep it shorter."""
 
 
