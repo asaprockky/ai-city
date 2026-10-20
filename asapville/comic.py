@@ -30,6 +30,7 @@ from asapville.llm.routing import ANGEL
 from asapville.llm.types import ChatMessage, LLMRequest
 
 CHROMIUM = os.environ.get("ASAPVILLE_CHROMIUM", "/opt/pw-browsers/chromium")
+FACES = Path(__file__).resolve().parent.parent / "manga" / "faces"  # <agent id>.jpg|png portraits
 SKIP_KINDS = {"move", "rest", "sleep", "idle", "travel", "depart", "arrive", "wake", "plan",
               "invalid_action", "tier_change", "angel"}
 _FENCE = re.compile(r"^```(?:json)?\s*|\s*```$", re.MULTILINE)
@@ -127,6 +128,19 @@ def _hair_tone(hair: str) -> str:
     return "#444"
 
 
+def portrait(agent: Agent, size: int = 120) -> str:
+    """The citizen's drawn portrait if one exists (manga/faces/<id>.jpg), else their ink bust."""
+    import base64
+
+    for ext in ("jpg", "png"):
+        f = FACES / f"{agent.id}.{ext}"
+        if f.exists():
+            data = base64.b64encode(f.read_bytes()).decode()
+            return (f'<img class="face" src="data:image/{"jpeg" if ext == "jpg" else "png"};base64,{data}" '
+                    f'width="{size}" height="{size}">')
+    return face_svg(agent, size)
+
+
 def face_svg(agent: Agent, size: int = 120) -> str:
     """A citizen's manga bust, the same every time: hair tone from their own words, style from their name."""
     p = Personality.model_validate(agent.personality)
@@ -169,7 +183,7 @@ body{background:#fff;width:1080px;font-family:'DejaVu Sans',sans-serif;color:#11
   background:repeating-linear-gradient(45deg,#fff 0 6px,#eee 6px 8px)}
 .sub{font-size:18px;text-align:center;margin:-8px 0 18px;letter-spacing:3px}
 .grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
-.panel{position:relative;border:5px solid #111;min-height:440px;overflow:hidden;display:flex;
+.panel{position:relative;border:5px solid #111;min-height:470px;overflow:hidden;display:flex;
   flex-direction:column;justify-content:space-between;
   background:radial-gradient(#ddd 1.2px,transparent 1.3px) 0 0/9px 9px,#fff}
 .panel.wide{grid-column:span 2;min-height:400px}
@@ -187,6 +201,8 @@ body{background:#fff;width:1080px;font-family:'DejaVu Sans',sans-serif;color:#11
 .b:nth-child(2):after{left:auto;right:40px}
 .cast{display:flex;justify-content:space-around;align-items:flex-end;padding-top:6px}
 .who{text-align:center;font-size:15px;font-weight:bold}
+.face{display:block;border:3px solid #111;border-bottom:none;filter:grayscale(1) contrast(1.1);
+  object-fit:cover;background:#fff}
 .who span{display:inline-block;background:#fff;border:2px solid #111;padding:1px 8px;margin-top:-6px}
 .sfx{position:absolute;right:16px;bottom:150px;font-family:'DejaVu Serif',serif;font-weight:bold;
   font-size:50px;transform:rotate(-12deg);color:#fff;-webkit-text-stroke:3px #111;z-index:1}
@@ -206,7 +222,7 @@ def render_html(session: Session, script: Script, *, chapter: str = "") -> str:
     for i, p in enumerate(script.panels):
         wide = n % 2 == 1 and i == n - 1
         cast = [a for a in (find(c) for c in p.characters[:3]) if a is not None]
-        faces = "".join(f'<div class="who">{face_svg(a, 130 if len(cast) < 3 else 105)}'
+        faces = "".join(f'<div class="who">{portrait(a, 170 if len(cast) < 3 else 135)}'
                         f'<br><span>{html.escape(a.name.split()[0])}</span></div>' for a in cast)
         bubbles = "".join(
             f'<div class="b"><small>{html.escape((find(b.who).name.split()[0]) if find(b.who) else b.who)}'
@@ -229,11 +245,21 @@ def render_html(session: Session, script: Script, *, chapter: str = "") -> str:
 def render_png(page_html: str, out: Path) -> Path:
     src = out.with_suffix(".html")
     src.write_text(page_html, encoding="utf-8")
-    height = 230 + 456 * ((page_html.count('class="panel') + 1) // 2)
     subprocess.run([CHROMIUM, "--headless=new", "--no-sandbox", "--disable-gpu", "--hide-scrollbars",
-                    f"--window-size=1080,{height}", f"--screenshot={out}", src.resolve().as_uri()],
+                    "--window-size=1080,4000", f"--screenshot={out}", src.resolve().as_uri()],
                    check=True, capture_output=True, timeout=120)
+    _trim(out)
     return out
+
+
+def _trim(png: Path, margin: int = 24) -> None:
+    """Cut the blank page below the drawing."""
+    from PIL import Image, ImageOps
+
+    im = Image.open(png).convert("RGB")
+    box = ImageOps.invert(im).getbbox()
+    if box:
+        im.crop((0, 0, im.width, min(im.height, box[3] + margin))).save(png)
 
 
 def post_telegram(png: Path, caption: str, *, token: str, chat: str) -> dict[str, Any]:
