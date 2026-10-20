@@ -147,6 +147,8 @@ def build_perception(ctx: TickContext, agent: Agent) -> Perception:
         job=agent.role if my_job else None,
         workplace=ctx.by_key[my_job.workplace].name if my_job else None,
         wage_cents=economy.wage_of(s, cfg, agent.role) if my_job else None,
+        job_output_cents=(sum((economy.price_of(cfg, item, s) or 0) * qty
+                              for item, qty in my_job.makes.items()) if my_job else None),
         shop=shop,
         jobs_here=jobs_here,
         plan=plan,
@@ -186,6 +188,11 @@ def render_perception(p: Perception) -> str:
     if p.job:
         lines.append(f"Your job: {p.job} at {p.workplace}, {(p.wage_cents or 0) / 100:.2f} asaps per hour "
                      f"worked (choose 'work' while you are there).")
+        if p.job_output_cents and p.wage_cents is not None and p.job_output_cents >= 2 * p.wage_cents:
+            lines.append(f"One hour of your work makes goods the town sells for "
+                         f"{p.job_output_cents / 100:.2f} asaps, and pays you {p.wage_cents / 100:.2f}. "
+                         "Wages are not fixed: any citizen may put a new wage to a town vote "
+                         "(propose_law at the Town Hall or Square).")
     else:
         lines.append("You have no job.")
     town = [x for x in p.shop if x.seller is None]

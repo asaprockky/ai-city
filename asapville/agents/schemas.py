@@ -195,6 +195,7 @@ class Perception(BaseModel):
     job: str | None = None  # the agent's job, if any
     workplace: str | None = None  # name of where that job is done
     wage_cents: int | None = None
+    job_output_cents: int | None = None  # shelf value of what one hour of that job makes
     shop: list[ShopItem] = Field(default_factory=list)  # for sale where the agent stands
     jobs_here: list[JobHere] = Field(default_factory=list)
     plan: str | None = None  # the citizen's own plan for today, in their words

@@ -254,3 +254,4 @@ async def test_a_worker_at_their_workplace_is_told_to_work_not_apply(world, sess
         a.location_id, a.destination_id, a.travel_ticks_left = ctx.by_key["bakery"].id, None, 0
         text = render_perception(build_perception(ctx, a))
         assert "this is YOUR job: choose 'work'" in text and "apply' to take" not in text
+        assert "makes goods the town sells for 12.00 asaps" in text and "propose_law" in text

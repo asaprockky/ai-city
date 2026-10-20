@@ -105,7 +105,7 @@ def describe_needs(hunger: float, energy: float, social: float, health: float) -
     """How the body feels, in words (perception never exposes raw numbers alone)."""
     out = []
     if hunger >= 90:
-        out.append("you are starving; your hands shake")
+        out.append("you are starving; your hands shake and your health is failing, eat or you will die")
     elif hunger >= 65:
         out.append("you are very hungry")
     elif hunger >= 40:
