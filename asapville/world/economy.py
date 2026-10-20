@@ -206,15 +206,36 @@ def wage_of(session: Session, settings: Settings, job: str) -> int:
 
 
 def shortages(session: Session, settings: Settings, since_tick: int) -> dict[str, int]:
-    """Per job, how many hours others could not work for want of what this job makes."""
+    """Per job, how many hours others could not work for want of what this job makes.
+
+    The blame walks up the chain: bakers idle for flour count against the miller only if the
+    millers themselves were working; if the millers stood idle for grain, it is the farmer's
+    shortage (more millers would not bake a single loaf).
+    """
     from asapville.db.models import Event
 
     makers = {item: name for name, job in settings.economy.jobs.items() for item in job.makes}
-    out: dict[str, int] = {}
+    worked: dict[str, int] = {}
+    blocked_on: dict[str, dict[str, int]] = {}  # job -> missing item -> hours
     for e in session.scalars(select(Event).where(Event.kind == "work", Event.tick >= since_tick)):
-        missing = (e.data or {}).get("missing")
-        if missing in makers and not (e.data or {}).get("success"):
-            out[makers[missing]] = out.get(makers[missing], 0) + 1
+        d = e.data or {}
+        job = d.get("job")
+        if d.get("success"):
+            worked[job] = worked.get(job, 0) + 1
+        elif d.get("missing") in makers:
+            blocked_on.setdefault(job, {})
+            blocked_on[job][d["missing"]] = blocked_on[job].get(d["missing"], 0) + 1
+    out: dict[str, int] = {}
+    for job, missing in blocked_on.items():
+        for item, hours in missing.items():
+            maker, seen = makers[item], {job}
+            while maker not in seen:  # pass the blame up while the maker was mostly idle too
+                seen.add(maker)
+                up = blocked_on.get(maker, {})
+                if not up or sum(up.values()) <= worked.get(maker, 0):
+                    break
+                maker = makers[max(up, key=lambda k: up[k])]
+            out[maker] = out.get(maker, 0) + hours
     return out
 
 

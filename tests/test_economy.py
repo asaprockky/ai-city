@@ -162,3 +162,22 @@ async def test_a_bottleneck_raises_its_own_wage(world, sessions, settings):
         changed = economy.adjust_wages(s, settings, tick=10)
         assert changed["miller"] == (300, 375)
         assert "baker" not in changed or changed["baker"][1] < changed["baker"][0]
+
+
+async def test_a_shortage_is_blamed_on_the_first_idle_link_of_the_chain(world, sessions, settings):
+    from asapville.world.events import emit
+
+    with sessions() as s:
+        agents = list(s.scalars(select(Agent).order_by(Agent.id)))
+        agents[0].role = "farmer"
+        for a in agents[1:5]:
+            a.role = "miller"
+        for t in range(4):  # bakers want flour, but the millers themselves stand idle for grain
+            emit(s, tick=t, kind="work", actor=agents[1], visibility="local", summary="no flour",
+                 data={"job": "baker", "success": False, "missing": "flour"})
+            emit(s, tick=t, kind="work", actor=agents[2], visibility="local", summary="no grain",
+                 data={"job": "miller", "success": False, "missing": "grain"})
+        assert economy.shortages(s, settings, 0) == {"farmer": 8}
+        changed = economy.adjust_wages(s, settings, tick=10)
+        assert changed["farmer"][1] > changed["farmer"][0]
+        assert changed["miller"][1] < changed["miller"][0]  # four millers, none of them short
