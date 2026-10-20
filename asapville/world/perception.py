@@ -7,7 +7,7 @@ from sqlalchemy import select
 
 from asapville.agents.schemas import Destination, JobHere, Notice, Perception, SeenAgent, ShopItem
 from asapville.db.models import Agent, Event, Memory, Stall
-from asapville.world import economy
+from asapville.world import bank, economy
 from asapville.world.actions import TickContext, available_usages
 from asapville.world.map import travel_ticks
 from asapville.world.needs import describe_needs, sick_of
@@ -176,6 +176,11 @@ def build_perception(ctx: TickContext, agent: Agent) -> Perception:
         jobs_here=jobs_here,
         plan=plan,
         businesses=mine,
+        bank=bank.describe(s, cfg, agent, ctx.tick),
+        bank_offer=(f"AsapBank: deposit savings (they earn {cfg.bank.deposit_rate:.1%} a day), withdraw, "
+                    f"borrow up to {bank.can_borrow(s, cfg, agent, ctx.tick) / 100:.2f} asaps more "
+                    f"({cfg.bank.loan_rate:.0%} a day, due in {cfg.bank.loan_days} days), or repay"
+                    if here.kind == "bank" else None),
         proposals=proposals,
         decisions=decisions,
         people=standing(s, agent),
@@ -208,6 +213,10 @@ def render_perception(p: Perception) -> str:
     asaps = p.money_cents / 100
     inv = ", ".join(f"{k} x{v}" for k, v in sorted(p.inventory.items())) or "nothing"
     lines.append(f"You carry {asaps:.2f} asaps and: {inv}.")
+    if p.bank:
+        lines.append(p.bank)
+    if p.bank_offer:
+        lines.append(p.bank_offer + ".")
     if p.job:
         boss = f" for {p.employer}, who owns it" if p.employer else ""
         lines.append(f"Your job: {p.job} at {p.workplace}{boss}, {(p.wage_cents or 0) / 100:.2f} asaps per "

@@ -196,6 +196,15 @@ class AngelsCfg(BaseModel):
     max_tokens: int = 2048
 
 
+class BankCfg(BaseModel):
+    deposit_rate: float = 0.005  # interest paid on savings, per day
+    loan_rate: float = 0.02  # interest charged on a loan, per day
+    loan_days: int = 7  # a loan is due this many days after it is taken
+    min_credit_cents: int = 2000  # what the bank lends anyone with a job
+    income_multiple: float = 2.0  # credit: this many times the wages earned in the last 3 days
+    collateral_share: float = 0.5  # plus this share of the price of the businesses one owns
+
+
 class Settings(BaseModel):
     world: WorldCfg = WorldCfg()
     clock: ClockCfg = ClockCfg()
@@ -211,6 +220,7 @@ class Settings(BaseModel):
     memory: MemoryCfg = MemoryCfg()
     map: MapCfg = MapCfg()
     economy: EconomyCfg = EconomyCfg()
+    bank: BankCfg = BankCfg()
     angels: AngelsCfg = AngelsCfg()
     db_url: str = DEFAULT_DB_URL
 

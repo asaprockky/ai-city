@@ -1276,3 +1276,146 @@ class SetPrice:
              actor_memory=f"I set the price of {item} at my {place.name} to {cents / 100:.2f}.",
              importance=4)
         return ActionResult(ok=True)
+
+
+# --------------------------------------------------------------------------- AsapBank
+def _asaps(d: Decision) -> int | None:
+    try:
+        cents = round(float(d.action_args.get("asaps")) * 100)
+    except (TypeError, ValueError):
+        return None
+    return cents if cents > 0 else None
+
+
+def _bank_check(ctx: TickContext, agent: Agent, d: Decision) -> tuple[int | None, str | None]:
+    here = _here(ctx, agent)
+    if here is None or here.kind != "bank":
+        return None, "Banking is done at AsapBank; go there first."
+    cents = _asaps(d)
+    if cents is None:
+        return None, 'Say how much: "asaps": <amount>.'
+    return cents, None
+
+
+@register(ActionName.DEPOSIT, 'deposit {"asaps": 20}  -- at AsapBank: put money in savings; it earns '
+                              'interest every day and is safe from thieves')
+class Deposit:
+    @staticmethod
+    def validate(ctx: TickContext, agent: Agent, d: Decision, perceived: set[int]) -> str | None:
+        cents, err = _bank_check(ctx, agent, d)
+        if err:
+            return err
+        if cents > agent.money_cents:
+            return f"You only have {agent.money_cents / 100:.2f} asaps on you."
+        return None
+
+    @staticmethod
+    def execute(ctx: TickContext, agent: Agent, d: Decision) -> ActionResult:
+        from asapville.world import bank
+
+        cents = _asaps(d)
+        bank.deposit(ctx.session, agent, cents, ctx.tick)
+        acc = bank.account(ctx.session, agent, ctx.tick)
+        emit(ctx.session, tick=ctx.tick, kind="bank", actor=agent, location_id=agent.location_id,
+             summary=f"{agent.name} deposited {cents / 100:.2f} at AsapBank",
+             data={"op": "deposit", "cents": cents},
+             actor_memory=f"I put {cents / 100:.2f} asaps in my AsapBank savings "
+                          f"(now {acc.deposit_cents / 100:.2f}).", importance=3)
+        return ActionResult(ok=True)
+
+
+@register(ActionName.WITHDRAW, 'withdraw {"asaps": 20}  -- at AsapBank: take money out of your savings')
+class Withdraw:
+    @staticmethod
+    def validate(ctx: TickContext, agent: Agent, d: Decision, perceived: set[int]) -> str | None:
+        from asapville.world import bank
+
+        cents, err = _bank_check(ctx, agent, d)
+        if err:
+            return err
+        acc = bank.account(ctx.session, agent, ctx.tick, create=False)
+        have = acc.deposit_cents if acc else 0
+        if cents > have:
+            return f"Your savings hold {have / 100:.2f} asaps."
+        return None
+
+    @staticmethod
+    def execute(ctx: TickContext, agent: Agent, d: Decision) -> ActionResult:
+        from asapville.world import bank
+
+        cents = _asaps(d)
+        bank.withdraw(ctx.session, agent, cents, ctx.tick)
+        emit(ctx.session, tick=ctx.tick, kind="bank", actor=agent, location_id=agent.location_id,
+             summary=f"{agent.name} withdrew {cents / 100:.2f} from AsapBank",
+             data={"op": "withdraw", "cents": cents},
+             actor_memory=f"I took {cents / 100:.2f} asaps out of my AsapBank savings.", importance=3)
+        return ActionResult(ok=True)
+
+
+@register(ActionName.BORROW, 'borrow {"asaps": 100}  -- at AsapBank: take a loan up to your credit limit; '
+                             'it costs interest every day and must be repaid within a week, or the bank '
+                             'takes your savings, cash and businesses')
+class Borrow:
+    @staticmethod
+    def validate(ctx: TickContext, agent: Agent, d: Decision, perceived: set[int]) -> str | None:
+        from asapville.world import bank
+
+        cents, err = _bank_check(ctx, agent, d)
+        if err:
+            return err
+        room = bank.can_borrow(ctx.session, ctx.settings, agent, ctx.tick)
+        if cents > room:
+            return (f"AsapBank will lend you at most {room / 100:.2f} asaps more"
+                    + (" (no job, no recent wages, no business to secure it)" if room == 0 else "") + ".")
+        return None
+
+    @staticmethod
+    def execute(ctx: TickContext, agent: Agent, d: Decision) -> ActionResult:
+        from asapville.world import bank
+
+        cents = _asaps(d)
+        bank.borrow(ctx.session, ctx.settings, agent, cents, ctx.tick)
+        acc = bank.account(ctx.session, agent, ctx.tick)
+        cfg = ctx.settings.bank
+        emit(ctx.session, tick=ctx.tick, kind="bank", actor=agent, location_id=agent.location_id,
+             summary=f"{agent.name} borrowed {cents / 100:.2f} from AsapBank",
+             data={"op": "borrow", "cents": cents, "owed": acc.loan_cents, "due": acc.loan_due_tick},
+             actor_memory=f"I borrowed {cents / 100:.2f} asaps from AsapBank. I owe "
+                          f"{acc.loan_cents / 100:.2f}, "
+                          f"growing {cfg.loan_rate:.0%} a day, due within {cfg.loan_days} days; if I don't "
+                          "repay, the bank takes my savings, my cash and my businesses.", importance=8)
+        return ActionResult(ok=True)
+
+
+@register(ActionName.REPAY, 'repay {"asaps": 50}  -- at AsapBank: pay back (part of) your loan')
+class Repay:
+    @staticmethod
+    def validate(ctx: TickContext, agent: Agent, d: Decision, perceived: set[int]) -> str | None:
+        from asapville.world import bank
+
+        cents, err = _bank_check(ctx, agent, d)
+        if err:
+            return err
+        acc = bank.account(ctx.session, agent, ctx.tick, create=False)
+        if acc is None or acc.loan_cents == 0:
+            return "You owe AsapBank nothing."
+        if min(cents, acc.loan_cents) > agent.money_cents:
+            return f"You only have {agent.money_cents / 100:.2f} asaps on you."
+        return None
+
+    @staticmethod
+    def execute(ctx: TickContext, agent: Agent, d: Decision) -> ActionResult:
+        from asapville.world import bank
+
+        paid = bank.repay(ctx.session, agent, _asaps(d), ctx.tick)
+        acc = bank.account(ctx.session, agent, ctx.tick)
+        left = acc.loan_cents
+        emit(ctx.session, tick=ctx.tick, kind="bank", actor=agent, location_id=agent.location_id,
+             summary=f"{agent.name} repaid {paid / 100:.2f} to AsapBank",
+             data={"op": "repay", "cents": paid, "owed": left},
+             actor_memory=(f"I repaid {paid / 100:.2f} asaps to AsapBank; "
+                           + (f"I still owe {left / 100:.2f}." if left else "my loan is cleared.")),
+             importance=6 if not left else 4)
+        if not left:
+            nudge_reputation(agent, 0.03)
+        return ActionResult(ok=True)

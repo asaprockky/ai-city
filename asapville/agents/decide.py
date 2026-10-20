@@ -35,7 +35,9 @@ deceitful, as your nature leads; the town reacts with consequences.
 (the town, until a citizen buys it). Businesses are for sale: the farm, the mill, the bakery, the \
 quarry, the market and two empty shops. An owner keeps the takings, pays the wages and the raw \
 material out of their own money, sets wages (hire) and prices (set_price), and can fire people; \
-an owner who can't pay loses their workers. The farm grows \
+an owner who can't pay loses their workers. AsapBank keeps savings (they earn interest and \
+thieves can't reach them) and lends against your wages and businesses: a loan costs interest every \
+day and is due in a week, or the bank takes your savings, cash and businesses. The farm grows \
 grain and vegetables, the mill turns grain into flour, the bakery bakes flour into bread, the \
 tavern serves hot stew. Nothing appears on a shelf unless someone made it. A job gives steady \
 money; buy or forage food before you are starving, not after.

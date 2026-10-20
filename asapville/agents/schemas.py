@@ -111,6 +111,9 @@ class ActionName(StrEnum):
     BUY_PROPERTY = "buy_property"
     STOCK_STALL = "stock_stall"
     SET_PRICE = "set_price"
+    DEPOSIT = "deposit"
+    WITHDRAW = "withdraw"
+    REPAY = "repay"
     IDLE = "idle"
 
 
@@ -199,6 +202,8 @@ class Perception(BaseModel):
     wage_cents: int | None = None
     job_output_cents: int | None = None  # shelf value of what one hour of that job makes
     employer: str | None = None  # the citizen who owns the workplace, if any
+    bank: str | None = None  # their AsapBank account, in words
+    bank_offer: str | None = None  # at the bank: what it will do for them
     shop: list[ShopItem] = Field(default_factory=list)  # for sale where the agent stands
     jobs_here: list[JobHere] = Field(default_factory=list)
     plan: str | None = None  # the citizen's own plan for today, in their words

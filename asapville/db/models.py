@@ -142,6 +142,18 @@ class Vote(Base):
     tick: Mapped[int] = mapped_column(Integer)
 
 
+class BankAccount(Base):
+    """A citizen's account at AsapBank: savings that earn interest, and at most one loan."""
+    __tablename__ = "bank_accounts"
+
+    agent_id: Mapped[int] = mapped_column(ForeignKey("agents.id"), primary_key=True)
+    deposit_cents: Mapped[int] = mapped_column(Integer, default=0)
+    loan_cents: Mapped[int] = mapped_column(Integer, default=0)  # owed now, interest included
+    loan_due_tick: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    defaulted: Mapped[bool] = mapped_column(Boolean, default=False)
+    opened_tick: Mapped[int] = mapped_column(Integer, default=0)
+
+
 class WorldTick(Base):
     """Per-tick snapshot of the town's shelves and fund (dashboard timeline)."""
 

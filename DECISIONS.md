@@ -216,3 +216,10 @@ Each of these came from watching the real town:
   businesses at the seller's price (deliveries are bought by the receiving shop). Owners set
   wages (`hire`), prices (`set_price`) and can `fire`; an owner who can't pay leaves workers
   unpaid. The daily wage adjustment and town votes only touch businesses the town still owns.
+- **Lasting memory.** Decisions see the last few hours plus the five most important older
+  memories (importance 7+): deals, debts, attacks, purchases.
+- **AsapBank** (`deposit`, `withdraw`, `borrow`, `repay` at the bank). The vault is the town
+  fund. Savings earn 0.5% a day and can't be stolen; loans cost 2% a day and are due in a week.
+  Credit = 20 asaps for anyone with a job + 2x the wages of the last 3 days + half the price of
+  businesses owned. Overdue: the bank takes savings, then cash, then forecloses on businesses
+  (back to the town); anything still owed is a public default and freezes credit.

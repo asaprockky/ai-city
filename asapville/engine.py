@@ -316,6 +316,9 @@ class World:
                      data={"cause": outcome.cause_of_death})
 
     def _daily(self, ctx: TickContext, agents: list[Agent]) -> None:
+        from asapville.world import bank
+
+        bank.daily(ctx.session, self.settings, ctx.tick)
         changed = economy.adjust_wages(ctx.session, self.settings, tick=ctx.tick)
         if changed:
             parts = [f"{job} {new / 100:.2f}/h (was {old / 100:.2f})" for job, (old, new) in changed.items()]

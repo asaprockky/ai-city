@@ -121,6 +121,14 @@ economy:
     market: 60000              # (the tavern and the clinic stay the town's: the safety net)
   notice_ticks: 24             # a notice stays on the town board for a day
 
+bank:                          # AsapBank, the town's bank (its vault is the town fund)
+  deposit_rate: 0.005          # savings earn 0.5% a day
+  loan_rate: 0.02              # loans cost 2% a day
+  loan_days: 7                 # and are due a week after they are taken
+  min_credit_cents: 2000       # anyone with a job can borrow 20 asaps
+  income_multiple: 2.0         # credit = 2x the wages earned in the last 3 days
+  collateral_share: 0.5        #   + half the price of the businesses you own (the bank's security)
+
 angels:                        # the simulation's guardians (never citizens)
   enabled: true
   allow: [notice, give_food]   # inform, and save a life at the last moment; never decide for them
