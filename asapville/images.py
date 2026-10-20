@@ -14,8 +14,23 @@ import urllib.request
 CF_MODEL = "@cf/black-forest-labs/flux-1-schnell"
 
 
+def _cf_account(token: str) -> str | None:
+    """The Cloudflare account id: from the environment (either spelling), else asked of the API."""
+    acct = os.environ.get("CLOUDFLARE_ACCOUNT_ID") or os.environ.get("CLOUDFARE_ACCOUNT_ID")
+    if acct:
+        return acct
+    req = urllib.request.Request("https://api.cloudflare.com/client/v4/accounts",
+                                 headers={"Authorization": f"Bearer {token}"})
+    try:
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            result = json.loads(resp.read()).get("result") or []
+    except Exception:  # no account visible to this token: the service is just not available
+        return None
+    return result[0]["id"] if result else None
+
+
 def available() -> str | None:
-    if os.environ.get("CLOUDFLARE_ACCOUNT_ID") and os.environ.get("CLOUDFLARE_API_TOKEN"):
+    if os.environ.get("CLOUDFLARE_API_TOKEN"):
         return "cloudflare"
     if os.environ.get("FAL_KEY"):
         return "fal"
@@ -34,7 +49,10 @@ def _post(url: str, body: dict, headers: dict[str, str], timeout: int = 180) -> 
 def draw(prompt: str, *, square: bool = False) -> bytes:
     service = available()
     if service == "cloudflare":
-        acct, token = os.environ["CLOUDFLARE_ACCOUNT_ID"], os.environ["CLOUDFLARE_API_TOKEN"]
+        token = os.environ["CLOUDFLARE_API_TOKEN"]
+        acct = _cf_account(token)
+        if not acct:
+            raise RuntimeError("cloudflare: no account id (set CLOUDFLARE_ACCOUNT_ID)")
         data = _post(f"https://api.cloudflare.com/client/v4/accounts/{acct}/ai/run/{CF_MODEL}",
                      {"prompt": prompt[:2000], "steps": 8}, {"Authorization": f"Bearer {token}"})
         image = (data.get("result") or {}).get("image")
