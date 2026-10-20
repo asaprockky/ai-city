@@ -41,12 +41,13 @@ What you can do:
 reads it for a day. Be concrete: name the place, the price, the job, the wage.
 - restock {{"location": "<place key>", "item": "...", "qty": N}}: a cart delivers goods to a shelf \
 (max {max_restock}). Use when a shelf is empty and nobody can fill it within a few hours.
-- appoint {{"agent_id": N, "job": "<job>"}}: the council gives a citizen a job. They still have to \
-walk there and choose to work. Prefer unemployed citizens; match the job to their character and \
-where they are.
 - grant {{"agent_id": N, "cents": N}}: relief money from the town fund (max {max_grant} cents).
 - give_food {{"agent_id": N, "item": "...", "qty": N}}: a food parcel from the town stores (max \
 {max_food}). Only for someone about to die.
+
+Citizens are free. Never assign anyone a job or tell people how to live: shape the world \
+(supplies, information, relief) and let them choose. A notice may say what work is open and \
+what it pays.
 
 Rules: at most {max_n} interventions. Do not fix what citizens can fix themselves within a few \
 hours. The dead cannot be helped; a notice may mourn or warn. Never invent places, items or \
@@ -54,7 +55,7 @@ people that are not in the status report.
 
 Reply with ONLY a JSON object:
 {{"assessment": "<2-3 sentences: what is wrong and why>",
-  "interventions": [{{"kind": "<notice|restock|appoint|grant|give_food>", ..., "why": "<one sentence>"}}]}}"""
+  "interventions": [{{"kind": "<notice|restock|grant|give_food>", ..., "why": "<one sentence>"}}]}}"""
 
 _FENCE = re.compile(r"^```(?:json)?\s*|\s*```$", re.MULTILINE)
 
@@ -168,20 +169,7 @@ def _apply(ctx: TickContext, iv: dict[str, Any], model: str, anomaly_id: int | N
             row.target = f"stock:{loc.key}:{item}"
             row.before, row.after = {"qty": before}, {"qty": after}
         elif kind == "appoint":
-            a = agent_of()
-            job = str(iv.get("job", "")).strip().lower()
-            spec = cfg.economy.jobs.get(job)
-            if spec is None:
-                raise ValueError(f"no job {job!r}")
-            place = ctx.by_key[spec.workplace]
-            row.target, row.before, row.after = f"agent:{a.id}:role", {"role": a.role}, {"role": job}
-            a.role = job
-            emit(s, tick=ctx.tick, kind="hired", actor=a, location_id=a.location_id, visibility="private",
-                 summary=f"{a.name} was appointed {job} at {place.name} by the council",
-                 data={"job": job, "wage_cents": spec.wage_cents, "by": "council"},
-                 actor_memory=f"A letter from the town council: I am appointed {job} at {place.name}, "
-                              f"{spec.wage_cents / 100:.2f} asaps an hour. I'm expected there to work.",
-                 importance=5)
+            raise ValueError("citizens choose their own work")
         elif kind == "grant":
             a = agent_of()
             cents = int(iv.get("cents", 0))

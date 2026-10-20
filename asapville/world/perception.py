@@ -23,6 +23,17 @@ _DOING = {
 RECENT_TICKS = 3
 
 
+def todays_plan(ctx: TickContext, agent: Agent) -> str | None:
+    """The plan this citizen wrote this simulated day, if any."""
+    from asapville.world.clock import Clock
+
+    m = ctx.session.scalar(select(Memory).where(Memory.agent_id == agent.id, Memory.kind == "plan")
+                           .order_by(Memory.created_at_tick.desc(), Memory.id.desc()).limit(1))
+    if m is None or Clock(ctx.settings.clock).at(m.created_at_tick).day != ctx.time.day:
+        return None
+    return m.content
+
+
 def build_perception(ctx: TickContext, agent: Agent) -> Perception:
     s = ctx.session
     here = ctx.locations[agent.location_id]  # caller guarantees the agent isn't travelling
@@ -64,6 +75,7 @@ def build_perception(ctx: TickContext, agent: Agent) -> Perception:
             author = describe(s, agent.id, author_agent) if author_agent else author
         notices.append(Notice(text=ev.data.get("text", ev.summary), author=author,
                               hours_ago=ctx.tick - ev.tick))
+    plan = todays_plan(ctx, agent)
     recent = list(s.scalars(
         select(Memory).where(Memory.agent_id == agent.id,
                              Memory.created_at_tick >= ctx.tick - RECENT_TICKS)
@@ -92,6 +104,7 @@ def build_perception(ctx: TickContext, agent: Agent) -> Perception:
         wage_cents=my_job.wage_cents if my_job else None,
         shop=shop,
         jobs_here=jobs_here,
+        plan=plan,
         recent_dialogue=[m.content for m in recent if m.kind == "dialogue"][-8:],
         recent_events=[m.content for m in recent if m.kind in ("observation", "outcome", "action")][-8:],
         available_actions=available_usages(),
@@ -140,6 +153,12 @@ def render_perception(p: Perception) -> str:
             extra.append("hires " + ", ".join(d.jobs))
         tail = " — " + "; ".join(extra) if extra else ""
         lines.append(f"  - {d.key}: {d.name} ({d.travel_hours}h){tail}")
+    if p.plan:
+        lines.append(f"Your own plan for today (you wrote it this morning): {p.plan}")
+    if p.hunger < 50 and p.energy > 35 and p.health > 40:
+        lines.append("Your body is fine right now: this hour is yours. Follow your plan, chase what "
+                     "you want from life, or try something new of your own (improvise). Nobody "
+                     "decides for you.")
     if p.notices:
         lines.append("On the town board:")
         lines.extend(f'  - "{n.text}" — {n.author}, {n.hours_ago}h ago' for n in p.notices)

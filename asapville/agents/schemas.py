@@ -191,6 +191,7 @@ class Perception(BaseModel):
     wage_cents: int | None = None
     shop: list[ShopItem] = Field(default_factory=list)  # for sale where the agent stands
     jobs_here: list[JobHere] = Field(default_factory=list)
+    plan: str | None = None  # the citizen's own plan for today, in their words
     recent_dialogue: list[str] = Field(default_factory=list)
     recent_events: list[str] = Field(default_factory=list)
     available_actions: list[str] = Field(default_factory=list)

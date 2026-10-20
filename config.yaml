@@ -98,14 +98,13 @@ economy:
   unlimited: [stew, treatment] # the tavern kitchen and the clinic never run dry (the safety net)
   jobs:                        # take one with `apply` at the workplace; `work` there for wages
     farmer:    {workplace: farm,   wage_cents: 250, makes: {grain: 3, vegetables: 2}, deliver: {vegetables: market}}
-    miller:    {workplace: mill,   wage_cents: 300, uses: {grain: 3}, source: farm, makes: {flour: 3}}
-    baker:     {workplace: bakery, wage_cents: 300, uses: {flour: 2}, source: mill, makes: {bread: 4}}
+    miller:    {workplace: mill,   wage_cents: 300, uses: {grain: 3}, source: farm, makes: {flour: 3}, deliver: {flour: bakery}}
+    baker:     {workplace: bakery, wage_cents: 300, uses: {flour: 2}, source: bakery, makes: {bread: 4}}
     quarryman: {workplace: quarry, wage_cents: 350, makes: {stone: 2}}
   stock_start:                 # seeded once, the day the shops open
-    bakery: {bread: 24}
+    bakery: {bread: 24, flour: 6}
     market: {vegetables: 20}
     farm: {grain: 12}
-    mill: {flour: 6}
   work_energy_cost: 5
   notice_ticks: 24             # a notice stays on the town board for a day
 

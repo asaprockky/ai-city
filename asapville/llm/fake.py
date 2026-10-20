@@ -149,7 +149,6 @@ def fake_fixer(req: LLMRequest, rng: random.Random) -> str:
     """A cautious angel: restock empty shelves, feed the dying, fill empty jobs, post a notice."""
     ctx = req.context
     anomalies = ctx.get("anomalies", [])
-    unemployed = list(ctx.get("unemployed", []))
     ivs: list[dict[str, Any]] = []
     kinds = {a["kind"] for a in anomalies}
     if "no_food_for_sale" in kinds:
@@ -159,14 +158,19 @@ def fake_fixer(req: LLMRequest, rng: random.Random) -> str:
         if a["kind"] == "starving" and a["severity"] >= 4 and a.get("agent_id"):
             ivs.append({"kind": "give_food", "agent_id": a["agent_id"], "item": "bread", "qty": 2,
                         "why": "about to die"})
-        elif a["kind"].startswith("no_workers_") and unemployed:
-            ivs.append({"kind": "appoint", "agent_id": unemployed.pop(0), "job": a["data"]["job"],
-                        "why": "nobody makes it"})
     ivs.append({"kind": "notice", "text": "Bread is sold at the Bakery for 3.00 asaps; the farm, mill, "
                                           "bakery and quarry pay wages. Apply there.",
                 "why": "people don't know where food is"})
     return json.dumps({"assessment": "The town is short of food and workers.",
                        "interventions": ivs[:6]})
+
+
+def fake_plan(req: LLMRequest, rng: random.Random) -> str:
+    p = req.context.get("perception", {})
+    goal = rng.choice(["find steady work", "make a friend at the tavern", "carve something to sell",
+                       "explore the forest", "help whoever looks worst off"])
+    return json.dumps({"plan": f"Eat something at {p.get('location_name', 'home')}, then {goal}.",
+                       "mood": "hopeful"})
 
 
 def fake_judge(req: LLMRequest, rng: random.Random) -> str:
@@ -188,7 +192,8 @@ class FakeLLM:
     def __init__(self, *, billable: bool = False, handlers: dict[str, Handler] | None = None) -> None:
         self.billable = billable  # True lets tests exercise the budget guard with fake spend
         self.handlers: dict[str, Handler] = {"birth": fake_birth, "decide": fake_decide,
-                                             "fixer": fake_fixer, "judge": fake_judge}
+                                             "fixer": fake_fixer, "judge": fake_judge,
+                                             "plan": fake_plan}
         if handlers:
             self.handlers.update(handlers)
         self._scripts: dict[str, deque[str]] = defaultdict(deque)

@@ -29,7 +29,8 @@ def test_parse_rejects(bad):
 async def test_invalid_json_retries_once_then_hesitates(world, fake, sessions):
     fake.script("decide", *["not json at all"] * 10)  # every decider fails twice
     rep = await world.step()
-    assert rep.hesitations == rep.llm_calls // 2 > 0
+    decide_calls = sum(1 for r in fake.requests if r.purpose == "decide")
+    assert rep.hesitations == decide_calls // 2 > 0
     with sessions() as s:
         anomalies = list(s.scalars(select(Anomaly).where(Anomaly.source == "engine")))
         assert anomalies and all(a.kind == "json_parse_failure" for a in anomalies)

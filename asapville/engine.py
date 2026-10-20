@@ -21,6 +21,7 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from asapville.agents.decide import DecideOutcome, decide
 from asapville.agents.persona import persona_block
+from asapville.agents.plan import plan_day
 from asapville.agents.schemas import ActionName, Decision, Personality
 from asapville.angels import fixer, judge, watcher
 from asapville.config import Settings
@@ -31,9 +32,9 @@ from asapville.llm.routing import WORKER, effort_for, model_for, tier_for
 from asapville.world import actions, economy
 from asapville.world.actions import ActionResult, TickContext, arrive
 from asapville.world.clock import Clock, in_sleep_window
-from asapville.world.events import EventBus, emit, event_payload
+from asapville.world.events import EventBus, emit, event_payload, remember
 from asapville.world.needs import NeedsState, tick_needs
-from asapville.world.perception import build_perception
+from asapville.world.perception import build_perception, todays_plan
 from asapville.world.timeline import record_tick, tick_payload
 
 log = logging.getLogger("asapville.engine")
@@ -131,6 +132,31 @@ class World:
                 a.asleep = False
                 emit(ctx.session, tick=ctx.tick, kind="wake", actor=a, location_id=a.location_id,
                      summary=f"{a.name} woke up", actor_memory="I woke up.", importance=1)
+
+    async def _plan_mornings(self, ctx: TickContext, deciders: list[Agent], mode: str) -> int:
+        """Each citizen's first waking turn of a day starts with their own plan for it."""
+        todo = [a for a in deciders if todays_plan(ctx, a) is None and self._gets_llm_turn(a, ctx.tick, mode)]
+        if not todo:
+            return 0
+        cfg = self.settings.llm
+
+        async def one(a: Agent):
+            return a, await plan_day(
+                gateway=self.gateway, agent_id=a.id, tier=a.tier, model=model_for(a, cfg.models),
+                effort=effort_for(a, cfg.effort), persona=self.persona_for(a),
+                perception=build_perception(ctx, a), tick=ctx.tick, max_tokens=cfg.max_output_tokens)
+
+        made = 0
+        for a, reply in await asyncio.gather(*(one(a) for a in todo)):
+            if reply is None:
+                continue
+            made += 1
+            remember(ctx.session, a.id, ctx.tick, "plan", reply.plan, importance=5)
+            emit(ctx.session, tick=ctx.tick, kind="plan", actor=a, location_id=a.location_id,
+                 visibility="private", summary=f"{a.name} plans the day: {reply.plan}",
+                 data={"plan": reply.plan, "mood": reply.mood})
+        ctx.session.flush()
+        return made
 
     async def _decide_all(self, ctx: TickContext, deciders: list[Agent],
                           mode: str) -> dict[int, DecideOutcome]:
@@ -272,6 +298,7 @@ class World:
             deciders = [a for a in agents
                         if not a.asleep and a.travel_ticks_left == 0 and a.location_id is not None]
             calls_before = len(self.gateway.pending)
+            await self._plan_mornings(ctx, deciders, mode)
             outcomes = await self._decide_all(ctx, deciders, mode)
             report.llm_calls = len(self.gateway.pending) - calls_before
             results = self._execute(ctx, agents, outcomes, report)

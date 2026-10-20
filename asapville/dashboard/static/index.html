@@ -401,10 +401,10 @@ td.num, th.num { text-align: right; }
     talk: '💬', depart: '🚶', arrive: '📍', turned_away: '🚪', sleep: '🌙', wake: '☀️', eat: '🍞',
     forage: '🌿', collapse: '💫', death: '✝', invalid_action: '✗', budget_paused: '⏸', buy: '🛒',
     sell: '💰', work: '🔨', hired: '📋', quit: '🚪', notice: '📜', angel: '👁', relief: '🎁',
-    delivery: '🛻', give: '🤝', improvise: '✨',
+    delivery: '🛻', give: '🤝', improvise: '✨', plan: '📝',
   };
   const FILTERS = {
-    all: null, talk: ['talk'], deeds: ['improvise', 'give', 'buy', 'sell', 'work', 'hired', 'quit', 'notice'],
+    all: null, talk: ['talk'], deeds: ['plan', 'improvise', 'give', 'buy', 'sell', 'work', 'hired', 'quit', 'notice'],
     trouble: ['collapse', 'death', 'invalid_action', 'turned_away', 'budget_paused'],
     angels: ['angel', 'relief', 'delivery'],
   };
@@ -444,7 +444,7 @@ td.num, th.num { text-align: right; }
       drawer: { now: 'Сейчас', where: 'Где', doing: 'Занят', job: 'Работа', mood: 'Настроение', money: 'Деньги', carrying: 'Несёт',
         body: 'Тело', who: 'Кто это', values: 'Ценности · страхи · мечты', secrets: 'Секреты (видите только вы)', traits: 'Черты (с рождения)',
         backstory: 'Прошлое', hours: 'Последние часы', identity: 'Паспорт', homeL: 'Дом', bedtime: 'Отбой', speech: 'Речь',
-        unpleasant: 'неприятный', years: 'лет', from: 'из', family: 'семья', thought: 'Мысли (по-английски, как он думает)',
+        plan: 'План на сегодня (своими словами)', unpleasant: 'неприятный', years: 'лет', from: 'из', family: 'семья', thought: 'Мысли (по-английски, как он думает)',
         close: 'Закрыть (Esc)', look: (h, b, c, s) => `Волосы: ${h}. Сложение: ${b}. Одежда: ${c}. Всегда с собой: ${s}.` },
       asaps: 'асапов',
       onRoad: (p) => `в пути → ${p}`, at: (p) => p, deadOf: (c) => `погиб: ${c}`,
@@ -488,6 +488,7 @@ td.num, th.num { text-align: right; }
         reliefMoney: (a, c) => `Совет помог ${a}: ${c} асапов`, reliefFood: (a, q, i) => `Совет передал ${a} посылку: ${q} × ${i}`,
         delivery: (q, i, p) => `Телега привезла ${q} × ${i} в ${p}`, collapse: (a) => `${a} падает без сил`, death: (a, c) => `${a} умирает (${c})`,
         turned: (a, p) => `${a}: ${p} переполнено`, invalid: (a, x, e) => `${a} пытается ${x}, но: ${e}`,
+        plan: (a, p) => `${a} задумал на день: <q>${p}</q>`,
         give: (a, t, w) => `${a} даёт ${t}: ${w}`, angel: (t) => `Исправитель: <q>${t}</q>`, forageOk: (a, q, i) => `${a} находит ${q} × ${i}`, forageNo: (a, p) => `${a} ищет еду (${p}), но ничего не находит`,
         to: '→',
       },
@@ -523,7 +524,7 @@ td.num, th.num { text-align: right; }
       drawer: { now: 'Right now', where: 'Where', doing: 'Doing', job: 'Job', mood: 'Mood', money: 'Money', carrying: 'Carrying',
         body: 'Body', who: 'Who they are', values: 'Values · fears · ambitions', secrets: 'Secrets (only you can see these)', traits: 'Traits (fixed at birth)',
         backstory: 'Backstory', hours: 'Their recent hours', identity: 'Identity', homeL: 'Home', bedtime: 'Bedtime', speech: 'Speech',
-        unpleasant: 'unpleasant', years: 'years', from: 'from', family: 'family', thought: 'Thinking',
+        plan: 'Plan for today (in their own words)', unpleasant: 'unpleasant', years: 'years', from: 'from', family: 'family', thought: 'Thinking',
         close: 'Close (Esc)', look: (h, b, c, s) => `Hair ${h}; build ${b}; wears ${c}; never without ${s}.` },
       asaps: 'asaps',
       onRoad: (p) => `on the road to ${p}`, at: (p) => p, deadOf: (c) => `died: ${c}`,
@@ -557,6 +558,7 @@ td.num, th.num { text-align: right; }
         reliefMoney: (a, c) => `The council gives ${a} ${c} asaps`, reliefFood: (a, q, i) => `The council hands ${a} ${q} ${i}`,
         delivery: (q, i, p) => `A cart brings ${q} ${i} to ${p}`, collapse: (a) => `${a} collapses from exhaustion`, death: (a, c) => `${a} dies (${c})`,
         turned: (a, p) => `${a} finds ${p} full`, invalid: (a, x, e) => `${a} tries to ${x}, but: ${e}`,
+        plan: (a, p) => `${a} plans the day: <q>${p}</q>`,
         give: (a, t, w) => `${a} gives ${t} ${w}`, angel: (t) => `The Fixer: <q>${t}</q>`, forageOk: (a, q, i) => `${a} finds ${q} ${i}`, forageNo: (a, p) => `${a} forages at ${p} and finds nothing`,
         to: '→',
       },
@@ -690,6 +692,7 @@ td.num, th.num { text-align: right; }
       case 'invalid_action': return w.invalid(A, esc(d.action), `<span class="muted">${esc(d.error)}</span>`);
       case 'give': return w.give(A, T, esc(d.cents ? `${money(d.cents)} ${W().asaps}` : `${d.qty} × ${item(d.item)}`));
       case 'angel': return w.angel(esc(d.assessment || e.summary));
+      case 'plan': return w.plan(A, esc(d.plan || ''));
       case 'forage': return d.success ? w.forageOk(A, d.qty, esc(item(d.item))) : w.forageNo(A, place);
       case 'improvise': {
         let s = esc(d.outcome || e.summary);
@@ -700,7 +703,7 @@ td.num, th.num { text-align: right; }
       default: return esc(e.summary);
     }
   }
-  const evClass = (e) => e.kind === 'improvise' ? 'idea' : FILTERS.trouble.includes(e.kind) ? 'trouble' : FILTERS.angels.includes(e.kind) || (e.kind === 'notice' && !e.agent_id) ? 'angel' : '';
+  const evClass = (e) => e.kind === 'improvise' || e.kind === 'plan' ? 'idea' : FILTERS.trouble.includes(e.kind) ? 'trouble' : FILTERS.angels.includes(e.kind) || (e.kind === 'notice' && !e.agent_id) ? 'angel' : '';
   const evLine = (e, cls) => `<div class="ev ${evClass(e)} ${cls || ''}"><span class="ic">${ICON[e.kind] || '•'}</span><span>${evText(e)}</span></div>`;
 
   // ---------------------------------------------------------------- map
@@ -910,7 +913,7 @@ td.num, th.num { text-align: right; }
     const st = frameStocks(); const sum = (it) => Object.values(st).reduce((n, s) => n + (s[it] || 0), 0);
     cards.push({ cls: worked ? 'good' : 'crit', lab: T.now.econ, ttl: T.econTtl(worked), det: T.econDet(sum('bread'), sum('flour'), sum('grain')), act: () => openTab('town') });
     // 4. the newest notable thing
-    const notable = S.events.filter((e) => e.tick <= f.tick && !ROUTINE.has(e.kind) && !['talk', 'depart', 'invalid_action', 'buy'].includes(e.kind)).slice(-1)[0];
+    const notable = S.events.filter((e) => e.tick <= f.tick && !ROUTINE.has(e.kind) && !['talk', 'depart', 'invalid_action', 'buy', 'plan'].includes(e.kind)).slice(-1)[0];
     if (notable) cards.push({ cls: notable.kind === 'death' ? 'crit' : notable.kind === 'improvise' ? 'warn' : '', lab: `${T.now.just} · ${hh(frameAt(notable.tick)?.hour ?? 0)}`, ttl: '', det: '', html: evText(notable), act: () => { openTab('story'); } });
     // 5. the last thing said
     const said = S.events.filter((e) => e.tick <= f.tick && e.kind === 'talk').slice(-1)[0];
@@ -948,7 +951,7 @@ td.num, th.num { text-align: right; }
       const fr = frameAt(t); const list = byTick.get(t);
       const convos = new Map(); const rest = [];
       for (const e of list) { if (e.kind === 'talk') { const k = e.location_id ?? 0; if (!convos.has(k)) convos.set(k, []); convos.get(k).push(e); } else rest.push(e); }
-      const order = { death: 0, improvise: 1, angel: 2, notice: 3, give: 4 };
+      const order = { death: 0, improvise: 1, plan: 2, angel: 3, notice: 4, give: 5 };
       rest.sort((a, b) => (order[a.kind] ?? 9) - (order[b.kind] ?? 9));
       const convoHTML = [...convos.entries()].map(([loc, lines]) => `<div class="convo"><div class="where">${esc(T.story.convoAt(locName(loc)))}</div>${lines.map((e) =>
         `<div class="line ${e.id > S.seenEvent ? 'new' : ''}">${face(e.agent_id)}<div><span class="who">${esc(S.agents.get(e.agent_id)?.name || '?')} <span class="to">${T.ev.to} ${esc(S.agents.get(e.target_id)?.name || '')}</span></span><q>${esc(e.data?.line || '')}</q></div></div>`).join('')}</div>`).join('');
@@ -1090,6 +1093,7 @@ td.num, th.num { text-align: right; }
           <dl class="kv"><dt>${esc(D.where)}</dt><dd>${esc(where)}</dd><dt>${esc(D.doing)}</dt><dd>${esc(stateOf(fa, pos))}</dd>
           <dt>${esc(D.job)}</dt><dd>${job ? `${esc(jobName(job))} · ${esc(locName(locByKey(S.data.economy.jobs[job].workplace)?.id))} · ${(S.data.economy.jobs[job].wage_cents / 100).toFixed(2)}/h` : esc(T.none)}</dd>
           <dt>${esc(D.mood)}</dt><dd>${esc(fa.mood_label)} (${fa.mood})</dd><dt>${esc(D.money)}</dt><dd class="num">${money(fa.money || 0)} ${esc(T.asaps)}</dd><dt>${esc(D.carrying)}</dt><dd class="chips">${inv}</dd></dl>
+          ${(() => { const p = S.events.filter((e) => e.kind === 'plan' && e.agent_id === a.id && e.tick <= f.tick && frameAt(e.tick)?.day === f.day).slice(-1)[0]; return p ? `<div class="eyebrow" style="margin-top:10px">${esc(D.plan)}</div><p class="thought">📝 ${esc(p.data?.plan || '')}</p>` : ''; })()}
           ${fa.thought ? `<div class="eyebrow" style="margin-top:10px">${esc(D.thought)}</div><p class="thought">${esc(fa.thought)}</p>` : ''}
         </div>
         <div class="sec"><h3>${esc(D.body)}</h3><div class="needs">${need('hunger', true)}${need('energy')}${need('health')}${need('social')}</div></div>

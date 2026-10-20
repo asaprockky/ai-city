@@ -132,3 +132,33 @@ async def test_fake_town_improvises_gives_and_writes_live_bundles(world, session
     with sessions() as s:
         kinds = {k for (k,) in s.execute(select(Event.kind).distinct())}
     assert "improvise" in kinds
+
+
+async def test_each_citizen_plans_each_morning_once(world, sessions, fake):
+    await world.run(ticks=3, realtime=False)
+    with sessions() as s:
+        from asapville.db.models import Memory
+
+        plans = list(s.scalars(select(Memory).where(Memory.kind == "plan")))
+        assert len({m.agent_id for m in plans}) == len(plans) == 5  # one each, not one per hour
+        ev = s.scalar(select(Event).where(Event.kind == "plan"))
+        assert ev.visibility == "private" and ev.data["plan"]
+    req = next(r for r in fake.requests if r.purpose == "decide" and r.context["tick"] == 2)
+    assert "Your own plan for today" in req.messages[0].content
+    assert "this hour is yours" in req.messages[0].content
+
+
+async def test_the_fixer_cannot_assign_jobs(world, sessions, fake):
+    fake.script("fixer", json.dumps({"assessment": "x", "interventions": [
+        {"kind": "appoint", "agent_id": 1, "job": "farmer", "why": "nobody farms"}]}))
+    with sessions() as s:
+        a = s.get(Agent, 1)
+        a.hunger, a.health = 95, 15
+        s.commit()
+    await world.step()
+    with sessions() as s:
+        from asapville.db.models import Intervention
+
+        iv = s.scalar(select(Intervention))
+        assert iv.applied is False and "choose their own work" in iv.reason
+        assert s.get(Agent, 1).role != "farmer"

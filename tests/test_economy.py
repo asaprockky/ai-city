@@ -76,7 +76,8 @@ async def test_jobs_and_the_production_chain(world, sessions, settings):
         actions.execute(ctx, a, work)  # 3 grain -> 3 flour
         assert a.money_cents == money + 300 and ws.treasury_cents == fund - 300
         assert economy.stock_qty(s, ctx.by_key["farm"].id, "grain") == 9
-        assert economy.stock_qty(s, ctx.by_key["mill"].id, "flour") == 9
+        # the miller delivers flour straight to the bakery
+        assert economy.stock_qty(s, ctx.by_key["bakery"].id, "flour") == 9
         # run the farm dry: the mill stops and the worker is not paid
         economy.stock_add(s, ctx.by_key["farm"].id, "grain", -9)
         actions.execute(ctx, a, work)

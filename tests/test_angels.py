@@ -6,15 +6,21 @@ from asapville.world import economy
 
 
 async def test_watcher_files_each_problem_once(world, sessions, settings):
-    await world.step()
+    settings.angels.enabled = False
     with sessions() as s:
-        kinds = [a.kind for a in s.scalars(select(Anomaly).where(Anomaly.source == "watcher"))]
-        assert "no_workers_miller" in kinds and "no_workers_quarryman" in kinds
-        assert "no_workers_baker" not in kinds  # 24 loaves on the shelf is plenty
-    await world.step()
-    with sessions() as s:
-        again = [a.kind for a in s.scalars(select(Anomaly).where(Anomaly.source == "watcher"))]
-        assert sorted(again) == sorted(kinds)  # still open -> not filed twice
+        import random
+
+        from asapville.world.actions import TickContext
+
+        ws = s.get(WorldState, 1)
+        ctx = TickContext(session=s, settings=settings, tick=ws.tick, time=world.clock.at(ws.tick),
+                          rng=random.Random(1),
+                          locations={loc.id: loc for loc in s.scalars(select(Location))})
+        agents = list(s.scalars(select(Agent)))
+        first = [a.kind for a in watcher.scan(ctx, agents)]
+        assert "no_workers_miller" in first and "no_workers_quarryman" in first
+        assert "no_workers_baker" not in first  # 24 loaves on the shelf is plenty
+        assert watcher.scan(ctx, agents) == []  # still open -> not filed twice
 
 
 async def test_watcher_sees_starvation_and_empty_shelves(world, sessions, settings):
@@ -50,7 +56,7 @@ async def test_fixer_intervenes_within_limits(world, sessions, settings, fake):
         targets = [i.target for i in ivs if i.applied]
         assert "stock:bakery:bread" in targets and "notice" in targets
         assert f"agent:{victim.id}:inventory" in targets
-        assert any(t.startswith("agent:") and t.endswith(":role") for t in targets)
+        assert not any(t.endswith(":role") for t in targets)  # citizens choose their own work
         assert economy.stock_qty(s, bakery.id, "bread") == 20
         assert s.get(Agent, victim.id).inventory.get("bread") == 2
         assert all(a.status == "fixed" for a in s.scalars(select(Anomaly).where(Anomaly.source == "watcher")))
