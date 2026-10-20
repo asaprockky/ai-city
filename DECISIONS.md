@@ -264,3 +264,10 @@ Each of these came from watching the real town:
   panel; FLUX.1 schnell kept no faces. Other models (FLUX.2 klein, Leonardo Lucid Origin and
   Phoenix, SDXL) work by name, each with its own request shape, and go without references.
   Panels are drawn in the page's shapes (square, or wide for an odd last panel).
+
+## Town report for Telegram (`asapville digest`)
+The channel gets a plain report in Russian, always the same shape: day and fund, the main story,
+food and work, where everyone is, who died. `digest.facts()` takes it straight from the database
+and one Sonnet call writes it up, told to invent nothing. `asapville post-file` sends any file
+(the replay page from `export`, say) so readers can open interesting HTML from the chat.
+Daily budget raised to $15 at the owner's request.

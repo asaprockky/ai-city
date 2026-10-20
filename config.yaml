@@ -35,7 +35,7 @@ llm:
     claude-haiku-5-5:  {input: 0.10, output: 0.50,  cache_read: 0.01, cache_write: 0.125}
 
 budget:
-  daily_usd: 10.00           # hard cap for all calls in one real (UTC) day
+  daily_usd: 15.00           # hard cap for all calls in one real (UTC) day
   per_agent_daily_usd: 1.00  # cap per citizen per real day on their usual model
   fallback_agent_daily_usd: 1.50  # then they keep thinking on the cheap model up to this hard cap
   angel_opus_monthly_usd: 10.00

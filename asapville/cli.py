@@ -360,6 +360,12 @@ def main(argv: list[str] | None = None) -> int:
     p_com.add_argument("--script", help="redraw from a saved script JSON instead of writing a new one")
     p_com.add_argument("--post", action="store_true",
                        help="send it to Telegram (ASAPVILLE_TELEGRAM_TOKEN, ASAPVILLE_TELEGRAM_CHAT)")
+    p_dig = sub.add_parser("digest", help="write the town report in Russian (and post it to Telegram)")
+    p_dig.add_argument("--post", action="store_true",
+                       help="send it to Telegram (ASAPVILLE_TELEGRAM_TOKEN, ASAPVILLE_TELEGRAM_CHAT)")
+    p_doc = sub.add_parser("post-file", help="send a file (an HTML page, say) to the Telegram channel")
+    p_doc.add_argument("path")
+    p_doc.add_argument("--caption", default="")
     args = parser.parse_args(argv)
 
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
@@ -455,6 +461,30 @@ def main(argv: list[str] | None = None) -> int:
                 raise SystemExit("set ASAPVILLE_TELEGRAM_TOKEN and ASAPVILLE_TELEGRAM_CHAT to post")
             res = comic.post_telegram(out, f"Асапвиль, день {day}: {script.title}", token=token, chat=chat)
             print("posted" if res.get("ok") else f"telegram said: {res}")
+        return 0
+    if args.cmd in ("digest", "post-file"):
+        import os
+        from pathlib import Path
+
+        from asapville import comic, digest
+
+        token = os.environ.get("ASAPVILLE_TELEGRAM_TOKEN")
+        chat = os.environ.get("ASAPVILLE_TELEGRAM_CHAT")
+        if (args.cmd == "post-file" or args.post) and (not token or not chat):
+            raise SystemExit("set ASAPVILLE_TELEGRAM_TOKEN and ASAPVILLE_TELEGRAM_CHAT to post")
+        if args.cmd == "post-file":
+            res = digest.post_document(Path(args.path), args.caption, token=token, chat=chat)
+        else:
+            with sessions() as s:
+                gateway.guard.load(s)
+                text = asyncio.run(digest.write(s, settings, gateway))
+                gateway.flush(s)
+                s.commit()
+            print(text)
+            if not args.post:
+                return 0
+            res = comic.post_text(text, token=token, chat=chat)
+        print("posted" if res.get("ok") else f"telegram said: {res}")
         return 0
     if args.cmd == "export":
         from pathlib import Path
