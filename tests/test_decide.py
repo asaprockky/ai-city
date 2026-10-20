@@ -80,3 +80,39 @@ def test_anthropic_request_shape_caches_static_prefix():
     assert "thinking" not in params and "context" not in params and "never sent" not in str(params)
     req.effort = None
     assert "output_config" not in AnthropicBackend.build_params(req)
+
+
+def test_anthropic_backend_needs_explicit_key(monkeypatch):
+    from asapville.llm.client import AnthropicBackend
+
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    with pytest.raises(RuntimeError, match="ANTHROPIC_API_KEY"):
+        AnthropicBackend()
+
+
+async def test_anthropic_backend_parses_usage(monkeypatch):
+    from types import SimpleNamespace
+
+    from asapville.llm.client import AnthropicBackend
+
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "test-not-a-real-key")
+    monkeypatch.setenv("ANTHROPIC_BASE_URL", "http://host-proxy.invalid")
+    backend = AnthropicBackend()
+    assert str(backend.client.base_url).startswith("https://api.anthropic.com")
+    sent = {}
+
+    async def create(**params):
+        sent.update(params)
+        return SimpleNamespace(
+            content=[SimpleNamespace(type="thinking", thinking=""),
+                     SimpleNamespace(type="text", text=GOOD)],
+            usage=SimpleNamespace(input_tokens=11, output_tokens=22, cache_read_input_tokens=300,
+                                  cache_creation_input_tokens=0),
+            stop_reason="end_turn")
+
+    backend.client = SimpleNamespace(messages=SimpleNamespace(create=create))
+    req = LLMRequest(purpose="decide", model="claude-haiku-5-5", tier=3, system_rules="R",
+                     messages=[ChatMessage(role="user", content="x")])
+    raw = await backend.complete(req)
+    assert raw.text == GOOD and raw.cache_read_tokens == 300 and raw.output_tokens == 22
+    assert sent["model"] == "claude-haiku-5-5"

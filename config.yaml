@@ -3,8 +3,8 @@
 
 world:
   name: Asapville
-  seed: 1337                 # master RNG seed; same seed + FakeLLM = same world
-  population: 5              # citizens created by `init-world`
+  seed: 2026                 # master RNG seed; same seed + FakeLLM = same world
+  population: 10             # citizens created by `init-world`
 
 clock:
   ticks_per_day: 24          # 1 tick = 1 simulated hour
@@ -15,7 +15,7 @@ clock:
 llm:
   backend: fake              # fake | anthropic
   max_concurrency: 8         # semaphore for concurrent decide calls
-  max_output_tokens: 1024
+  max_output_tokens: 2048     # includes adaptive thinking tokens
   json_retries: 1            # one retry with the parse error, then "hesitate"
   # Model strings are fixed by the brief. Routing logic lives in llm/routing.py.
   models:
@@ -79,6 +79,10 @@ food:                        # nutrition = hunger reduced per item
 forage:                      # free food costs time + energy and is never guaranteed
   forest: {item: berries, chance: 0.55, max_qty: 3, energy_cost: 6}
   river:  {item: fish, chance: 0.35, max_qty: 2, energy_cost: 8}
+
+birth:
+  min_dark: 1                # the founding town always has at least one bad apple
+  max_tokens: 4096
 
 conversation:
   max_turns: 6

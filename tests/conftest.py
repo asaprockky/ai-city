@@ -16,6 +16,7 @@ def settings(tmp_path) -> Settings:
     s = load_settings()
     s.db_url = f"sqlite:///{tmp_path / 'test.db'}"
     s.llm.backend = "fake"
+    s.world.population = 5  # keep tests fast; config default is 10
     return s
 
 

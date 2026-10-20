@@ -91,3 +91,16 @@ def short_looks(p: Personality) -> str:
     """What a stranger sees: build, hair, clothing, signature item. Never the name."""
     a = p.appearance
     return f"{a.build}, {a.hair} hair, wearing {a.clothing}, with {a.signature_item}"
+
+
+def unpleasant_reasons(p: Personality) -> list[str]:
+    """Why an observer would call this person unpleasant (empty list = they're not)."""
+    reasons = []
+    if p.moral_alignment in ("selfish", "cruel", "criminal"):
+        reasons.append(f"{p.moral_alignment} moral baseline")
+    for trait in ("machiavellianism", "narcissism", "psychopathy"):
+        if getattr(p.dark_traits, trait) >= 0.6:
+            reasons.append(f"high {trait}")
+    if p.big_five.agreeableness <= 0.25:
+        reasons.append("very disagreeable")
+    return reasons

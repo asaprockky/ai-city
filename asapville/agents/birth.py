@@ -64,8 +64,8 @@ def _trait(rng: random.Random, mean: float = 0.5, sd: float = 0.2) -> float:
     return round(min(1.0, max(0.0, rng.gauss(mean, sd))), 2)
 
 
-def roll_seed_card(rng: random.Random, settings: Settings) -> SeedCard:
-    dark = rng.random() < DARK_SHARE
+def roll_seed_card(rng: random.Random, settings: Settings, *, force_dark: bool = False) -> SeedCard:
+    dark = force_dark or rng.random() < DARK_SHARE
     alignment = rng.choice(DARK_ALIGNMENTS) if dark else _weighted(
         rng, [("lawful-good", 0.4), ("neutral", 0.6)])
     big_five = BigFive(
@@ -89,6 +89,48 @@ def roll_seed_card(rng: random.Random, settings: Settings) -> SeedCard:
         formative_events=rng.sample(FORMATIVE_EVENTS, k=rng.randint(1, 2)),
         bedtime_hour=(sc.default_bedtime + rng.randint(-sc.bedtime_jitter, sc.bedtime_jitter)) % 24,
     )
+
+
+def roll_founders(rng: random.Random, settings: Settings, n: int) -> list[SeedCard]:
+    """Seed cards for the founding population, with at least `birth.min_dark` dark ones."""
+    cards = [roll_seed_card(rng, settings) for _ in range(n)]
+    missing = min(n, settings.birth.min_dark) - sum(c.moral_alignment in DARK_ALIGNMENTS for c in cards)
+    for i in range(n - 1, -1, -1):
+        if missing <= 0:
+            break
+        if cards[i].moral_alignment not in DARK_ALIGNMENTS:
+            cards[i] = roll_seed_card(rng, settings, force_dark=True)
+            missing -= 1
+    return cards
+
+
+def _level(v: float) -> str:
+    if v >= 0.8:
+        return "very high"
+    if v >= 0.65:
+        return "high"
+    if v > 0.35:
+        return "average"
+    if v > 0.2:
+        return "low"
+    return "very low"
+
+
+def describe_seed(seed: SeedCard) -> str:
+    """The seed card in plain words, so the agent writes a self consistent with its numbers."""
+    b, d = seed.big_five, seed.dark_traits
+    return "\n".join([
+        f"- Age {seed.age}, born in {seed.birthplace}, family of {seed.family_size}, "
+        f"{seed.wealth_bracket} background.",
+        f"- Openness {_level(b.openness)}, conscientiousness {_level(b.conscientiousness)}, "
+        f"extraversion {_level(b.extraversion)}, agreeableness {_level(b.agreeableness)}, "
+        f"neuroticism {_level(b.neuroticism)}.",
+        f"- Machiavellianism {_level(d.machiavellianism)}, narcissism {_level(d.narcissism)}, "
+        f"psychopathy {_level(d.psychopathy)}.",
+        f"- Moral baseline: {seed.moral_alignment}.",
+        "- Formative events: " + "; ".join(seed.formative_events) + ".",
+        f"- Natural bedtime around {seed.bedtime_hour:02d}:00.",
+    ])
 
 
 def _unique_identity(session: Session, rng: random.Random) -> tuple[str, str]:
@@ -117,17 +159,23 @@ class _Subject:
 
 
 async def write_self(gateway: LLMGateway, settings: Settings, seed: SeedCard, *, tier: int,
-                     seed_index: int, tick: int, retries: int = 1) -> SelfPortrait:
+                     seed_index: int, tick: int, retries: int = 1,
+                     taken_names: set[str] | None = None) -> SelfPortrait:
     """The agent's own model (per its tier) writes its self-portrait from the seed card."""
     subject = _Subject(tier)
-    content = "Your seed card:\n" + seed.model_dump_json(indent=2)
+    taken = {n.casefold() for n in (taken_names or set())}
+    content = ("Your seed card:\n" + describe_seed(seed) + "\n\nRaw values (0-1):\n"
+               + seed.model_dump_json(include={"big_five", "dark_traits"}))
+    if taken_names:
+        content += "\n\nNames already taken in town (choose a different one): " + ", ".join(
+            sorted(taken_names))
     messages = [ChatMessage(role="user", content=content)]
     last_error = ""
     for attempt in range(retries + 1):
         req = LLMRequest(
             purpose="birth", model=model_for(subject, settings.llm.models), tier=subject.tier,
             effort=effort_for(subject, settings.llm.effort), system_rules=BIRTH_RULES,
-            messages=messages, max_tokens=settings.llm.max_output_tokens,
+            messages=messages, max_tokens=settings.birth.max_tokens,
             context={"seed_index": seed_index, "seed": seed.model_dump(), "tick": tick,
                      "attempt": attempt},
         )
@@ -135,7 +183,10 @@ async def write_self(gateway: LLMGateway, settings: Settings, seed: SeedCard, *,
         text = result.text.strip()
         try:
             start, end = text.find("{"), text.rfind("}")
-            return SelfPortrait.model_validate(json.loads(text[start:end + 1]))
+            portrait = SelfPortrait.model_validate(json.loads(text[start:end + 1]))
+            if portrait.name.casefold() in taken:
+                raise ValueError(f"the name {portrait.name!r} is already taken")
+            return portrait
         except (ValueError, ValidationError) as exc:
             last_error = str(exc)[:300]
             messages = messages + [
@@ -147,15 +198,16 @@ async def write_self(gateway: LLMGateway, settings: Settings, seed: SeedCard, *,
 
 async def birth_agent(session: Session, gateway: LLMGateway, settings: Settings,
                       rng: random.Random, *, seed_index: int, home: Location | None,
-                      tick: int = 0) -> Agent:
-    seed = roll_seed_card(rng, settings)
+                      tick: int = 0, seed: SeedCard | None = None) -> Agent:
+    seed = seed or roll_seed_card(rng, settings)
     lo, hi = WEALTH_CENTS[seed.wealth_bracket]
     blo, bhi = WEALTH_BREAD[seed.wealth_bracket]
     money = rng.randint(lo, hi)
     bread = rng.randint(blo, bhi)
     tier = tier_for(seed.starting_role, money, settings.tiers)
+    taken = set(session.scalars(select(Agent.name)))
     portrait = await write_self(gateway, settings, seed, tier=tier, seed_index=seed_index,
-                                tick=tick, retries=settings.llm.json_retries)
+                                tick=tick, retries=settings.llm.json_retries, taken_names=taken)
     personality = compose_personality(seed, portrait)
     mac, ip = _unique_identity(session, rng)
     agent = Agent(

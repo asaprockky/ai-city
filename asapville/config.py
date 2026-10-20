@@ -49,7 +49,7 @@ class EffortCfg(BaseModel):
 class LLMCfg(BaseModel):
     backend: Literal["fake", "anthropic"] = "fake"
     max_concurrency: int = 8
-    max_output_tokens: int = 1024
+    max_output_tokens: int = 2048
     json_retries: int = 1
     models: ModelNames = ModelNames()
     effort: EffortCfg = EffortCfg()
@@ -111,6 +111,11 @@ class ForageSpot(BaseModel):
     energy_cost: float
 
 
+class BirthCfg(BaseModel):
+    min_dark: int = 1  # founding population has at least this many selfish/cruel/criminal citizens
+    max_tokens: int = 4096  # room for adaptive thinking + the self-portrait
+
+
 class ConversationCfg(BaseModel):
     max_turns: int = 6
 
@@ -159,6 +164,7 @@ class Settings(BaseModel):
     sleep: SleepCfg = SleepCfg()
     food: dict[str, FoodItem] = Field(default_factory=dict)
     forage: dict[str, ForageSpot] = Field(default_factory=dict)
+    birth: BirthCfg = BirthCfg()
     conversation: ConversationCfg = ConversationCfg()
     memory: MemoryCfg = MemoryCfg()
     map: MapCfg = MapCfg()

@@ -23,6 +23,15 @@ export ANTHROPIC_API_KEY=...         # never put it in config.yaml
 export ASAPVILLE_LLM_BACKEND=anthropic
 ```
 
+Phase 2 demo (10 real births, then the persona cards):
+
+```bash
+rm -f asapville.db
+ASAPVILLE_LLM_BACKEND=anthropic asapville init-world
+asapville personas --out reports/persona_cards.md
+asapville report --events 0     # cost summary of the births
+```
+
 Budget caps (`budget:` in `config.yaml`) are hard limits: slow mode at 90% of the daily cap,
 pause at 100%.
 

@@ -11,8 +11,8 @@ import sys
 from sqlalchemy import case, func, select
 from sqlalchemy.orm import Session, sessionmaker
 
-from asapville.agents.birth import birth_agent
-from asapville.agents.persona import persona_block
+from asapville.agents.birth import birth_agent, roll_founders
+from asapville.agents.persona import persona_block, unpleasant_reasons
 from asapville.agents.schemas import Personality
 from asapville.config import Settings, load_settings
 from asapville.db.models import Agent, Brand, Event, LLMCall, Location, WorldState
@@ -23,6 +23,8 @@ from asapville.llm.client import LLMGateway, make_backend
 from asapville.llm.routing import TIER_NAMES
 from asapville.world.clock import Clock
 from asapville.world.map import seed_locations
+
+log = logging.getLogger("asapville.cli")
 
 FOUNDING_BRANDS = [
     {"name": "AsapBank", "category": "bank",
@@ -58,9 +60,11 @@ async def init_world(settings: Settings, *, population: int | None = None,
         rng = random.Random(settings.world.seed)
         n = population if population is not None else settings.world.population
         agents = []
-        for i in range(n):
+        for i, seed in enumerate(roll_founders(rng, settings, n)):
             home = homes[i] if i < len(homes) else None  # extra citizens start homeless
-            agents.append(await birth_agent(s, gateway, settings, rng, seed_index=i, home=home))
+            agents.append(await birth_agent(s, gateway, settings, rng, seed_index=i, home=home,
+                                            seed=seed))
+            log.info("born: %s (%s)", agents[-1].name, seed.moral_alignment)
             if home is not None:
                 home.owner_id = agents[-1].id
         gateway.flush(s)
@@ -124,6 +128,60 @@ def persona_cards(session: Session) -> str:
     return "\n".join(out)
 
 
+def _bar(v: float) -> str:
+    filled = round(v * 10)
+    return "█" * filled + "░" * (10 - filled) + f" {v:.2f}"
+
+
+def persona_cards_markdown(session: Session, settings: Settings) -> str:
+    """Observer-facing persona cards (seed facts + the agent's self-written identity)."""
+    from asapville.llm.routing import model_for
+
+    agents = list(session.scalars(select(Agent).order_by(Agent.id)))
+    out = ["# Asapville — persona cards", ""]
+    flagged = []
+    for a in agents:
+        p = Personality.model_validate(a.personality)
+        seed = a.seed_card
+        bad = unpleasant_reasons(p)
+        if bad:
+            flagged.append(f"**{a.name}** ({', '.join(bad)})")
+        ap = p.appearance
+        out += [
+            f"## {a.name}" + ("  ⚠ unpleasant" if bad else ""),
+            "",
+            f"*{ap.self_description}*",
+            "",
+            f"- **Age** {seed.get('age')} · **born in** {seed.get('birthplace')} · **family of** "
+            f"{seed.get('family_size')} · **{seed.get('wealth_bracket')}** background",
+            f"- **Tier** {TIER_NAMES[a.tier]} → `{model_for(a, settings.llm.models)}` · **role** {a.role} · "
+            f"**money** {a.money_cents / 100:.2f} asaps · **bedtime** {a.bedtime_hour:02d}:00",
+            f"- **Identity** MAC `{a.virtual_mac}` · IP `{a.virtual_ip}`",
+            f"- **Formative events:** {'; '.join(seed.get('formative_events', []))}",
+            "",
+            f"**Look:** hair {ap.hair}; build {ap.build}; wears {ap.clothing}; never without "
+            f"{ap.signature_item}.",
+            "",
+            f"**Speech:** {p.speech_style}",
+            "",
+            "| trait | value |", "|---|---|",
+            *[f"| {k} | `{_bar(v)}` |" for k, v in p.big_five.model_dump().items()],
+            *[f"| {k} | `{_bar(v)}` |" for k, v in p.dark_traits.model_dump().items()],
+            f"| moral alignment | **{p.moral_alignment}** |",
+            "",
+            f"- **Values:** {'; '.join(p.values)}",
+            f"- **Fears:** {'; '.join(p.fears)}",
+            f"- **Ambitions:** {'; '.join(p.ambitions)}",
+            f"- **Secrets:** {'; '.join(p.secrets) or '—'}",
+            f"- **Quirks:** {'; '.join(p.quirks) or '—'}",
+            "",
+            f"**Backstory.** {p.backstory}",
+            "",
+        ]
+    out[2:2] = [f"{len(agents)} citizens. Unpleasant: " + (", ".join(flagged) if flagged else "none"), ""]
+    return "\n".join(out)
+
+
 def _set_flag(settings: Settings, **values: object) -> None:
     sessions = make_session_factory(make_engine(settings.db_url))
     with sessions() as s:
@@ -149,7 +207,8 @@ def main(argv: list[str] | None = None) -> int:
     p_speed.add_argument("value", type=float)
     p_rep = sub.add_parser("report", help="world state, recent events and cost summary")
     p_rep.add_argument("--events", type=int, default=15)
-    sub.add_parser("personas", help="print every citizen's persona card")
+    p_pers = sub.add_parser("personas", help="print every citizen's persona card")
+    p_pers.add_argument("--out", help="write markdown persona cards to this file")
     args = parser.parse_args(argv)
 
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
@@ -181,7 +240,14 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     if args.cmd == "personas":
         with sessions() as s:
-            print(persona_cards(s))
+            if args.out:
+                from pathlib import Path
+
+                Path(args.out).parent.mkdir(parents=True, exist_ok=True)
+                Path(args.out).write_text(persona_cards_markdown(s, settings))
+                print(f"wrote {args.out}")
+            else:
+                print(persona_cards(s))
         return 0
     if args.cmd == "run":
         ticks = args.ticks

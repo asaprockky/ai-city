@@ -89,3 +89,25 @@ Choices made where the brief left room. Newest phase at the bottom.
 - **Determinism:** the same seed + FakeLLM gives the same world, event for event (tested).
 - **Founding brand:** AsapBank is in the registry from day 0. Logo: a plain teal hexagon with one
   white upward chevron (original design).
+
+## Phase 2 — Birth, personality, persona block
+
+- **Founding population = 10** (`world.population`). Tests still use 5 to stay fast.
+- **At least one bad apple.** `birth.min_dark` (default 1): if the founding seed cards roll no
+  selfish/cruel/criminal citizen, the last neutral card is re-rolled as dark. Later births and
+  migrants use the plain ~15% roll.
+- **World seed changed 1337 → 2026.** 1337 gave nine "neutral" founders; 2026 gives a mixed town
+  without help from `min_dark` (1 criminal, 1 cruel, 3 lawful-good, 5 neutral).
+- **The seed card is shown in words as well as numbers** ("agreeableness very low, psychopathy
+  high"), so the agent writes a self that fits its traits. The raw 0–1 values are attached too.
+- **Names are unique.** The birth prompt lists names already taken. A clash is treated as an
+  invalid reply and retried once.
+- **Birth gets more room:** `birth.max_tokens` = 4096 and `llm.max_output_tokens` = 2048, because
+  adaptive thinking tokens count against `max_tokens`. Only tokens actually used are billed.
+- **Credentials are pinned.** The Anthropic backend reads `ANTHROPIC_API_KEY` explicitly and talks
+  to `https://api.anthropic.com`. It ignores any `ANTHROPIC_BASE_URL` or other credentials already
+  in the shell, so it can never ride on someone else's credentials. `ASAPVILLE_ANTHROPIC_BASE_URL`
+  overrides the URL on purpose. A missing key fails loudly at startup.
+- **"Unpleasant" is defined in code** (`persona.unpleasant_reasons`): a dark moral baseline, or any
+  dark trait ≥0.6, or agreeableness ≤0.25. `asapville personas --out FILE` writes markdown persona
+  cards with the flagged citizens listed at the top.

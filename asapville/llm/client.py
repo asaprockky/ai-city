@@ -8,6 +8,7 @@ the key is never logged or stored.
 from __future__ import annotations
 
 import asyncio
+import os
 import time
 from typing import Any
 
@@ -36,8 +37,13 @@ class AnthropicBackend:
     def __init__(self) -> None:
         import anthropic  # local import: tests never need it
 
-        self._anthropic = anthropic
-        self.client = anthropic.AsyncAnthropic()  # key from ANTHROPIC_API_KEY
+        api_key = os.environ.get("ANTHROPIC_API_KEY")
+        if not api_key:
+            raise RuntimeError("ANTHROPIC_API_KEY is not set; the anthropic backend needs it")
+        # Explicit key + base URL: never fall back to other ambient credentials or a host-set
+        # ANTHROPIC_BASE_URL. ASAPVILLE_ANTHROPIC_BASE_URL overrides for proxies.
+        base_url = os.environ.get("ASAPVILLE_ANTHROPIC_BASE_URL", "https://api.anthropic.com")
+        self.client = anthropic.AsyncAnthropic(api_key=api_key, base_url=base_url)
 
     @staticmethod
     def build_params(req: LLMRequest) -> dict[str, Any]:
