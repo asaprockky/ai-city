@@ -179,6 +179,7 @@ class EconomyCfg(BaseModel):
     jobs: dict[str, JobCfg] = Field(default_factory=dict)
     stock_start: dict[str, dict[str, int]] = Field(default_factory=dict)
     work_energy_cost: float = 5.0
+    property_price_cents: int = 30_000
     notice_ticks: int = 24  # how long a notice stays on the town board
 
 

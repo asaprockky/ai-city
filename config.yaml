@@ -108,6 +108,7 @@ economy:
     market: {vegetables: 20}
     farm: {grain: 12}
   work_energy_cost: 5
+  property_price_cents: 30000  # an empty shop costs 300 asaps, paid to the town fund
   notice_ticks: 24             # a notice stays on the town board for a day
 
 angels:                        # the simulation's guardians (never citizens)
@@ -153,6 +154,9 @@ map:
     - {key: quarry,     name: "Grey Quarry",   kind: quarry,     x: 3,  y: 16, capacity: 30}
     - {key: river,      name: "Silt River Bank", kind: river,    x: 18, y: 5,  capacity: 200}
     - {key: jail,       name: "Jail",          kind: jail,       x: 9,  y: 12, capacity: 6}
+    # empty premises anyone can buy from the town (buy_property); only the owner trades there
+    - {key: well_shop,  name: "The Empty Shop by the Well", kind: shop, x: 9, y: 9, capacity: 12}
+    - {key: corner_shop, name: "The Corner Shop", kind: shop,   x: 14, y: 9,  capacity: 12}
   home_plots:                # one home per plot, laid out in a residential block
     count: 12
     origin: {x: 4, y: 9}

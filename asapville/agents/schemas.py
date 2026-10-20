@@ -108,6 +108,7 @@ class ActionName(StrEnum):
     BORROW = "borrow"
     IMPROVISE = "improvise"
     OPEN_STALL = "open_stall"
+    BUY_PROPERTY = "buy_property"
     STOCK_STALL = "stock_stall"
     IDLE = "idle"
 
@@ -147,6 +148,7 @@ class Destination(BaseModel):
     travel_hours: int
     sells: list[str] = Field(default_factory=list)
     jobs: list[str] = Field(default_factory=list)
+    note: str | None = None  # e.g. "for sale, 300 asaps" or "owned by Hester Vance"
 
 
 class ShopItem(BaseModel):
@@ -178,6 +180,7 @@ class Perception(BaseModel):
     location_key: str
     location_name: str
     location_kind: str
+    location_note: str | None = None
     is_home: bool
     here: list[SeenAgent]
     destinations: list[Destination]

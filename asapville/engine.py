@@ -80,6 +80,11 @@ class World:
         with self.sessions() as s:
             gateway.guard.load(s)
             ws = s.get(WorldState, 1)
+            if ws is not None:
+                from asapville.world.map import seed_locations
+
+                if seed_locations(s, settings.map):  # places added to config since the world began
+                    s.commit()
             if ws is not None and economy.open_economy(s, settings, tick=ws.tick):
                 s.commit()
 

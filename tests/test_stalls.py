@@ -86,3 +86,32 @@ async def test_stall_rules(world, sessions):
         assert actions.validate(ctx, a, d(name="Home Co", item="spoon", price=1), set()) is None
         nothing = Decision(thought="", action=ActionName.STOCK_STALL, action_args={"item": "spoon", "qty": 1})
         assert "no stall" in actions.validate(ctx, a, nothing, set()).lower()
+
+
+async def test_empty_shops_can_be_bought_and_only_the_owner_trades_there(world, sessions, settings):
+    from asapville.world.perception import build_perception, render_perception
+
+    with sessions() as s:
+        ctx = _ctx(world, s)
+        a, b = list(s.scalars(select(Agent).order_by(Agent.id)))[:2]
+        _at(ctx, a, "well_shop")
+        _at(ctx, b, "well_shop")
+        shop = ctx.by_key["well_shop"]
+        assert shop.kind == "shop" and shop.owner_id is None
+        assert "for sale" in render_perception(build_perception(ctx, a))
+        open_ = Decision(thought="", action=ActionName.OPEN_STALL,
+                         action_args={"name": "Hester's Cooperage", "item": "barrel", "price": 12})
+        assert "for sale" in actions.validate(ctx, a, open_, set())
+        buy = Decision(thought="", action=ActionName.BUY_PROPERTY)
+        a.money_cents = 100
+        assert "costs 300.00" in actions.validate(ctx, a, buy, set())
+        a.money_cents = 50_000
+        fund = s.get(WorldState, 1).treasury_cents
+        actions.execute(ctx, a, buy)
+        assert shop.owner_id == a.id and a.money_cents == 20_000
+        assert s.get(WorldState, 1).treasury_cents == fund + 30_000
+        assert actions.validate(ctx, a, open_, set()) is None
+        assert "belongs to" in actions.validate(ctx, b, open_, set())
+        b.money_cents = 50_000
+        assert "already belongs" in actions.validate(ctx, b, buy, set())
+        assert "your own shop" in render_perception(build_perception(ctx, a))

@@ -401,10 +401,10 @@ td.num, th.num { text-align: right; }
     talk: '💬', depart: '🚶', arrive: '📍', turned_away: '🚪', sleep: '🌙', wake: '☀️', eat: '🍞',
     forage: '🌿', collapse: '💫', death: '✝', invalid_action: '✗', budget_paused: '⏸', buy: '🛒',
     sell: '💰', work: '🔨', hired: '📋', quit: '🚪', notice: '📜', angel: '👁', relief: '🎁',
-    delivery: '🛻', give: '🤝', improvise: '✨', plan: '📝', open_stall: '🏪', stock_stall: '📦', wages: '⚖', proposal: '🗳', vote: '✋', law: '🏛', arrival: '🧳', secret_deal: '🕵', steal: '🫳', attack: '👊',
+    delivery: '🛻', give: '🤝', improvise: '✨', plan: '📝', open_stall: '🏪', stock_stall: '📦', wages: '⚖', proposal: '🗳', vote: '✋', law: '🏛', arrival: '🧳', secret_deal: '🕵', steal: '🫳', attack: '👊', property: '🔑',
   };
   const FILTERS = {
-    all: null, talk: ['talk'], deeds: ['plan', 'proposal', 'vote', 'law', 'improvise', 'open_stall', 'stock_stall', 'wages', 'give', 'buy', 'sell', 'work', 'hired', 'quit', 'notice'],
+    all: null, talk: ['talk'], deeds: ['plan', 'property', 'proposal', 'vote', 'law', 'improvise', 'open_stall', 'stock_stall', 'wages', 'give', 'buy', 'sell', 'work', 'hired', 'quit', 'notice'],
     trouble: ['collapse', 'death', 'steal', 'attack', 'invalid_action', 'turned_away', 'budget_paused', 'secret_deal'],
     angels: ['angel', 'relief', 'delivery'],
   };
@@ -476,7 +476,7 @@ td.num, th.num { text-align: right; }
       cause: { starvation: 'голод', exhaustion: 'истощение' },
       place: { square: 'Площадь', market: 'Рынок', bank: 'AsapBank', town_hall: 'Ратуша', church: 'Часовня на холме', clinic: 'Клиника',
         tavern: 'Кривой фонарь', bakery: 'Пекарня', mill: 'Мельница', farm: 'Ферма', forest: 'Сосновый лес', quarry: 'Серый карьер',
-        river: 'Берег реки', jail: 'Тюрьма' },
+        river: 'Берег реки', jail: 'Тюрьма', well_shop: 'Пустая лавка у колодца', corner_shop: 'Угловая лавка' },
       house: (n) => `Дом ${n}`,
       ev: {
         depart: (a, f, t, h) => `${a} в пути: ${f} → ${t}${h ? `, ${h} ч` : ''}`,
@@ -494,6 +494,7 @@ td.num, th.num { text-align: right; }
         secretDeal: (a, t, c) => `Тайно: ${a} заплатил ${t} ${c} асапов, чтобы шпионить за городом (знают только они)`,
         steal: (a, t, w, how) => `${a} крадёт у ${t}: ${w} — ${how}`, stealHow: { caught: 'пойман за руку', seen: 'кто-то видел', unseen: 'никто не заметил', empty: 'красть было нечего' },
         attack: (a, t, z) => `${a} нападает на ${t}${z ? ' во сне' : ''}`,
+        property: (a, p, c) => `${a} покупает ${p} за ${c} асапов`,
         proposal: (a, n, t, c) => `${a} выносит на голосование №${n}: <q>${t}</q>${c}`,
         vote: (a, n, y, t) => `${a} голосует ${y ? 'ЗА' : 'ПРОТИВ'} №${n} (сейчас ${t[0]}–${t[1]})`,
         law: (n, t, y, no, ok) => `Город проголосовал по №${n} <q>${t}</q>: ${y}–${no}, ${ok ? 'ПРИНЯТО' : 'не принято'}`,
@@ -576,6 +577,7 @@ td.num, th.num { text-align: right; }
         secretDeal: (a, t, c) => `Secretly: ${a} paid ${t} ${c} asaps to spy on the town (only the two know)`,
         steal: (a, t, w, how) => `${a} steals ${w} from ${t} — ${how}`, stealHow: { caught: 'caught in the act', seen: 'someone saw', unseen: 'nobody noticed', empty: 'nothing to take' },
         attack: (a, t, z) => `${a} attacks ${t}${z ? ' in their sleep' : ''}`,
+        property: (a, p, c) => `${a} buys ${p} for ${c} asaps`,
         proposal: (a, n, t, c) => `${a} puts #${n} to a vote: <q>${t}</q>${c}`,
         vote: (a, n, y, t) => `${a} votes ${y ? 'YES' : 'NO'} on #${n} (now ${t[0]}–${t[1]})`,
         law: (n, t, y, no, ok) => `The town voted on #${n} <q>${t}</q>: ${y}–${no}, ${ok ? 'PASSED' : 'not passed'}`,
@@ -707,6 +709,7 @@ td.num, th.num { text-align: right; }
       case 'secret_deal': return w.secretDeal(A, T, money(d.cents || 0));
       case 'steal': return w.steal(A, T, esc(d.cents ? `${money(d.cents)} ${W().asaps}` : `${d.qty || 0} × ${item(d.item)}`), w.stealHow[d.empty ? 'empty' : d.noticed ? 'caught' : (d.witnesses || []).length ? 'seen' : 'unseen']);
       case 'attack': return w.attack(A, T, d.asleep);
+      case 'property': return w.property(A, place, money(d.cents || 0));
       case 'proposal': return w.proposal(A, d.proposal, esc(d.text), d.kind === 'wage' ? w.changeWage(esc(jobName(d.target)), money(d.value)) : d.kind === 'price' ? w.changePrice(esc(item(d.target)), money(d.value)) : '');
       case 'vote': return w.vote(A, d.proposal, d.yes, d.tally || [0, 0]);
       case 'law': return w.law(d.proposal, esc(d.text), d.yes, d.no, d.passed);
@@ -737,7 +740,7 @@ td.num, th.num { text-align: right; }
       default: return esc(e.summary);
     }
   }
-  const evClass = (e) => ['improvise', 'plan', 'open_stall', 'proposal', 'law', 'arrival'].includes(e.kind) ? 'idea' : FILTERS.trouble.includes(e.kind) ? 'trouble' : FILTERS.angels.includes(e.kind) || (e.kind === 'notice' && !e.agent_id) ? 'angel' : '';
+  const evClass = (e) => ['improvise', 'plan', 'open_stall', 'proposal', 'law', 'arrival', 'property'].includes(e.kind) ? 'idea' : FILTERS.trouble.includes(e.kind) ? 'trouble' : FILTERS.angels.includes(e.kind) || (e.kind === 'notice' && !e.agent_id) ? 'angel' : '';
   const evLine = (e, cls) => `<div class="ev ${evClass(e)} ${cls || ''}"><span class="ic">${ICON[e.kind] || '•'}</span><span>${evText(e)}</span></div>`;
 
   // ---------------------------------------------------------------- map

@@ -24,6 +24,17 @@ RECENT_TICKS = 3
 PLAN_DAY_START = 5  # hours after midnight when a new day of plans begins
 
 
+def _ownership(ctx: TickContext, agent: Agent, loc) -> str | None:
+    if loc.kind != "shop":
+        return None
+    if loc.owner_id is None:
+        return f"empty shop for sale, {ctx.settings.economy.property_price_cents / 100:.0f} asaps"
+    if loc.owner_id == agent.id:
+        return "your own shop"
+    owner = ctx.session.get(Agent, loc.owner_id)
+    return f"shop owned by {describe(ctx.session, agent.id, owner) if owner else 'someone'}"
+
+
 def todays_plan(ctx: TickContext, agent: Agent) -> str | None:
     """The plan this citizen wrote this simulated day, if any."""
     from asapville.world.clock import Clock
@@ -60,7 +71,7 @@ def build_perception(ctx: TickContext, agent: Agent) -> Perception:
                     sells=economy.shop_items(cfg, loc.key) + sorted(
                         {st.item for st in economy.stalls_at(s, loc.id)
                          if st.qty > 0 and st.owner_id != agent.id}),
-                    jobs=list(economy.jobs_at(cfg, loc.key)))
+                    jobs=list(economy.jobs_at(cfg, loc.key)), note=_ownership(ctx, agent, loc))
         for loc in sorted(ctx.locations.values(), key=lambda x: x.id)
         if loc.id != here.id and (loc.kind != "home" or loc.id == agent.home_id)
     ]
@@ -120,6 +131,7 @@ def build_perception(ctx: TickContext, agent: Agent) -> Perception:
         location_key=here.key,
         location_name=here.name,
         location_kind=here.kind,
+        location_note=_ownership(ctx, agent, here),
         is_home=here.id == agent.home_id,
         here=seen,
         destinations=dests,
@@ -152,7 +164,8 @@ def render_perception(p: Perception) -> str:
     """Perception as second-person prose for the dynamic part of the prompt."""
     lines = [
         f"It is {p.time_label} ({p.part_of_day}). Season: {p.season}. Weather: {p.weather}.",
-        f"You are at {p.location_name} [{p.location_key}]" + (" — your home." if p.is_home else "."),
+        f"You are at {p.location_name} [{p.location_key}]" + (" — your home." if p.is_home else ".")
+        + (f" ({p.location_note}.)" if p.location_note else ""),
     ]
     if p.here:
         lines.append("People here (use ref to address them):")
@@ -199,6 +212,8 @@ def render_perception(p: Perception) -> str:
             extra.append("sells " + ", ".join(d.sells))
         if d.jobs:
             extra.append("hires " + ", ".join(d.jobs))
+        if d.note:
+            extra.append(d.note)
         tail = " — " + "; ".join(extra) if extra else ""
         lines.append(f"  - {d.key}: {d.name} ({d.travel_hours}h){tail}")
     if p.people:

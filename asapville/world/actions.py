@@ -545,6 +545,12 @@ class OpenStall:
             return "You need to stand somewhere to open a business."
         if here.kind == "home" and here.id != agent.home_id:
             return "You can't open a business in someone else's home."
+        if here.kind == "shop" and here.owner_id != agent.id:
+            if here.owner_id is None:
+                price = ctx.settings.economy.property_price_cents / 100
+                return f"{here.name} is for sale ({price:.2f} asaps); buy it with buy_property first."
+            owner = ctx.session.get(Agent, here.owner_id)
+            return f"{here.name} belongs to {owner.name if owner else 'someone'}; only they trade here."
         name = str(d.action_args.get("name", "")).strip()
         item = economy.clean_item(d.action_args.get("item", ""))
         if len(name) < 2 or not item:
@@ -1038,4 +1044,45 @@ class Attack:
             record_deed(ctx.session, w.id, agent, ctx.tick,
                         f"attacked {victim.name.split()[0]} before my eyes", trust=-0.3, affinity=-0.3)
         nudge_reputation(agent, -0.1 * (1 + len(onlookers)))
+        return ActionResult(ok=True)
+
+
+# --------------------------------------------------------------------------- property
+BUY_PROPERTY_USAGE = ("buy_property {}  -- buy the empty shop you stand in from the town; "
+                      "then it is yours to trade in")
+
+
+@register(ActionName.BUY_PROPERTY, BUY_PROPERTY_USAGE)
+class BuyProperty:
+    @staticmethod
+    def validate(ctx: TickContext, agent: Agent, d: Decision, perceived: set[int]) -> str | None:
+        here = _here(ctx, agent)
+        if here is None or here.kind != "shop":
+            return "Only the empty shops can be bought; go and stand in one."
+        if here.owner_id is not None:
+            owner = ctx.session.get(Agent, here.owner_id)
+            return f"{here.name} already belongs to {owner.name if owner else 'someone'}."
+        price = ctx.settings.economy.property_price_cents
+        if agent.money_cents < price:
+            return f"{here.name} costs {price / 100:.2f} asaps; you have {agent.money_cents / 100:.2f}."
+        return None
+
+    @staticmethod
+    def execute(ctx: TickContext, agent: Agent, d: Decision) -> ActionResult:
+        here = _here(ctx, agent)
+        assert here is not None
+        price = ctx.settings.economy.property_price_cents
+        ws = ctx.session.get(WorldState, 1)
+        assert ws is not None
+        agent.money_cents -= price
+        ws.treasury_cents += price
+        here.owner_id = agent.id
+        emit(ctx.session, tick=ctx.tick, kind="property", actor=agent, location_id=here.id,
+             visibility="public",
+             summary=f"{agent.name} bought {here.name} for {price / 100:.2f}",
+             data={"place": here.key, "cents": price},
+             actor_memory=f"I bought {here.name} from the town for {price / 100:.2f} asaps. It is mine; "
+                          "only I can trade there (open_stall).",
+             witness_memory=f"{{actor}} bought {here.name}.", importance=7)
+        nudge_reputation(agent, 0.02)
         return ActionResult(ok=True)
