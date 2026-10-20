@@ -228,3 +228,6 @@ Each of these came from watching the real town:
   omelette, porridge, pancakes, fish pie, grilled fish, berry tart, cheese, fish hotpot). Anyone
   can `cook` at home or in a shop or business they own; a good dish lifts the mood (`food.mood`).
   Cook, open a stall, set a price: that is a restaurant. No recipe is forced on anyone.
+- **Against routine.** Morning plans use the stronger model, see yesterday's plan and the last
+  two days' waking hours, and must include one step that is new or toward an ambition. Two days
+  of nothing but work, food and walking is noticed in perception and costs mood each day.

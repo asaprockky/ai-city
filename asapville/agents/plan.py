@@ -28,6 +28,12 @@ Decide what YOU want from today, guided by your nature, ambitions, fears, the pe
 have met and what you see the town lacks. Be concrete and in character: places, people, \
 things to make or do. Two to four short steps, in your own voice.
 
+A day that is only work, food and sleep is a wasted day. At least one step must be something \
+you have not done before, or a real move toward one of your ambitions: make or cook something, \
+open or buy a business, court or befriend someone, borrow to build, propose a law, start a \
+club, a feud, a scheme, a craft, a celebration. Invent; the town has room for it. Don't repeat \
+yesterday's plan.
+
 Reply with ONLY a JSON object: {"plan": "<your plan for today>", "mood": "<one or two words>"}"""
 
 _FENCE = re.compile(r"^```(?:json)?\s*|\s*```$", re.MULTILINE)
@@ -51,10 +57,15 @@ def parse_plan(text: str) -> PlanReply:
 
 async def plan_day(*, gateway: LLMGateway, agent_id: int, tier: int, model: str, effort: str | None,
                    persona: str, perception: Perception, tick: int,
-                   max_tokens: int = 1024) -> PlanReply | None:
+                   max_tokens: int = 1024, yesterday: str | None = None,
+                   lately: str | None = None) -> PlanReply | None:
     """The citizen's own plan for today, or None if the call failed (they just live the day)."""
-    prompt = (render_perception(perception)
-              + "\n\nWhat do you want to do with today? Reply with only the JSON.")
+    prompt = render_perception(perception)
+    if lately:
+        prompt += f"\n\nYour waking hours of the last two days: {lately}."
+    if yesterday:
+        prompt += f"\nYesterday you planned: {yesterday}"
+    prompt += "\n\nWhat do you want to do with today? Reply with only the JSON."
     req = LLMRequest(
         purpose="plan", model=model, tier=tier, effort=effort, system_rules=PLAN_RULES,
         system_persona=persona, messages=[ChatMessage(role="user", content=prompt)],

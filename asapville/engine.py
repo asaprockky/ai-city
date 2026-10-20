@@ -42,6 +42,7 @@ log = logging.getLogger("asapville.engine")
 WAKE_ENERGY = 70.0
 LASTING_IMPORTANCE = 7  # memories this important stay with a citizen beyond the last few hours
 LASTING_MEMORIES = 5
+ROUT_MOOD = 6.0  # what a day of pure routine costs in mood
 STARVING_AWAKE = 90.0  # nobody sleeps through this much hunger
 REFLEX_HUNGER = 60.0  # without an LLM turn, a body this hungry eats what it carries
 REFLEX_ENERGY = 15.0
@@ -192,11 +193,26 @@ class World:
             return 0
         cfg = self.settings.llm
 
+        from asapville.db.models import Memory
+        from asapville.world.perception import routine
+
+        def lately(a: Agent) -> str | None:
+            counts, _ = routine(ctx, a)
+            return ", ".join(f"{k} {n}" for k, n in counts.items()) or None
+
+        def yesterday(a: Agent) -> str | None:
+            m = ctx.session.scalar(select(Memory).where(Memory.agent_id == a.id, Memory.kind == "plan",
+                                                        Memory.importance == 5)
+                                   .order_by(Memory.created_at_tick.desc()).limit(1))
+            return m.content if m else None
+
         async def one(a: Agent):
+            # a day's plan is where a life's direction comes from: always the stronger model
             return a, await plan_day(
-                gateway=self.gateway, agent_id=a.id, tier=a.tier, model=model_for(a, cfg.models),
+                gateway=self.gateway, agent_id=a.id, tier=a.tier, model=cfg.models.sonnet,
                 effort=effort_for(a, cfg.effort), persona=self.persona_for(a),
-                perception=build_perception(ctx, a), tick=ctx.tick, max_tokens=cfg.max_output_tokens)
+                perception=build_perception(ctx, a), tick=ctx.tick, max_tokens=cfg.max_output_tokens,
+                yesterday=yesterday(a), lately=lately(a))
 
         made = 0
         for a, reply in await asyncio.gather(*(one(a) for a in todo)):
@@ -336,6 +352,14 @@ class World:
                        "text": "The town council sets today's wages: " + "; ".join(parts)
                                + ". Jobs nobody does pay more each day; crowded ones pay less.",
                        "author": "the town council"})
+        from asapville.world.perception import routine
+
+        for a in agents:
+            if a.alive and routine(ctx, a)[1]:  # the same days over and over wear a person down
+                a.mood = max(0.0, a.mood - ROUT_MOOD)
+                remember(ctx.session, a.id, ctx.tick, "reflection",
+                         "Another day of nothing but work, food and sleep. I want more from my life.",
+                         importance=6)
         for a in agents:
             new_tier = tier_for(a.role, a.money_cents, self.settings.tiers)
             if new_tier != a.tier:

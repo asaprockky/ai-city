@@ -271,3 +271,22 @@ async def test_a_secret_deal_is_not_forgotten_after_a_day(world, sessions, setti
     await world.step()
     req = next(r for r in fake.requests if r.purpose == "decide" and r.agent_id == 1)
     assert "Things you remember" in req.messages[0].content and "paid" in req.messages[0].content
+
+
+async def test_a_life_of_pure_routine_is_noticed_and_plans_ask_for_more(world, sessions, fake):
+    from asapville.db.models import AgentTick
+    from asapville.world.perception import routine
+
+    with sessions() as s:
+        for t in range(30):
+            s.add(AgentTick(tick=t, agent_id=1, location_id=1, hunger=50, energy=50, social=50, health=90,
+                            money_cents=100, mood=50, asleep=False, action="work" if t % 2 else "eat"))
+        s.get(WorldState, 1).tick = 30
+        s.commit()
+        ctx = _ctx(world, s, tick=30)
+        counts, rut = routine(ctx, s.get(Agent, 1))
+        assert rut and counts["work"] == 15
+    await world.step()
+    req = next(r for r in fake.requests if r.purpose == "plan" and r.agent_id == 1)
+    assert "work 15" in req.messages[0].content and "wearing on you" in req.messages[0].content
+    assert "not done before" in req.system_rules and req.model == world.settings.llm.models.sonnet

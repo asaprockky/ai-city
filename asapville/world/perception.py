@@ -58,6 +58,35 @@ def _kitchen(ctx: TickContext, agent: Agent, here) -> str | None:
     return None
 
 
+ROUTINE = {"work", "eat", "buy", "move", "rest", "sleep", "idle", None}
+ROUTINE_WINDOW = 48
+
+
+def routine(ctx: TickContext, agent: Agent) -> tuple[dict[str, int], bool]:
+    """What a citizen did with their waking hours lately, and whether it was nothing but routine."""
+    from collections import Counter
+
+    from asapville.db.models import AgentTick
+
+    rows = ctx.session.scalars(select(AgentTick.action).where(
+        AgentTick.agent_id == agent.id, AgentTick.tick >= ctx.tick - ROUTINE_WINDOW,
+        AgentTick.asleep.is_(False)))
+    counts = Counter(a for a in rows if a not in ("sleep", None))
+    total = sum(counts.values())
+    plain = sum(n for a, n in counts.items() if a in ROUTINE)
+    return dict(counts.most_common()), total >= 20 and plain >= 0.85 * total
+
+
+def routine_line(ctx: TickContext, agent: Agent) -> str | None:
+    counts, rut = routine(ctx, agent)
+    if not rut:
+        return None
+    did = ", ".join(f"{a} {n}" for a, n in list(counts.items())[:5])
+    return (f"For two days you have done little but work, eat and walk ({did}). The sameness is "
+            "wearing on you; you crave something different: something you have never done, a person, "
+            "a craft, a venture, a step toward what you really want.")
+
+
 def todays_plan(ctx: TickContext, agent: Agent) -> str | None:
     """The plan this citizen wrote this simulated day, if any."""
     from asapville.world.clock import Clock
@@ -195,6 +224,7 @@ def build_perception(ctx: TickContext, agent: Agent) -> Perception:
         businesses=mine,
         bank=bank.describe(s, cfg, agent, ctx.tick),
         kitchen=_kitchen(ctx, agent, here),
+        routine=routine_line(ctx, agent),
         bank_offer=(f"AsapBank: deposit savings (they earn {cfg.bank.deposit_rate:.1%} a day), withdraw, "
                     f"borrow up to {bank.can_borrow(s, cfg, agent, ctx.tick) / 100:.2f} asaps more "
                     f"({cfg.bank.loan_rate:.0%} a day, due in {cfg.bank.loan_days} days), or repay"
@@ -237,6 +267,8 @@ def render_perception(p: Perception) -> str:
         lines.append(p.bank_offer + ".")
     if p.kitchen:
         lines.append(p.kitchen)
+    if p.routine:
+        lines.append(p.routine)
     if p.job:
         boss = f" for {p.employer}, who owns it" if p.employer else ""
         lines.append(f"Your job: {p.job} at {p.workplace}{boss}, {(p.wage_cents or 0) / 100:.2f} asaps per "

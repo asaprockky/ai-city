@@ -206,6 +206,7 @@ class Perception(BaseModel):
     bank: str | None = None  # their AsapBank account, in words
     bank_offer: str | None = None  # at the bank: what it will do for them
     kitchen: str | None = None  # what they could cook, and where
+    routine: str | None = None  # set when their days have been nothing but routine
     shop: list[ShopItem] = Field(default_factory=list)  # for sale where the agent stands
     jobs_here: list[JobHere] = Field(default_factory=list)
     plan: str | None = None  # the citizen's own plan for today, in their words
