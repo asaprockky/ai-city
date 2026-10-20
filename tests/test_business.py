@@ -50,8 +50,8 @@ async def test_a_citizen_buys_the_bakery_and_runs_it(world, sessions, settings):
         ws = s.get(WorldState, 1)
         fund, purse, pay = ws.treasury_cents, owner.money_cents, baker.money_cents
         assert _do(ctx, baker, ActionName.WORK) is None
-        assert baker.money_cents == pay + 400 and owner.money_cents == purse - 400
-        assert ws.treasury_cents == fund
+        assert baker.money_cents == pay + 380 and owner.money_cents == purse - 400  # 5% income tax
+        assert ws.treasury_cents == fund + 20
         assert "for " + owner.name + ", who owns it" in render_perception(build_perception(ctx, baker))
 
         # bread sales go to the owner, at the owner's price
@@ -59,7 +59,7 @@ async def test_a_citizen_buys_the_bakery_and_runs_it(world, sessions, settings):
         _put(ctx, buyer, "bakery")
         buyer.money_cents, purse = 1000, owner.money_cents
         assert _do(ctx, buyer, ActionName.BUY, item="bread") is None
-        assert buyer.money_cents == 650 and owner.money_cents == purse + 350
+        assert buyer.money_cents == 650 and owner.money_cents == purse + 315  # 10% sales tax
         assert economy.price_of(settings, "bread", s, at="market") == 300  # only at the bakery
 
         # the town can't vote on a wage a citizen pays

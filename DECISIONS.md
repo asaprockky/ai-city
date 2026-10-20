@@ -231,3 +231,7 @@ Each of these came from watching the real town:
 - **Against routine.** Morning plans use the stronger model, see yesterday's plan and the last
   two days' waking hours, and must include one step that is new or toward an ambition. Two days
   of nothing but work, food and walking is noticed in perception and costs mood each day.
+- **No demand, no wage; taxes.** A shelf holding `shelf_cap` (40) of an item takes no more, so a
+  job whose outputs all pile up unsold pays nothing until people buy. The town takes 5% of every
+  wage and 10% of every sale by a citizen's business or stall; it pays the wages of the
+  businesses it still owns (farm, mill, quarry, the herder's and fisher's work).

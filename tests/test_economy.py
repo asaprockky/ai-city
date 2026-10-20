@@ -74,14 +74,14 @@ async def test_jobs_and_the_production_chain(world, sessions, settings):
         assert a.role == "miller"
         money, fund = a.money_cents, ws.treasury_cents
         actions.execute(ctx, a, work)  # 3 grain -> 3 flour
-        assert a.money_cents == money + 300 and ws.treasury_cents == fund - 300
+        assert a.money_cents == money + 285 and ws.treasury_cents == fund - 285  # 5% comes back as tax
         assert economy.stock_qty(s, ctx.by_key["farm"].id, "grain") == 9
         # the miller delivers flour straight to the bakery
         assert economy.stock_qty(s, ctx.by_key["bakery"].id, "flour") == 9
         # run the farm dry: the mill stops and the worker is not paid
         economy.stock_add(s, ctx.by_key["farm"].id, "grain", -9)
         actions.execute(ctx, a, work)
-        assert a.money_cents == money + 300
+        assert a.money_cents == money + 285
         ev = s.scalars(select(Event).where(Event.kind == "work").order_by(Event.id.desc())).first()
         assert ev.data["success"] is False and ev.data["missing"] == "grain"
         # a farmer refills it; vegetables go straight to the market
@@ -253,3 +253,18 @@ async def test_an_empty_input_shelf_passes_the_blame_up_even_if_nobody_tried(wor
             emit(s, tick=t, kind="work", actor=agents[2], visibility="local", summary="no flour",
                  data={"job": "baker", "success": False, "missing": "flour"})
         assert economy.shortages(s, settings, 0) == {"farmer": 4}
+
+
+async def test_no_buyers_no_work_no_wage(world, sessions, settings):
+    with sessions() as s:
+        ctx = _ctx(world, s)
+        a = s.get(Agent, 1)
+        a.role, a.energy = "quarryman", 80
+        _put(ctx, a, "quarry")
+        quarry = ctx.by_key["quarry"]
+        economy.stock_add(s, quarry.id, "stone", settings.economy.shelf_cap)
+        money = a.money_cents
+        actions.execute(ctx, a, Decision(thought="", action=ActionName.WORK))
+        assert a.money_cents == money
+        ev = s.scalar(select(Event).where(Event.kind == "work", Event.agent_id == a.id))
+        assert ev.data["missing"] == "demand" and "nobody is buying" in ev.summary

@@ -391,6 +391,19 @@ class Work:
                                   f"{where}; nothing to do until someone makes some.",
                      witness_memory="{actor} stood idle at work; the supplies had run out.", importance=3)
                 return ActionResult(ok=True)
+        cap = ctx.settings.economy.shelf_cap
+        full = [item for item in spec.makes
+                if economy.stock_qty(ctx.session, ctx.by_key.get(spec.deliver.get(item, spec.workplace),
+                                                                 here).id, item) >= cap]
+        if spec.makes and len(full) == len(spec.makes):
+            emit(ctx.session, tick=ctx.tick, kind="work", actor=agent, location_id=here.id,
+                 summary=f"{agent.name} came to work as {agent.role}, but nobody is buying: "
+                         f"the shelves are full of {', '.join(full)}",
+                 data={"job": agent.role, "success": False, "missing": "demand", "full": full},
+                 actor_memory=f"No work and no pay today: the shelves are already full of {', '.join(full)} "
+                              "that nobody is buying. Until people buy, there is nothing to make.",
+                 importance=4)
+            return ActionResult(ok=True)
         wage = economy.wage_of(ctx.session, ctx.settings, agent.role)
         boss = economy.owner_of(ctx.session, here)
         if boss is not None and boss.id == agent.id:
@@ -427,13 +440,15 @@ class Work:
             made.append(f"{qty} {item}" + (f" ({qty - kept} to {dest.name})" if kept else
                                           f" to {dest.name}" if dest.id != here.id else ""))
         economy.credit(ctx.session, here, -wage)
-        agent.money_cents += wage
+        taxed = economy.tax(ctx.session, wage, ctx.settings.economy.income_tax)
+        agent.money_cents += wage - taxed
         what = ", ".join(made) or "an hour's labour"
         emit(ctx.session, tick=ctx.tick, kind="work", actor=agent, location_id=here.id,
              summary=f"{agent.name} worked as {agent.role}: {what}, earned {wage / 100:.2f}",
-             data={"job": agent.role, "success": True, "made": spec.makes, "wage_cents": wage},
+             data={"job": agent.role, "success": True, "made": spec.makes, "wage_cents": wage,
+                   "tax_cents": taxed},
              actor_memory=f"I worked an hour as {agent.role} ({what}) and earned "
-                          f"{wage / 100:.2f} asaps.",
+                          f"{wage / 100:.2f} asaps ({(wage - taxed) / 100:.2f} after the town's tax).",
              witness_memory="{actor} was hard at work.", importance=2)
         return ActionResult(ok=True)
 
@@ -495,7 +510,9 @@ class Buy:
             return _buy_from_stall(ctx, agent, stall, qty)
         price = economy.price_of(ctx.settings, item, ctx.session, at=here.key) or 0
         agent.money_cents -= price * qty
-        economy.credit(ctx.session, here, price * qty)  # the shop's owner, or the town fund
+        taxed = economy.tax(ctx.session, price * qty, ctx.settings.economy.sales_tax) \
+            if economy.owner_of(ctx.session, here) is not None else 0
+        economy.credit(ctx.session, here, price * qty - taxed)  # the shop's owner, or the town fund
         if item not in ctx.settings.economy.unlimited:
             economy.stock_add(ctx.session, here.id, item, -qty)
         if item in ctx.settings.economy.served:
@@ -523,10 +540,12 @@ def _buy_from_stall(ctx: TickContext, agent: Agent, stall, qty: int) -> ActionRe
     from asapville.world.events import remember
 
     owner = ctx.session.get(Agent, stall.owner_id)
+    from asapville.world import economy
+
     cents = stall.price_cents * qty
     agent.money_cents -= cents
     if owner is not None:
-        owner.money_cents += cents
+        owner.money_cents += cents - economy.tax(ctx.session, cents, ctx.settings.economy.sales_tax)
     stall.qty -= qty
     stall.sold += qty
     inv = dict(agent.inventory or {})

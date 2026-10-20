@@ -54,8 +54,8 @@ async def test_a_citizen_runs_a_business(world, sessions, settings):
         assert actions.validate(ctx, buyer, buy, set()) is None
         actions.execute(ctx, buyer, buy)
         assert buyer.inventory == {"bread": 2} and buyer.money_cents == 1100
-        assert ruth.money_cents == 900 and stall.qty == 3 and stall.sold == 2
-        assert s.get(WorldState, 1).treasury_cents == fund  # the town took nothing
+        assert ruth.money_cents == 810 and stall.qty == 3 and stall.sold == 2
+        assert s.get(WorldState, 1).treasury_cents == fund + 90  # the town's 10% sales tax
         memories = s.scalars(select(Memory).where(Memory.agent_id == ruth.id))
         assert any("sold 2 bread" in m.content for m in memories)
 

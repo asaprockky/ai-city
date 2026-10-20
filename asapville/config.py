@@ -189,6 +189,9 @@ class EconomyCfg(BaseModel):
     work_energy_cost: float = 5.0
     property_price_cents: int = 30_000
     business_prices: dict[str, int] = Field(default_factory=dict)  # location key -> price to buy it
+    shelf_cap: int = 40  # a shelf holding this many of an item buys no more of it: no demand, no wage
+    sales_tax: float = 0.10  # the town's share of every sale by a citizen's business or stall
+    income_tax: float = 0.05  # the town's share of every wage
     notice_ticks: int = 24  # how long a notice stays on the town board
 
 

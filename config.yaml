@@ -142,6 +142,9 @@ economy:
     farm: {grain: 12}
   work_energy_cost: 5
   property_price_cents: 30000  # an empty shop costs 300 asaps, paid to the town fund
+  shelf_cap: 40                # a shelf with 40 of an item takes no more: no buyer, no work, no wage
+  sales_tax: 0.10              # 10% of every sale by a citizen's business or stall goes to the town
+  income_tax: 0.05             # 5% of every wage goes to the town
   business_prices:             # the town sells its businesses too; the buyer keeps the takings,
     farm: 40000                # pays the wages and sets wages and prices
     mill: 40000

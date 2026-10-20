@@ -112,6 +112,16 @@ def pay(session: Session, payer: Location | None, payee: Location | None, cents:
     return cents
 
 
+def tax(session: Session, cents: int, rate: float) -> int:
+    """Move `rate` of `cents` into the town fund; returns the tax taken (the caller deducts it)."""
+    t = int(cents * rate)
+    if t > 0:
+        ws = session.get(WorldState, 1)
+        assert ws is not None
+        ws.treasury_cents += t
+    return t
+
+
 def owned_job(session: Session, settings: Settings, job: str) -> Agent | None:
     """The citizen who owns the workplace of a job, if any (they set its wage)."""
     spec = settings.economy.jobs.get(job)
