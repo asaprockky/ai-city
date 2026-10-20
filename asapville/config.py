@@ -95,6 +95,8 @@ class NeedsCfg(BaseModel):
     health_regen: float = 0.5
     collapse_energy: float = 0.0
     rough_sleep_mood_penalty: float = 10.0
+    boredom_mood: float = 8.0  # eating the same food three times running
+    variety_mood: float = 5.0  # eating something not had lately
 
 
 class SleepCfg(BaseModel):

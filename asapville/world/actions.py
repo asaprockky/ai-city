@@ -82,6 +82,14 @@ def execute(ctx: TickContext, agent: Agent, d: Decision) -> ActionResult:
     return REGISTRY[d.action].execute(ctx, agent, d)
 
 
+def _savour(ctx: TickContext, agent: Agent, item: str) -> str | None:
+    """Taste: the same food three times running spoils the mood; something new lifts it."""
+    diet, change, feeling = needs_rules.taste(list(agent.diet or []), item, ctx.settings.needs)
+    agent.diet = diet
+    agent.mood = needs_rules.clamp(agent.mood + change)
+    return feeling
+
+
 def _here(ctx: TickContext, agent: Agent) -> Location | None:
     return ctx.locations.get(agent.location_id) if agent.location_id else None
 
@@ -193,8 +201,11 @@ class Eat:
         food = ctx.settings.food[item]
         agent.hunger = needs_rules.eat(agent.hunger, food.nutrition)
         agent.health = needs_rules.clamp(agent.health + food.health)
+        feeling = _savour(ctx, agent, item)
         emit(ctx.session, tick=ctx.tick, kind="eat", actor=agent, location_id=agent.location_id,
-             summary=f"{agent.name} ate {item}", actor_memory=f"I ate some {item}.",
+             summary=f"{agent.name} ate {item}" + (f" ({feeling})" if feeling else ""),
+             data={"item": item, "feeling": feeling},
+             actor_memory=f"I ate some {item}." + (f" {feeling.capitalize()}." if feeling else ""),
              witness_memory=f"{{actor}} ate some {item}.", importance=1)
         return ActionResult(ok=True)
 
@@ -471,8 +482,10 @@ class Buy:
             food = ctx.settings.food[item]
             agent.hunger = needs_rules.eat(agent.hunger, food.nutrition * qty)
             agent.health = needs_rules.clamp(agent.health + food.health * qty)
-            what = f"ate {qty} {item} at {here.name}"
-            mem = f"I paid {price * qty / 100:.2f} asaps for {item} at {here.name} and ate it there."
+            feeling = _savour(ctx, agent, item) if food.nutrition > 0 else None
+            what = f"ate {qty} {item} at {here.name}" + (f" ({feeling})" if feeling else "")
+            mem = f"I paid {price * qty / 100:.2f} asaps for {item} at {here.name} and ate it there." \
+                + (f" {feeling.capitalize()}." if feeling else "")
         else:
             inv = dict(agent.inventory or {})
             inv[item] = inv.get(item, 0) + qty

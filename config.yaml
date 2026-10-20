@@ -65,6 +65,8 @@ needs:                       # all needs are 0..100
   health_regen: 0.5              # when fed and rested
   collapse_energy: 0.0
   rough_sleep_mood_penalty: 10.0
+  boredom_mood: 8.0              # mood lost eating the same food three times running
+  variety_mood: 5.0              # mood gained eating something not had lately
 
 sleep:
   hours: 7

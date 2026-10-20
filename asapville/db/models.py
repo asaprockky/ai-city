@@ -175,6 +175,7 @@ class Agent(Base):
 
     money_cents: Mapped[int] = mapped_column(Integer, default=0)
     inventory: Mapped[dict[str, int]] = mapped_column(JSON, default=dict)
+    diet: Mapped[list[str]] = mapped_column(JSON, default=list)  # the last few things eaten
 
     health: Mapped[float] = mapped_column(Float, default=100.0)
     hunger: Mapped[float] = mapped_column(Float, default=20.0)  # 100 = starving

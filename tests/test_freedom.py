@@ -195,3 +195,27 @@ async def test_every_gauge_reads_the_same_way(world, sessions):
         text = render_perception(build_perception(ctx, a))
         assert "higher is better): fed 11," in text and "very hungry" in text
         assert "hunger 89" not in text
+
+
+async def test_bread_gets_boring(world, sessions, settings):
+    from asapville.world.needs import sick_of, taste
+
+    cfg = settings.needs
+    diet, change, note = taste(["bread", "bread"], "bread", cfg)
+    assert change == -cfg.boredom_mood and "sick of it" in note and sick_of(diet) == "bread"
+    diet, change, note = taste(diet, "fish", cfg)
+    assert change == cfg.variety_mood and "change from bread" in note and sick_of(diet) is None
+    assert taste([], "bread", cfg)[1] == 0
+    with sessions() as s:
+        import random
+
+        from asapville.db.models import Location
+        from asapville.world.perception import build_perception, render_perception
+
+        a = s.get(Agent, 1)
+        a.inventory, a.diet, a.mood = {"bread": 1}, ["bread", "bread"], 50
+        ctx = TickContext(session=s, settings=settings, tick=0, time=world.clock.at(0), rng=random.Random(1),
+                          locations={loc.id: loc for loc in s.scalars(select(Location))})
+        actions.execute(ctx, a, Decision(thought="", action=ActionName.EAT, action_args={"item": "bread"}))
+        assert a.mood == 42 and a.diet == ["bread", "bread", "bread"]
+        assert "sick of eating bread" in render_perception(build_perception(ctx, a))

@@ -10,7 +10,7 @@ from asapville.db.models import Agent, Event, Memory, Stall
 from asapville.world import economy
 from asapville.world.actions import TickContext, available_usages
 from asapville.world.map import travel_ticks
-from asapville.world.needs import describe_needs
+from asapville.world.needs import describe_needs, sick_of
 from asapville.world.social import describe, knows_name, looks_of
 
 _DOING = {
@@ -123,7 +123,8 @@ def build_perception(ctx: TickContext, agent: Agent) -> Perception:
         is_home=here.id == agent.home_id,
         here=seen,
         destinations=dests,
-        body=describe_needs(agent.hunger, agent.energy, agent.social, agent.health),
+        body=describe_needs(agent.hunger, agent.energy, agent.social, agent.health)
+        + ([f"you are sick of eating {bored}"] if (bored := sick_of(list(agent.diet or []))) else []),
         hunger=round(agent.hunger),
         energy=round(agent.energy),
         health=round(agent.health),

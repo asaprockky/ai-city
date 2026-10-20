@@ -123,3 +123,23 @@ def describe_needs(hunger: float, energy: float, social: float, health: float) -
     elif health <= 60:
         out.append("you feel a bit unwell")
     return out
+
+
+DIET_MEMORY = 5  # meals remembered for taste
+
+
+def taste(diet: list[str], item: str, cfg: NeedsCfg) -> tuple[list[str], float, str | None]:
+    """(new diet, mood change, a feeling in words) for eating `item` after `diet`."""
+    recent = diet[-2:]
+    if len(recent) == 2 and all(x == item for x in recent):
+        change, note = -cfg.boredom_mood, f"{item} again; I'm sick of it"
+    elif diet and item not in diet[-DIET_MEMORY:]:
+        change, note = cfg.variety_mood, f"a welcome change from {max(set(diet), key=diet.count)}"
+    else:
+        change, note = 0.0, None
+    return (diet + [item])[-DIET_MEMORY:], change, note
+
+
+def sick_of(diet: list[str]) -> str | None:
+    """The food this citizen has eaten three times running, if any."""
+    return diet[-1] if len(diet) >= 3 and len(set(diet[-3:])) == 1 else None
