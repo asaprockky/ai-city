@@ -198,3 +198,18 @@ async def test_a_crowded_job_passes_a_shortage_up_even_if_it_sometimes_worked(wo
             emit(s, tick=t, kind="work", actor=agents[4], visibility="local", summary="no flour",
                  data={"job": "baker", "success": False, "missing": "flour"})
         assert economy.shortages(s, settings, 0) == {"farmer": 5}
+
+
+async def test_a_farmer_leaves_a_share_at_the_farm_gate(world, sessions, settings):
+    with sessions() as s:
+        ctx = _ctx(world, s)
+        a = s.get(Agent, 1)
+        a.role, a.energy = "farmer", 80
+        _put(ctx, a, "farm")
+        farm, market = ctx.by_key["farm"], ctx.by_key["market"]
+        before = economy.stock_qty(s, market.id, "vegetables")
+        actions.execute(ctx, a, Decision(thought="", action=ActionName.WORK))
+        assert economy.stock_qty(s, farm.id, "vegetables") == 1
+        assert economy.stock_qty(s, market.id, "vegetables") == before + 2
+        text = render_perception(build_perception(ctx, a))
+        assert "For sale here: vegetables" in text

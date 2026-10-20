@@ -167,6 +167,7 @@ class JobCfg(BaseModel):
     source: str | None = None  # location key whose stock holds the inputs
     makes: dict[str, int] = Field(default_factory=dict)  # outputs per hour
     deliver: dict[str, str] = Field(default_factory=dict)  # item -> location key (default: workplace)
+    keep: dict[str, int] = Field(default_factory=dict)  # units of an output left at the workplace
 
 
 class EconomyCfg(BaseModel):

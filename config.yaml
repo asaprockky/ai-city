@@ -94,12 +94,14 @@ economy:
   shops:                       # where things are sold
     bakery: [bread]
     market: [vegetables, berries, fish]
+    farm: [vegetables]           # the farm gate
     tavern: [stew]
     clinic: [treatment]
   served: [stew, treatment]    # used on the spot, never carried
   unlimited: [stew, treatment] # the tavern kitchen and the clinic never run dry (the safety net)
   jobs:                        # take one with `apply` at the workplace; `work` there for wages
-    farmer:    {workplace: farm,   wage_cents: 250, makes: {grain: 3, vegetables: 2}, deliver: {vegetables: market}}
+    farmer:    {workplace: farm,   wage_cents: 250, makes: {grain: 3, vegetables: 3}, deliver: {vegetables: market},
+                keep: {vegetables: 1}}  # one stays at the farm gate, for whoever works the fields
     miller:    {workplace: mill,   wage_cents: 300, uses: {grain: 3}, source: farm, makes: {flour: 3}, deliver: {flour: bakery}}
     baker:     {workplace: bakery, wage_cents: 300, uses: {flour: 2}, source: bakery, makes: {bread: 4}}
     quarryman: {workplace: quarry, wage_cents: 350, makes: {stone: 2}}

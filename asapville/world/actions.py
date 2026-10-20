@@ -402,8 +402,13 @@ class Work:
         made = []
         for item, qty in spec.makes.items():
             dest = ctx.by_key.get(spec.deliver.get(item, spec.workplace), here)
-            economy.stock_add(ctx.session, dest.id, item, qty)
-            made.append(f"{qty} {item}" + (f" to {dest.name}" if dest.id != here.id else ""))
+            kept = min(qty, spec.keep.get(item, 0)) if dest.id != here.id else 0
+            if kept:  # a farm-gate share stays where it was made
+                economy.stock_add(ctx.session, here.id, item, kept)
+            if qty - kept:
+                economy.stock_add(ctx.session, dest.id, item, qty - kept)
+            made.append(f"{qty} {item}" + (f" ({qty - kept} to {dest.name})" if kept else
+                                          f" to {dest.name}" if dest.id != here.id else ""))
         ws.treasury_cents -= wage
         agent.money_cents += wage
         what = ", ".join(made) or "an hour's labour"
