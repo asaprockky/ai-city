@@ -255,6 +255,15 @@ class World:
                      data={"cause": outcome.cause_of_death})
 
     def _daily(self, ctx: TickContext, agents: list[Agent]) -> None:
+        changed = economy.adjust_wages(ctx.session, self.settings)
+        if changed:
+            parts = [f"{job} {new / 100:.2f}/h (was {old / 100:.2f})" for job, (old, new) in changed.items()]
+            emit(ctx.session, tick=ctx.tick, kind="wages", visibility="public",
+                 summary="New wages: " + ", ".join(parts),
+                 data={"changes": {j: [o, n] for j, (o, n) in changed.items()},
+                       "text": "The town council sets today's wages: " + "; ".join(parts)
+                               + ". Jobs nobody does pay more each day; crowded ones pay less.",
+                       "author": "the town council"})
         for a in agents:
             new_tier = tier_for(a.role, a.money_cents, self.settings.tiers)
             if new_tier != a.tier:

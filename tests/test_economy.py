@@ -128,3 +128,21 @@ async def test_fake_town_trades_and_works(world, sessions):
         kinds = {k for (k,) in s.execute(select(Event.kind).distinct())}
         assert {"buy", "hired", "work"} <= kinds
         assert s.get(WorldState, 1).treasury_cents != world.settings.economy.treasury_cents
+
+
+async def test_wages_follow_the_labour_market(world, sessions, settings):
+    with sessions() as s:
+        agents = list(s.scalars(select(Agent).order_by(Agent.id)))
+        for a in agents[:4]:
+            a.role = "baker"
+        changed = economy.adjust_wages(s, settings)
+        assert changed["farmer"] == (250, 312) and changed["baker"] == (300, 270)
+        assert "quarryman" in changed and "miller" in changed
+        for _ in range(20):
+            economy.adjust_wages(s, settings)
+        assert economy.wage_of(s, settings, "farmer") == 750  # capped at 3x
+        assert economy.wage_of(s, settings, "baker") == 150  # floored at 0.5x
+        ctx = _ctx(world, s)
+        _put(ctx, agents[4], "farm")
+        text = render_perception(build_perception(ctx, agents[4]))
+        assert "farmer (7.50/h, 0 working)" in text

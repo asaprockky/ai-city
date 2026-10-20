@@ -401,10 +401,10 @@ td.num, th.num { text-align: right; }
     talk: '💬', depart: '🚶', arrive: '📍', turned_away: '🚪', sleep: '🌙', wake: '☀️', eat: '🍞',
     forage: '🌿', collapse: '💫', death: '✝', invalid_action: '✗', budget_paused: '⏸', buy: '🛒',
     sell: '💰', work: '🔨', hired: '📋', quit: '🚪', notice: '📜', angel: '👁', relief: '🎁',
-    delivery: '🛻', give: '🤝', improvise: '✨', plan: '📝', open_stall: '🏪', stock_stall: '📦',
+    delivery: '🛻', give: '🤝', improvise: '✨', plan: '📝', open_stall: '🏪', stock_stall: '📦', wages: '⚖',
   };
   const FILTERS = {
-    all: null, talk: ['talk'], deeds: ['plan', 'improvise', 'open_stall', 'stock_stall', 'give', 'buy', 'sell', 'work', 'hired', 'quit', 'notice'],
+    all: null, talk: ['talk'], deeds: ['plan', 'improvise', 'open_stall', 'stock_stall', 'wages', 'give', 'buy', 'sell', 'work', 'hired', 'quit', 'notice'],
     trouble: ['collapse', 'death', 'invalid_action', 'turned_away', 'budget_paused'],
     angels: ['angel', 'relief', 'delivery'],
   };
@@ -489,6 +489,7 @@ td.num, th.num { text-align: right; }
         delivery: (q, i, p) => `Телега привезла ${q} × ${i} в ${p}`, collapse: (a) => `${a} падает без сил`, death: (a, c) => `${a} умирает (${c})`,
         turned: (a, p) => `${a}: ${p} переполнено`, invalid: (a, x, e) => `${a} пытается ${x}, но: ${e}`,
         plan: (a, p) => `${a} задумал на день: <q>${p}</q>`,
+        wages: (t) => `Новые зарплаты: ${t}`,
         openStall: (a, n, i, c, p) => `${a} открывает своё дело «${n}» (${p}): ${i} по ${c}`,
         stockStall: (a, n, q, i, c) => `${a} выкладывает товар в «${n}»: ${q} × ${i} по ${c}`,
         buyStall: (a, q, i, n, c) => `${a} покупает ${q} × ${i} в «${n}» за ${c}`,
@@ -562,6 +563,7 @@ td.num, th.num { text-align: right; }
         delivery: (q, i, p) => `A cart brings ${q} ${i} to ${p}`, collapse: (a) => `${a} collapses from exhaustion`, death: (a, c) => `${a} dies (${c})`,
         turned: (a, p) => `${a} finds ${p} full`, invalid: (a, x, e) => `${a} tries to ${x}, but: ${e}`,
         plan: (a, p) => `${a} plans the day: <q>${p}</q>`,
+        wages: (t) => `New wages: ${t}`,
         openStall: (a, n, i, c, p) => `${a} opens a business, “${n}” (${p}): ${i} at ${c}`,
         stockStall: (a, n, q, i, c) => `${a} stocks “${n}”: ${q} ${i} at ${c}`,
         buyStall: (a, q, i, n, c) => `${a} buys ${q} ${i} from “${n}” for ${c}`,
@@ -684,6 +686,7 @@ td.num, th.num { text-align: right; }
       case 'wake': return w.wake(A);
       case 'eat': { const m = /ate (.+)$/.exec(e.summary); return w.eat(A, esc(item(m ? m[1] : '?'))); }
       case 'buy': return d.stall ? w.buyStall(A, d.qty, esc(item(d.item)), esc(d.stall), money(d.cents || 0)) : w.buy(A, d.qty, esc(item(d.item)), money(d.cents || 0));
+      case 'wages': return w.wages(esc(Object.entries(d.changes || {}).map(([j, [o, n]]) => `${jobName(j)} ${money(n)} (${n > o ? '↑' : '↓'} ${money(o)})`).join(' · ')));
       case 'open_stall': return w.openStall(A, esc(d.stall), esc(item(d.item)), money(d.price || 0), place);
       case 'stock_stall': return w.stockStall(A, esc(d.stall), d.qty, esc(item(d.item)), money(d.price || 0));
       case 'sell': return w.sell(A, d.qty, esc(item(d.item)), money(d.cents || 0));

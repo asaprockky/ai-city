@@ -312,14 +312,16 @@ class Apply:
     @staticmethod
     def execute(ctx: TickContext, agent: Agent, d: Decision) -> ActionResult:
         job = str(d.action_args["job"]).strip().lower()
-        spec = ctx.settings.economy.jobs[job]
         here = _here(ctx, agent)
         assert here is not None
         agent.role = job
+        from asapville.world import economy
+
+        wage = economy.wage_of(ctx.session, ctx.settings, job)
         emit(ctx.session, tick=ctx.tick, kind="hired", actor=agent, location_id=here.id,
-             summary=f"{agent.name} took a job as {job} at {here.name} ({spec.wage_cents / 100:.2f}/h)",
-             data={"job": job, "wage_cents": spec.wage_cents},
-             actor_memory=f"I took a job as {job} at {here.name}; it pays {spec.wage_cents / 100:.2f} "
+             summary=f"{agent.name} took a job as {job} at {here.name} ({wage / 100:.2f}/h)",
+             data={"job": job, "wage_cents": wage},
+             actor_memory=f"I took a job as {job} at {here.name}; it pays {wage / 100:.2f} "
                           f"asaps an hour. I work by choosing 'work' here.",
              witness_memory=f"{{actor}} signed on as a {job} here.", importance=4)
         return ActionResult(ok=True)
@@ -377,7 +379,8 @@ class Work:
                                   f"{where}; nothing to do until someone makes some.",
                      witness_memory="{actor} stood idle at work; the supplies had run out.", importance=3)
                 return ActionResult(ok=True)
-        if ws.treasury_cents < spec.wage_cents:
+        wage = economy.wage_of(ctx.session, ctx.settings, agent.role)
+        if ws.treasury_cents < wage:
             emit(ctx.session, tick=ctx.tick, kind="work", actor=agent, location_id=here.id,
                  summary=f"{agent.name} worked as {agent.role} but the town fund could not pay",
                  data={"job": agent.role, "success": False, "missing": "wages"},
@@ -390,14 +393,14 @@ class Work:
             dest = ctx.by_key.get(spec.deliver.get(item, spec.workplace), here)
             economy.stock_add(ctx.session, dest.id, item, qty)
             made.append(f"{qty} {item}" + (f" to {dest.name}" if dest.id != here.id else ""))
-        ws.treasury_cents -= spec.wage_cents
-        agent.money_cents += spec.wage_cents
+        ws.treasury_cents -= wage
+        agent.money_cents += wage
         what = ", ".join(made) or "an hour's labour"
         emit(ctx.session, tick=ctx.tick, kind="work", actor=agent, location_id=here.id,
-             summary=f"{agent.name} worked as {agent.role}: {what}, earned {spec.wage_cents / 100:.2f}",
-             data={"job": agent.role, "success": True, "made": spec.makes, "wage_cents": spec.wage_cents},
+             summary=f"{agent.name} worked as {agent.role}: {what}, earned {wage / 100:.2f}",
+             data={"job": agent.role, "success": True, "made": spec.makes, "wage_cents": wage},
              actor_memory=f"I worked an hour as {agent.role} ({what}) and earned "
-                          f"{spec.wage_cents / 100:.2f} asaps.",
+                          f"{wage / 100:.2f} asaps.",
              witness_memory="{actor} was hard at work.", importance=2)
         return ActionResult(ok=True)
 

@@ -182,3 +182,32 @@ def open_stall(session: Session, agent: Agent, here: Location, name: str, item: 
 def stall_payload(s: Stall) -> dict[str, Any]:
     return {"id": s.id, "owner_id": s.owner_id, "location_id": s.location_id, "name": s.name,
             "item": s.item, "price": s.price_cents, "qty": s.qty, "sold": s.sold, "opened": s.opened_tick}
+
+
+# The labour market: each midnight a job nobody holds pays more, a crowded one pays less.
+WAGE_UP, WAGE_DOWN, CROWDED = 1.25, 0.9, 3
+WAGE_MIN, WAGE_MAX = 0.5, 3.0  # bounds, as multiples of the base wage in config
+
+
+def wage_of(session: Session, settings: Settings, job: str) -> int:
+    ws = session.get(WorldState, 1)
+    base = settings.economy.jobs[job].wage_cents
+    return int((ws.wages or {}).get(job, base)) if ws is not None else base
+
+
+def adjust_wages(session: Session, settings: Settings) -> dict[str, tuple[int, int]]:
+    """Move every wage one step toward what the town needs. Returns {job: (old, new)} for changes."""
+    ws = session.get(WorldState, 1)
+    assert ws is not None
+    wages = dict(ws.wages or {})
+    changed = {}
+    for name, job in settings.economy.jobs.items():
+        old = int(wages.get(name, job.wage_cents))
+        n = len(workers_in(session, name))
+        factor = WAGE_UP if n == 0 else WAGE_DOWN if n > CROWDED else 1.0
+        new = round(min(job.wage_cents * WAGE_MAX, max(job.wage_cents * WAGE_MIN, old * factor)))
+        wages[name] = new
+        if new != old:
+            changed[name] = (old, new)
+    ws.wages = wages
+    return changed

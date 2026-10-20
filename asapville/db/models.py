@@ -62,6 +62,7 @@ class WorldState(Base):
     temperature_c: Mapped[float] = mapped_column(Float, default=15.0)
     seed: Mapped[int] = mapped_column(Integer, default=0)
     treasury_cents: Mapped[int] = mapped_column(Integer, default=0)  # the town fund (AsapBank)
+    wages: Mapped[dict[str, int]] = mapped_column(JSON, default=dict)  # job -> cents/h today
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, onupdate=utcnow)
 
 

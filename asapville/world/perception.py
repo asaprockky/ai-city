@@ -79,11 +79,12 @@ def build_perception(ctx: TickContext, agent: Agent) -> Perception:
         place = ctx.locations[st.location_id].name
         mine.append(f'"{st.name}" at {place}: {st.item} at {st.price_cents / 100:.2f} asaps, '
                     f'{st.qty} on the stall, {st.sold} sold so far')
-    jobs_here = [JobHere(job=name, wage_cents=job.wage_cents, workers=len(economy.workers_in(s, name)))
+    jobs_here = [JobHere(job=name, wage_cents=economy.wage_of(s, cfg, name),
+                         workers=len(economy.workers_in(s, name)))
                  for name, job in economy.jobs_at(cfg, here.key).items()]
     my_job = cfg.economy.jobs.get(agent.role)
     notices = []
-    for ev in s.scalars(select(Event).where(Event.kind == "notice",
+    for ev in s.scalars(select(Event).where(Event.kind.in_(("notice", "wages")),
                                             Event.tick >= ctx.tick - cfg.economy.notice_ticks)
                         .order_by(Event.id.desc()).limit(5)):
         author_id = ev.data.get("author_id")
@@ -119,7 +120,7 @@ def build_perception(ctx: TickContext, agent: Agent) -> Perception:
         notices=notices,
         job=agent.role if my_job else None,
         workplace=ctx.by_key[my_job.workplace].name if my_job else None,
-        wage_cents=my_job.wage_cents if my_job else None,
+        wage_cents=economy.wage_of(s, cfg, agent.role) if my_job else None,
         shop=shop,
         jobs_here=jobs_here,
         plan=plan,
