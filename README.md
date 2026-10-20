@@ -26,6 +26,7 @@ export ASAPVILLE_LLM_BACKEND=anthropic
 Phase 2 demo (10 real births, then the persona cards):
 
 ```bash
+pip install -e .                # once per fresh session; provides the `asapville` command
 rm -f asapville.db
 ASAPVILLE_LLM_BACKEND=anthropic asapville init-world
 asapville personas --out reports/persona_cards.md

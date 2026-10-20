@@ -45,9 +45,10 @@ async def init_world(settings: Settings, *, population: int | None = None,
                      sessions: sessionmaker[Session] | None = None,
                      gateway: LLMGateway | None = None) -> list[Agent]:
     """Migrate the DB, create map, founding brands and the first citizens."""
-    upgrade_to_head(settings.db_url)
     if sessions is None or gateway is None:
+        # Build the LLM backend first: a missing API key fails before any DB file is touched.
         sessions, gateway = _bootstrap(settings)
+    upgrade_to_head(settings.db_url)
     with sessions() as s:
         gateway.guard.load(s)
         if s.get(WorldState, 1) is not None:
