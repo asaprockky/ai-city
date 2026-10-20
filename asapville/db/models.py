@@ -137,6 +137,36 @@ class Event(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 
 
+class AgentTick(Base):
+    """Per-tick snapshot of every agent, written at the end of each tick.
+
+    The dashboard replays the town from these rows (where everyone was, how they
+    felt, what they were thinking). Citizens never read them.
+    """
+
+    __tablename__ = "agent_ticks"
+    __table_args__ = (UniqueConstraint("tick", "agent_id", name="uq_agent_ticks_pair"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    tick: Mapped[int] = mapped_column(Integer, index=True)
+    agent_id: Mapped[int] = mapped_column(ForeignKey("agents.id"), index=True)
+    location_id: Mapped[int | None] = mapped_column(ForeignKey("locations.id"), nullable=True)
+    destination_id: Mapped[int | None] = mapped_column(ForeignKey("locations.id"), nullable=True)
+    travel_ticks_left: Mapped[int] = mapped_column(Integer, default=0)
+    asleep: Mapped[bool] = mapped_column(Boolean, default=False)
+    alive: Mapped[bool] = mapped_column(Boolean, default=True)
+    hunger: Mapped[float] = mapped_column(Float, default=0.0)
+    energy: Mapped[float] = mapped_column(Float, default=0.0)
+    social: Mapped[float] = mapped_column(Float, default=0.0)
+    health: Mapped[float] = mapped_column(Float, default=0.0)
+    mood: Mapped[float] = mapped_column(Float, default=0.0)
+    mood_label: Mapped[str] = mapped_column(Unicode(64), default="calm")
+    money_cents: Mapped[int] = mapped_column(Integer, default=0)
+    inventory: Mapped[dict[str, int]] = mapped_column(JSON, default=dict)
+    action: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    thought: Mapped[str | None] = mapped_column(UnicodeText, nullable=True)
+
+
 class Memory(Base):
     __tablename__ = "memories"
 

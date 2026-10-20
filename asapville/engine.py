@@ -32,6 +32,7 @@ from asapville.world.clock import Clock, in_sleep_window
 from asapville.world.events import EventBus, emit, event_payload
 from asapville.world.needs import NeedsState, tick_needs
 from asapville.world.perception import build_perception
+from asapville.world.timeline import record_tick, tick_payload
 
 log = logging.getLogger("asapville.engine")
 
@@ -269,6 +270,7 @@ class World:
             self._needs(ctx, agents, results, report)
             if self.clock.is_new_day(ws.tick):
                 self._daily(ctx, agents)
+            snapshots = record_tick(s, ws.tick, agents)
 
             ws.tick += 1
             self.gateway.flush(s)
@@ -277,7 +279,13 @@ class World:
                                         .order_by(Event.id)))
             report.events = len(new_events)
             for e in new_events:
-                self.bus.publish(event_payload(e))
+                self.bus.publish({"type": "event", **event_payload(e)})
+            self.bus.publish({
+                "type": "tick", "tick": report.tick, "label": t.label(), "hour": t.hour,
+                "day": t.day, "season": t.season, "weather": ws.weather, "mode": mode,
+                "spent_today": round(self.gateway.guard.spent_today, 4),
+                "agents": [tick_payload(row) for row in snapshots],
+            })
             return report
 
     async def run(self, *, ticks: int | None = None, realtime: bool = True) -> list[TickReport]:

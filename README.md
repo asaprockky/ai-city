@@ -16,6 +16,19 @@ pytest                          # full test suite, $0
 
 Other commands: `asapville pause`, `asapville resume`, `asapville speed 2.0`.
 
+## Watch the town live
+
+```bash
+asapville serve                 # runs the world AND a live dashboard at http://127.0.0.1:8420
+asapville serve --days 2 --fast # run two days as fast as the LLM allows, keep serving afterwards
+asapville serve --view-only     # just show the database (live if `asapville run` is on elsewhere)
+asapville export --out town.html   # one self-contained replay page, no server needed
+```
+
+The dashboard shows the map with every citizen (walking, sleeping, talking), a scrubbable
+timeline of every hour lived, each citizen's needs, mood, thoughts and persona, the event feed
+and the LLM cost ledger. Pause, resume and speed work from the page.
+
 ## Real Claude models
 
 ```bash

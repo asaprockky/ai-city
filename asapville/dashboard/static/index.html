@@ -1,0 +1,792 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Asapville Live</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bitter:wght@500;600;700&family=Source+Sans+3:ital,wght@0,400;0,500;0,600;1,400&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: a one-screen observer's desk. The town map is the hero on the left, a
+   tabbed ledger (citizens / events / costs) on the right, and the clock bar across
+   the bottom scrubs through every hour the town has lived. Phone: stacked. */
+:root {
+  --bg: #eceee7;
+  --surface: #f9f9f5;
+  --surface-2: #e3e6dc;
+  --ink: #1d251f;
+  --muted: #5e6b62;
+  --line: #cfd5c8;
+  --accent: #1f6f6b;
+  --accent-ink: #ffffff;
+  --accent-soft: #d6e8e5;
+  --land: #dfe5d2;
+  --land-2: #d2dbc2;
+  --water: #a9c9d8;
+  --road: #cbd0bf;
+  --good: #2f8a5a;
+  --warn: #c2871c;
+  --crit: #b33a30;
+  --night: #0f1a33;
+  --al-lawful: #2d7fb8;
+  --al-neutral: #8a8f58;
+  --al-selfish: #c7891a;
+  --al-cruel: #8f3b8f;
+  --al-criminal: #b33a30;
+  --shadow: 0 1px 2px rgba(20, 30, 24, .12), 0 8px 24px rgba(20, 30, 24, .08);
+  --display: "Bitter", "Iowan Old Style", Georgia, serif;
+  --body: "Source Sans 3", "Segoe UI", system-ui, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #121814; --surface: #1a221d; --surface-2: #222c26; --ink: #e6ebe4; --muted: #96a398;
+    --line: #2d3932; --accent: #5cc2ba; --accent-ink: #0d1b19; --accent-soft: #1d3b39;
+    --land: #1f2b23; --land-2: #26342c; --water: #27485a; --road: #33403a;
+    --good: #4fb97e; --warn: #e0a53a; --crit: #e06057; --night: #050912;
+    --al-lawful: #5aa6dc; --al-neutral: #b3b878; --al-selfish: #e0a53a; --al-cruel: #c070c0;
+    --al-criminal: #e06057;
+    --shadow: 0 1px 2px rgba(0,0,0,.4), 0 8px 24px rgba(0,0,0,.35);
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #121814; --surface: #1a221d; --surface-2: #222c26; --ink: #e6ebe4; --muted: #96a398;
+  --line: #2d3932; --accent: #5cc2ba; --accent-ink: #0d1b19; --accent-soft: #1d3b39;
+  --land: #1f2b23; --land-2: #26342c; --water: #27485a; --road: #33403a;
+  --good: #4fb97e; --warn: #e0a53a; --crit: #e06057; --night: #050912;
+  --al-lawful: #5aa6dc; --al-neutral: #b3b878; --al-selfish: #e0a53a; --al-cruel: #c070c0;
+  --al-criminal: #e06057;
+  --shadow: 0 1px 2px rgba(0,0,0,.4), 0 8px 24px rgba(0,0,0,.35);
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+body {
+  margin: 0; background: var(--bg); color: var(--ink);
+  font-family: var(--body); font-size: 15px; line-height: 1.45;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 0;
+}
+[hidden] { display: none !important; }
+img { max-width: 100%; }
+button, select, input { font: inherit; color: inherit; }
+button { cursor: pointer; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+h1, h2, h3 { margin: 0; font-family: var(--display); text-wrap: balance; }
+.num { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+.eyebrow { font-family: var(--mono); font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+
+.app { height: 100%; display: grid; grid-template-rows: auto 1fr auto; gap: 12px; padding-block: 12px; min-height: 0; }
+
+/* ---------- header */
+.top { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+.brand { display: flex; align-items: center; gap: 10px; }
+.brand svg { width: 30px; height: 30px; }
+.brand h1 { font-size: 22px; font-weight: 700; letter-spacing: -.01em; }
+.brand .sub { font-size: 12px; color: var(--muted); }
+.clock { display: flex; flex-direction: column; min-width: 0; }
+.clock .big { font-family: var(--display); font-size: 18px; font-weight: 600; }
+.clock .small { font-size: 12px; color: var(--muted); }
+.spacer { flex: 1; }
+.pill { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: 999px; font-size: 12px; font-weight: 600; border: 1px solid var(--line); background: var(--surface); white-space: nowrap; }
+.pill .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
+.pill.live .dot { background: var(--good); box-shadow: 0 0 0 3px color-mix(in srgb, var(--good) 25%, transparent); }
+.pill.paused .dot { background: var(--warn); }
+.pill.slow .dot { background: var(--warn); }
+.pill.off .dot { background: var(--crit); }
+.controls { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.btn { border: 1px solid var(--line); background: var(--surface); border-radius: 8px; padding: 6px 12px; font-weight: 600; font-size: 13px; }
+.btn:hover { border-color: var(--accent); }
+.btn.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.btn.icon { padding: 6px 9px; }
+select.btn { padding-right: 24px; }
+
+/* ---------- main */
+.main { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(320px, .9fr); gap: 12px; min-height: 0; }
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
+.map-wrap { position: relative; }
+.map-wrap svg { width: 100%; height: 100%; display: block; }
+.map-legend { position: absolute; left: 10px; bottom: 10px; display: flex; gap: 8px; flex-wrap: wrap; font-size: 11px; color: var(--muted); background: color-mix(in srgb, var(--surface) 85%, transparent); padding: 6px 8px; border-radius: 8px; backdrop-filter: blur(4px); }
+.map-legend span { display: inline-flex; align-items: center; gap: 4px; }
+.map-legend i { width: 9px; height: 9px; border-radius: 50%; display: inline-block; }
+.map-hint { position: absolute; right: 10px; top: 10px; font-size: 11px; color: var(--muted); background: color-mix(in srgb, var(--surface) 85%, transparent); padding: 4px 8px; border-radius: 8px; }
+
+.tabs { display: flex; border-bottom: 1px solid var(--line); padding: 0 8px; gap: 2px; }
+.tab { background: none; border: 0; padding: 10px 12px; font-weight: 600; color: var(--muted); border-bottom: 2px solid transparent; margin-bottom: -1px; }
+.tab[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--accent); }
+.tab .count { font-family: var(--mono); font-size: 11px; color: var(--muted); margin-left: 4px; }
+.tabpanel { overflow: auto; min-height: 0; flex: 1; padding: 10px; }
+
+/* citizens */
+.citizens { display: grid; gap: 8px; }
+.cit { display: grid; grid-template-columns: 40px 1fr auto; gap: 10px; align-items: center; padding: 8px 10px; border-radius: 10px; border: 1px solid transparent; background: var(--surface-2); text-align: left; width: 100%; }
+.cit:hover { border-color: var(--accent); }
+.cit.selected { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+.cit.dead { opacity: .55; }
+.avatar { width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center; font-family: var(--display); font-weight: 700; font-size: 15px; color: #fff; background: var(--al-neutral); position: relative; }
+.avatar.asleep::after { content: "z"; position: absolute; right: -3px; top: -4px; font: 700 11px var(--mono); color: var(--ink); background: var(--surface); border-radius: 50%; width: 16px; height: 16px; display: grid; place-items: center; border: 1px solid var(--line); }
+.cit .name { font-weight: 600; display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.cit .where { font-size: 12px; color: var(--muted); display: flex; gap: 6px; align-items: center; min-width: 0; }
+.cit .where span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cit .mood { font-style: italic; }
+.bars { display: grid; grid-template-columns: repeat(4, 34px); gap: 4px; }
+.bar { height: 6px; border-radius: 3px; background: var(--line); position: relative; overflow: hidden; }
+.bar i { position: absolute; inset: 0 auto 0 0; background: var(--good); border-radius: 3px; transition: width .4s; }
+.bar.warn i { background: var(--warn); } .bar.crit i { background: var(--crit); }
+.bar[title] { cursor: help; }
+.chip { font-size: 11px; font-weight: 600; padding: 1px 7px; border-radius: 999px; color: #fff; background: var(--al-neutral); letter-spacing: .02em; }
+.chip.lawful-good { background: var(--al-lawful); } .chip.neutral { background: var(--al-neutral); }
+.chip.selfish { background: var(--al-selfish); } .chip.cruel { background: var(--al-cruel); } .chip.criminal { background: var(--al-criminal); }
+.chip.soft { background: var(--surface-2); color: var(--ink); border: 1px solid var(--line); font-weight: 500; }
+
+/* events */
+.filters { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 10px; }
+.filters button { border: 1px solid var(--line); background: var(--surface); border-radius: 999px; padding: 3px 10px; font-size: 12px; font-weight: 600; color: var(--muted); }
+.filters button[aria-pressed="true"] { background: var(--accent-soft); color: var(--ink); border-color: var(--accent); }
+.feed { display: grid; gap: 4px; }
+.tickhead { position: sticky; top: -10px; background: var(--surface); padding: 8px 4px 4px; font-family: var(--mono); font-size: 11px; color: var(--muted); border-bottom: 1px solid var(--line); z-index: 1; }
+.ev { display: grid; grid-template-columns: 22px 1fr; gap: 8px; padding: 6px 6px; border-radius: 8px; align-items: start; }
+.ev.new { animation: pop .5s ease-out; }
+@keyframes pop { from { background: var(--accent-soft); } to { background: transparent; } }
+.ev .ic { width: 22px; height: 22px; border-radius: 6px; display: grid; place-items: center; background: var(--surface-2); font-size: 12px; }
+.ev.talk .ic { background: var(--accent-soft); }
+.ev.trouble .ic { background: color-mix(in srgb, var(--crit) 18%, transparent); }
+.ev .who { font-weight: 600; }
+.ev .who button { background: none; border: 0; padding: 0; font-weight: 600; color: var(--ink); text-decoration: underline dotted var(--muted); }
+.ev .txt { color: var(--ink); }
+.ev .txt.muted { color: var(--muted); }
+.ev q { font-style: italic; }
+.ev .at { font-size: 11px; color: var(--muted); }
+.empty { color: var(--muted); padding: 24px 8px; text-align: center; }
+
+/* costs */
+.stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 8px; margin-bottom: 12px; }
+.stat { background: var(--surface-2); border-radius: 10px; padding: 10px 12px; }
+.stat .v { font-family: var(--mono); font-size: 20px; font-weight: 500; }
+.stat .k { font-size: 12px; color: var(--muted); }
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+th, td { text-align: left; padding: 6px 6px; border-bottom: 1px solid var(--line); }
+th { font-family: var(--mono); font-size: 11px; font-weight: 500; color: var(--muted); letter-spacing: .04em; text-transform: uppercase; }
+td.num, th.num { text-align: right; }
+.budget { height: 8px; border-radius: 4px; background: var(--line); overflow: hidden; margin-top: 6px; }
+.budget i { display: block; height: 100%; background: var(--accent); }
+
+/* ---------- timeline bar */
+.timeline { display: grid; grid-template-columns: auto 1fr auto; gap: 12px; align-items: center; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 8px 12px; }
+.timeline .tl-left, .timeline .tl-right { display: flex; align-items: center; gap: 8px; }
+.timeline input[type=range] { width: 100%; accent-color: var(--accent); }
+.tl-mid { display: grid; gap: 2px; min-width: 0; }
+.tl-mid .lab { display: flex; justify-content: space-between; font-family: var(--mono); font-size: 11px; color: var(--muted); }
+.daystrip { height: 6px; border-radius: 3px; background: linear-gradient(90deg, var(--line), var(--line)); position: relative; overflow: hidden; }
+.daystrip i { position: absolute; top: 0; bottom: 0; background: var(--night); opacity: .35; }
+
+/* ---------- detail drawer */
+.drawer { position: absolute; inset: 0; background: var(--surface); display: flex; flex-direction: column; z-index: 3; }
+.drawer .head { display: flex; gap: 12px; align-items: center; padding: 12px; border-bottom: 1px solid var(--line); }
+.drawer .head .avatar { width: 52px; height: 52px; font-size: 20px; }
+.drawer .head h2 { font-size: 20px; }
+.drawer .head .meta { font-size: 12px; color: var(--muted); }
+.drawer .body { overflow: auto; padding: 12px; display: grid; gap: 16px; align-content: start; }
+.drawer .close { margin-left: auto; }
+.sec h3 { font-size: 12px; font-family: var(--mono); font-weight: 500; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin-bottom: 6px; }
+.thought { font-style: italic; border-left: 3px solid var(--accent); padding: 4px 10px; color: var(--ink); background: var(--surface-2); border-radius: 0 8px 8px 0; }
+.kv { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; font-size: 14px; }
+.kv dt { color: var(--muted); } .kv dd { margin: 0; }
+.needs { display: grid; gap: 6px; }
+.need { display: grid; grid-template-columns: 64px 1fr 36px; gap: 8px; align-items: center; font-size: 13px; }
+.need .bar { height: 8px; }
+.traits { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 14px; font-size: 12px; }
+.trait { display: grid; grid-template-columns: 1fr 70px; gap: 6px; align-items: center; }
+.trait .bar i { background: var(--accent); }
+.trait.dark .bar i { background: var(--crit); }
+.chips { display: flex; flex-wrap: wrap; gap: 4px; }
+.prose { max-width: 62ch; }
+.prose p { margin: 0 0 8px; }
+.minifeed { display: grid; gap: 2px; font-size: 13px; }
+.minifeed div { display: grid; grid-template-columns: 44px 1fr; gap: 8px; }
+.minifeed .t { font-family: var(--mono); font-size: 11px; color: var(--muted); padding-top: 2px; }
+.toast { position: fixed; left: 50%; bottom: calc(16px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); background: var(--ink); color: var(--bg); padding: 8px 14px; border-radius: 999px; font-size: 13px; z-index: 9; box-shadow: var(--shadow); }
+
+/* ---------- svg map pieces */
+.loc-label { font-family: var(--body); font-size: 11px; font-weight: 600; fill: var(--ink); text-anchor: middle; pointer-events: none; }
+.loc-label.small { font-size: 9px; font-weight: 500; fill: var(--muted); }
+.bld { fill: var(--surface); stroke: var(--muted); stroke-width: 1.2; }
+.bld-roof { fill: var(--accent); opacity: .85; }
+.home-roof { fill: var(--muted); }
+.plaza { fill: var(--land-2); stroke: var(--road); stroke-width: 1; }
+.tree { fill: var(--good); opacity: .8; }
+.trunk { fill: var(--muted); }
+.water { fill: var(--water); }
+.rock { fill: var(--road); stroke: var(--muted); stroke-width: .8; }
+.field { stroke: var(--land-2); stroke-width: 4; }
+.path { stroke: var(--muted); stroke-dasharray: 3 4; stroke-width: 1.2; fill: none; opacity: .7; }
+.agent { cursor: pointer; }
+.agent .body { stroke: var(--surface); stroke-width: 2; }
+.agent text { font-family: var(--display); font-weight: 700; font-size: 9px; fill: #fff; text-anchor: middle; dominant-baseline: central; pointer-events: none; }
+.agent .zz { font-family: var(--mono); font-size: 9px; fill: var(--ink); font-weight: 500; }
+.agent.asleep .body { opacity: .6; }
+.agent.dead .body { fill: var(--muted); opacity: .5; }
+.agent.selected .ring { stroke: var(--accent); stroke-width: 2.5; fill: none; }
+.agent .ring { stroke: none; fill: none; }
+.agent-name { font-family: var(--body); font-size: 9px; fill: var(--ink); text-anchor: middle; pointer-events: none; paint-order: stroke; stroke: var(--surface); stroke-width: 3px; stroke-linejoin: round; }
+.night-overlay { fill: var(--night); pointer-events: none; transition: opacity 1s; }
+.map-frame { fill: var(--land); }
+.grid-line { stroke: var(--land-2); stroke-width: .6; }
+@media (prefers-reduced-motion: no-preference) {
+  .agent { transition: transform .7s cubic-bezier(.4,.1,.3,1); }
+}
+
+/* ---------- phone */
+@media (max-width: 860px) {
+  .app { height: auto; grid-template-rows: auto auto auto auto; }
+  .main { grid-template-columns: 1fr; }
+  .map-wrap { aspect-ratio: 1 / 1; max-width: 100%; }
+  .panel.right { height: 70vh; }
+  .top .clock .big { font-size: 15px; }
+  .timeline { grid-template-columns: auto 1fr; }
+  .timeline .tl-right { grid-column: 1 / -1; justify-content: flex-end; }
+}
+</style>
+</head>
+<body>
+<script id="asapville-data" type="application/json"></script>
+<div class="app" id="app">
+  <header class="top">
+    <div class="brand" title="Asapville">
+      <svg viewBox="0 0 32 32" aria-hidden="true"><polygon points="16,2 29,9 29,23 16,30 3,23 3,9" fill="#1f6f6b"/><polyline points="9,19 16,11 23,19" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      <div><h1 id="townName">Asapville</h1><div class="sub" id="townSub">LLM citizens, real needs, real consequences</div></div>
+    </div>
+    <div class="clock">
+      <div class="big" id="clockBig">—</div>
+      <div class="small" id="clockSmall">—</div>
+    </div>
+    <div class="spacer"></div>
+    <span class="pill" id="statusPill"><span class="dot"></span><span id="statusText">connecting…</span></span>
+    <span class="pill" id="spendPill" title="Total spent on LLM calls so far"><span>$</span><span class="num" id="spendText">0.0000</span></span>
+    <div class="controls" id="liveControls" hidden>
+      <button class="btn" id="btnPause">Pause world</button>
+      <label class="eyebrow" for="speedSel">speed</label>
+      <select class="btn" id="speedSel">
+        <option value="0.5">0.5×</option><option value="1" selected>1×</option><option value="2">2×</option>
+        <option value="5">5×</option><option value="10">10×</option>
+      </select>
+    </div>
+  </header>
+
+  <section class="main">
+    <div class="panel map-wrap">
+      <svg id="map" viewBox="0 0 800 800" role="img" aria-label="Map of the town with every citizen"></svg>
+      <div class="map-hint">Click a citizen to open their file</div>
+      <div class="map-legend" id="legend"></div>
+    </div>
+    <div class="panel right" id="rightPanel" style="position:relative">
+      <div class="tabs" role="tablist">
+        <button class="tab" role="tab" aria-selected="true" data-tab="citizens">Citizens<span class="count" id="cntCitizens"></span></button>
+        <button class="tab" role="tab" aria-selected="false" data-tab="events">Events<span class="count" id="cntEvents"></span></button>
+        <button class="tab" role="tab" aria-selected="false" data-tab="costs">Costs</button>
+      </div>
+      <div class="tabpanel" id="tab-citizens" role="tabpanel"><div class="citizens" id="citizens"></div></div>
+      <div class="tabpanel" id="tab-events" role="tabpanel" hidden>
+        <div class="filters" id="filters">
+          <button aria-pressed="true" data-f="all">All</button>
+          <button aria-pressed="false" data-f="talk">Talk</button>
+          <button aria-pressed="false" data-f="move">Moves</button>
+          <button aria-pressed="false" data-f="body">Body</button>
+          <button aria-pressed="false" data-f="trouble">Trouble</button>
+        </div>
+        <div class="feed" id="feed"></div>
+      </div>
+      <div class="tabpanel" id="tab-costs" role="tabpanel" hidden></div>
+      <div class="drawer" id="drawer" hidden></div>
+    </div>
+  </section>
+
+  <footer class="timeline">
+    <div class="tl-left">
+      <button class="btn icon" id="btnFirst" title="First hour (Home)">⏮</button>
+      <button class="btn icon" id="btnPrev" title="Previous hour (←)">◀</button>
+      <button class="btn icon" id="btnPlay" title="Replay (Space)">▶</button>
+      <button class="btn icon" id="btnNext" title="Next hour (→)">▶|</button>
+    </div>
+    <div class="tl-mid">
+      <input type="range" id="scrub" min="0" max="0" value="0" aria-label="Hour of the simulation">
+      <div class="daystrip" id="daystrip"></div>
+      <div class="lab"><span id="tlStart">day 1 06:00</span><span id="tlCur">tick 0</span><span id="tlEnd"></span></div>
+    </div>
+    <div class="tl-right">
+      <button class="btn primary" id="btnLive" title="Follow the newest hour (End)">● Latest</button>
+    </div>
+  </footer>
+</div>
+
+<script>
+(function () {
+  'use strict';
+  const $ = (id) => document.getElementById(id);
+  const CELL = 40;
+  const ALIGN = { 'lawful-good': 'lawful', neutral: 'neutral', selfish: 'selfish', cruel: 'cruel', criminal: 'criminal' };
+  const alignColor = (a) => `var(--al-${ALIGN[a] || 'neutral'})`;
+  const TIER_LABEL = { notable: 'notable', manager: 'manager', worker: 'worker' };
+  const KIND_FILTER = {
+    talk: ['talk'], move: ['depart', 'arrive', 'turned_away'], body: ['sleep', 'wake', 'eat', 'forage'],
+    trouble: ['collapse', 'death', 'invalid_action', 'budget_paused'],
+  };
+  const KIND_ICON = {
+    talk: '💬', depart: '🚶', arrive: '📍', turned_away: '🚪', sleep: '🌙', wake: '☀️', eat: '🍞',
+    forage: '🌿', collapse: '💫', death: '✝', invalid_action: '✗', budget_paused: '⏸', tier_change: '↕',
+  };
+
+  // ---------------------------------------------------------------- state
+  const S = {
+    live: false, data: null, agents: new Map(), locs: new Map(), frames: [], events: [],
+    cur: 0, follow: true, playing: false, playTimer: null, selected: null, tab: 'citizens',
+    filter: 'all', ws: null, seenEvent: 0, lastRenderedTick: null, pollTimer: null,
+  };
+
+  // ---------------------------------------------------------------- helpers
+  const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const initials = (name) => name.split(/\s+/).map((w) => w[0]).slice(0, 2).join('').toUpperCase();
+  const money = (c) => (c / 100).toFixed(2);
+  const hourLabel = (h) => `${String(h).padStart(2, '0')}:00`;
+  const frameAgent = (f, id) => f.agents.find((a) => a.id === id);
+  const needClass = (v, inverted) => { const x = inverted ? 100 - v : v; return x <= 20 ? 'crit' : x <= 40 ? 'warn' : ''; };
+  const locName = (id) => (S.locs.get(id) || {}).name || '?';
+  const curFrame = () => S.frames[S.cur];
+
+  function toast(msg) {
+    let t = document.querySelector('.toast');
+    if (!t) { t = document.createElement('div'); t.className = 'toast'; document.body.appendChild(t); }
+    t.textContent = msg; t.hidden = false;
+    clearTimeout(t._h); t._h = setTimeout(() => { t.hidden = true; }, 2400);
+  }
+
+  // Where is this agent (in px) at frame index k? Travellers are interpolated along the road.
+  function agentPos(k, id) {
+    const f = S.frames[k]; const a = frameAgent(f, id); const ag = S.agents.get(id);
+    if (!a) return null;
+    if (a.loc != null) return { loc: a.loc, x: null, y: null, travelling: false };
+    const dest = S.locs.get(a.dest); if (!dest) return null;
+    let originId = ag.home_id, departTick = f.tick;
+    for (let j = k - 1; j >= 0; j--) {
+      const p = frameAgent(S.frames[j], id);
+      if (p && p.loc != null) { originId = p.loc; departTick = S.frames[j].tick + 1; break; }
+    }
+    const o = S.locs.get(originId) || dest;
+    const total = (f.tick - departTick) + a.left + 1;
+    const prog = Math.min(1, Math.max(0.08, (f.tick - departTick + 1) / Math.max(1, total)));
+    const cx = (p) => (p.x + .5) * CELL, cy = (p) => (p.y + .5) * CELL;
+    return { loc: null, travelling: true, from: o, to: dest,
+      x: cx(o) + (cx(dest) - cx(o)) * prog, y: cy(o) + (cy(dest) - cy(o)) * prog };
+  }
+
+  // ---------------------------------------------------------------- map
+  const SLOTS = [[0, 27], [-18, 27], [18, 27], [-36, 27], [36, 27], [-9, 43], [9, 43], [-27, 43], [27, 43], [0, 59], [-18, 59], [18, 59]];
+  const HOME_SLOTS = [[0, 20], [-12, 22], [12, 22], [0, 34]];
+  const PLAZA_SLOTS = [[0, 20], [-22, 12], [22, 12], [-22, 36], [22, 36], [0, 42], [-44, 24], [44, 24], [-44, 48], [44, 48], [0, 60], [-22, 60]];
+
+  function buildingSVG(l) {
+    const cx = (l.x + .5) * CELL, cy = (l.y + .5) * CELL; const k = l.kind;
+    const label = `<text class="loc-label" x="${cx}" y="${cy + 30}">${esc(l.name)}</text>`;
+    if (k === 'home') {
+      const n = l.name.replace('House No. ', '');
+      return `<g><path class="home-roof" d="M${cx - 15},${cy - 2} L${cx},${cy - 14} L${cx + 15},${cy - 2} Z"/>
+        <rect class="bld" x="${cx - 11}" y="${cy - 2}" width="22" height="16" rx="1.5"/>
+        <text class="loc-label small" x="${cx}" y="${cy + 10}">${esc(n)}</text></g>`;
+    }
+    if (k === 'square') {
+      return `<g><circle class="plaza" cx="${cx}" cy="${cy}" r="58"/><circle class="water" cx="${cx}" cy="${cy}" r="9"/>
+        <circle class="bld" cx="${cx}" cy="${cy}" r="3"/><text class="loc-label" x="${cx}" y="${cy - 62}">${esc(l.name)}</text></g>`;
+    }
+    if (k === 'forest') {
+      const trees = [[-30, -10], [-10, -24], [12, -14], [30, -2], [-22, 14], [2, 6], [24, 20], [-6, 28]].map(([dx, dy]) =>
+        `<rect class="trunk" x="${cx + dx - 1.5}" y="${cy + dy + 4}" width="3" height="8"/><path class="tree" d="M${cx + dx - 9},${cy + dy + 6} L${cx + dx},${cy + dy - 12} L${cx + dx + 9},${cy + dy + 6} Z"/>`).join('');
+      return `<g>${trees}${label.replace(cy + 30, cy + 46)}</g>`;
+    }
+    if (k === 'river') {
+      return `<g><path class="water" d="M${cx - 60},${cy - 70} C${cx - 30},${cy - 40} ${cx - 50},${cy - 10} ${cx - 20},${cy + 10} C${cx},${cy + 24} ${cx - 10},${cy + 50} ${cx + 10},${cy + 80} L${cx + 40},${cy + 80} C${cx + 20},${cy + 50} ${cx + 30},${cy + 24} ${cx + 8},${cy + 8} C${cx - 18},${cy - 12} ${cx - 2},${cy - 40} ${cx - 30},${cy - 70} Z"/>${label.replace(cy + 30, cy + 44)}</g>`;
+    }
+    if (k === 'quarry') {
+      return `<g><path class="rock" d="M${cx - 34},${cy + 14} L${cx - 20},${cy - 14} L${cx - 2},${cy - 6} L${cx + 8},${cy - 20} L${cx + 30},${cy + 2} L${cx + 34},${cy + 16} Z"/>
+        <path class="rock" d="M${cx - 10},${cy + 16} L${cx + 2},${cy + 2} L${cx + 16},${cy + 16} Z"/>${label}</g>`;
+    }
+    if (k === 'farm') {
+      const rows = [-16, -8, 0, 8, 16].map((dy) => `<line class="field" x1="${cx - 34}" y1="${cy + dy}" x2="${cx + 34}" y2="${cy + dy}"/>`).join('');
+      return `<g><rect class="plaza" x="${cx - 38}" y="${cy - 22}" width="76" height="44" rx="4"/>${rows}
+        <rect class="bld" x="${cx + 14}" y="${cy - 36}" width="20" height="14"/><path class="bld-roof" d="M${cx + 12},${cy - 36} L${cx + 24},${cy - 46} L${cx + 36},${cy - 36} Z"/>${label}</g>`;
+    }
+    const w = 52, h = 32; const x = cx - w / 2, y = cy - h / 2 + 4;
+    let deco = '';
+    if (k === 'church') deco = `<rect class="bld" x="${cx - 6}" y="${y - 22}" width="12" height="22"/><path class="bld-roof" d="M${cx - 8},${y - 22} L${cx},${y - 34} L${cx + 8},${y - 22} Z"/><path d="M${cx},${y - 40} v8 M${cx - 3},${y - 37} h6" stroke="var(--ink)" stroke-width="1.5"/>`;
+    else if (k === 'clinic') deco = `<path d="M${cx},${cy - 2} v12 M${cx - 6},${cy + 4} h12" stroke="var(--crit)" stroke-width="3"/>`;
+    else if (k === 'bank') deco = [-16, -5, 6, 17].map((dx) => `<rect x="${cx + dx - 1.5}" y="${y + 6}" width="3" height="${h - 10}" fill="var(--muted)"/>`).join('');
+    else if (k === 'market') deco = [0, 1, 2, 3, 4].map((i) => `<rect x="${x + i * (w / 5)}" y="${y - 6}" width="${w / 5}" height="7" fill="${i % 2 ? 'var(--accent)' : 'var(--surface)'}" stroke="var(--muted)" stroke-width=".6"/>`).join('');
+    else if (k === 'jail') deco = [-12, -4, 4, 12].map((dx) => `<rect x="${cx + dx - 1}" y="${y + 6}" width="2" height="${h - 12}" fill="var(--ink)"/>`).join('');
+    else if (k === 'tavern') deco = `<circle cx="${cx + 18}" cy="${y - 8}" r="5" fill="var(--warn)"/><rect x="${cx + 17}" y="${y - 20}" width="2" height="8" fill="var(--muted)"/>`;
+    else if (k === 'town_hall') deco = `<rect x="${cx - 1}" y="${y - 24}" width="2" height="20" fill="var(--muted)"/><path d="M${cx + 1},${y - 24} h14 l-4,4 l4,4 h-14 Z" fill="var(--accent)"/>`;
+    else if (k === 'workplace') deco = `<circle cx="${cx + 16}" cy="${cy + 4}" r="7" fill="none" stroke="var(--muted)" stroke-width="2" stroke-dasharray="2 2"/>`;
+    const roof = (k === 'church' || k === 'bank' || k === 'town_hall')
+      ? `<rect class="bld-roof" x="${x - 3}" y="${y - 6}" width="${w + 6}" height="7"/>`
+      : `<path class="bld-roof" d="M${x - 3},${y} L${cx},${y - 14} L${x + w + 3},${y} Z"/>`;
+    return `<g><rect class="bld" x="${x}" y="${y}" width="${w}" height="${h}" rx="2"/>${roof}${deco}${label}</g>`;
+  }
+
+  function drawMap() {
+    const m = S.data.map; const W = m.width * CELL, H = m.height * CELL;
+    const svg = $('map'); svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+    let grid = '';
+    for (let i = 0; i <= m.width; i++) grid += `<line class="grid-line" x1="${i * CELL}" y1="0" x2="${i * CELL}" y2="${H}"/>`;
+    for (let i = 0; i <= m.height; i++) grid += `<line class="grid-line" x1="0" y1="${i * CELL}" x2="${W}" y2="${i * CELL}"/>`;
+    const locs = [...S.locs.values()];
+    const order = { forest: 0, river: 0, farm: 0, quarry: 0, square: 1 };
+    locs.sort((a, b) => (order[a.kind] ?? 2) - (order[b.kind] ?? 2));
+    svg.innerHTML = `<rect class="map-frame" width="${W}" height="${H}"/>${grid}
+      <g id="places">${locs.map(buildingSVG).join('')}</g>
+      <g id="paths"></g><g id="agents"></g>
+      <rect class="night-overlay" id="night" width="${W}" height="${H}" opacity="0"/>`;
+    const g = svg.querySelector('#agents');
+    for (const a of S.agents.values()) {
+      const el = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+      el.setAttribute('class', 'agent'); el.dataset.id = a.id;
+      el.innerHTML = `<circle class="ring" r="14"/><circle class="body" r="10" fill="${alignColor(a.alignment)}"/>
+        <text>${esc(initials(a.name))}</text><text class="zz" x="9" y="-9" hidden>z</text>
+        <text class="agent-name" y="22">${esc(a.name.split(' ')[0])}</text><title></title>`;
+      el.addEventListener('click', () => select(a.id));
+      g.appendChild(el);
+    }
+    $('legend').innerHTML = ['lawful-good', 'neutral', 'selfish', 'cruel', 'criminal']
+      .map((k) => `<span><i style="background:${alignColor(k)}"></i>${k}</span>`).join('') +
+      `<span><i style="background:var(--muted);opacity:.5"></i>asleep</span>`;
+  }
+
+  function renderMap() {
+    const f = curFrame(); if (!f) return;
+    const byLoc = new Map(); const paths = [];
+    for (const a of S.agents.values()) {
+      const p = agentPos(S.cur, a.id); const fa = frameAgent(f, a.id);
+      const el = document.querySelector(`#agents .agent[data-id="${a.id}"]`); if (!el || !p) continue;
+      let x, y;
+      if (p.travelling) {
+        x = p.x; y = p.y;
+        paths.push(`<line class="path" x1="${(p.from.x + .5) * CELL}" y1="${(p.from.y + .5) * CELL}" x2="${(p.to.x + .5) * CELL}" y2="${(p.to.y + .5) * CELL}"/>`);
+      } else {
+        const l = S.locs.get(p.loc); const n = byLoc.get(p.loc) || 0; byLoc.set(p.loc, n + 1);
+        const slots = l.kind === 'home' ? HOME_SLOTS : l.kind === 'square' ? PLAZA_SLOTS : SLOTS;
+        const [dx, dy] = slots[n % slots.length]; const ring = Math.floor(n / slots.length) * 14;
+        x = (l.x + .5) * CELL + dx; y = (l.y + .5) * CELL + dy + ring;
+      }
+      el.style.transform = `translate(${x}px, ${y}px)`;
+      el.classList.toggle('asleep', !!fa.asleep); el.classList.toggle('dead', !fa.alive);
+      el.classList.toggle('selected', S.selected === a.id);
+      el.querySelector('.zz').hidden = !fa.asleep;
+      el.querySelector('title').textContent = `${a.name} · ${fa.alive ? (fa.asleep ? 'asleep' : p.travelling ? 'walking to ' + p.to.name : 'at ' + locName(p.loc)) : 'dead'} · ${fa.mood_label}`;
+    }
+    document.querySelector('#paths').innerHTML = paths.join('');
+    const h = f.hour; // night tint: deepest 00-04, none 08-18
+    const night = h >= 21 || h < 5 ? .5 : h >= 19 ? .3 : h < 7 ? .25 : 0;
+    $('night').setAttribute('opacity', night);
+  }
+
+  // ---------------------------------------------------------------- header + timeline
+  function renderClock() {
+    const f = curFrame(); const w = S.data.world; if (!f) return;
+    $('clockBig').textContent = `${f.season[0].toUpperCase() + f.season.slice(1)} · Day ${f.day} · ${hourLabel(f.hour)}`;
+    const latest = S.frames[S.frames.length - 1];
+    const liveNote = S.cur === S.frames.length - 1 ? 'newest hour' : `${latest.tick - f.tick}h behind the newest hour`;
+    $('clockSmall').textContent = `${f.part_of_day} · ${w.weather} · tick ${f.tick} · ${liveNote}`;
+    const pill = $('statusPill'); pill.className = 'pill';
+    if (!S.live) { pill.classList.add('off'); $('statusText').textContent = 'Replay snapshot'; }
+    else if (w.paused) { pill.classList.add('paused'); $('statusText').textContent = w.mode === 'budget_paused' ? 'Paused: budget cap' : 'Paused'; }
+    else if (w.mode === 'slow') { pill.classList.add('slow'); $('statusText').textContent = 'Live · slow mode'; }
+    else { pill.classList.add('live'); $('statusText').textContent = `Live · ${w.speed}×`; }
+    $('spendText').textContent = S.data.cost.total_usd.toFixed(4);
+    $('btnPause').textContent = w.paused ? 'Resume world' : 'Pause world';
+    $('btnPause').classList.toggle('primary', !!w.paused);
+    const sel = $('speedSel'); if (document.activeElement !== sel) sel.value = String(w.speed);
+  }
+
+  function renderTimeline() {
+    const n = S.frames.length; const sc = $('scrub');
+    sc.max = Math.max(0, n - 1); if (Number(sc.value) !== S.cur) sc.value = S.cur;
+    const f = curFrame(); const last = S.frames[n - 1];
+    $('tlCur').textContent = f ? `day ${f.day} ${hourLabel(f.hour)}` : '';
+    $('tlEnd').textContent = last ? `${n} hour${n === 1 ? '' : 's'} lived` : '';
+    $('tlStart').textContent = S.frames[0] ? `day ${S.frames[0].day} ${hourLabel(S.frames[0].hour)}` : '';
+    // night bands on the strip
+    let bands = '', start = null;
+    for (let i = 0; i < n; i++) {
+      const night = S.frames[i].hour >= 21 || S.frames[i].hour < 6;
+      if (night && start === null) start = i;
+      if ((!night || i === n - 1) && start !== null) { const end = night ? i + 1 : i; bands += `<i style="left:${start / n * 100}%;width:${(end - start) / n * 100}%"></i>`; start = null; }
+    }
+    $('daystrip').innerHTML = bands;
+    $('btnLive').classList.toggle('primary', S.follow);
+    $('btnLive').textContent = S.follow ? '● Latest' : '○ Jump to latest';
+    $('btnPlay').textContent = S.playing ? '❚❚' : '▶';
+  }
+
+  // ---------------------------------------------------------------- citizens
+  function stateOf(fa, pos) {
+    if (!fa.alive) return 'dead';
+    if (fa.asleep) return 'asleep';
+    if (pos && pos.travelling) return 'walking';
+    return (fa.action || 'awake').replace('_', ' ');
+  }
+  function renderCitizens() {
+    const f = curFrame(); if (!f) return;
+    const box = $('citizens');
+    const html = [...S.agents.values()].map((a) => {
+      const fa = frameAgent(f, a.id); if (!fa) return '';
+      const pos = agentPos(S.cur, a.id);
+      const where = !fa.alive ? `died: ${a.cause_of_death || '—'}` : pos && pos.travelling ? `→ ${pos.to.name}` : locName(fa.loc);
+      return `<button class="cit ${fa.alive ? '' : 'dead'} ${S.selected === a.id ? 'selected' : ''}" data-id="${a.id}">
+        <span class="avatar ${fa.asleep ? 'asleep' : ''}" style="background:${alignColor(a.alignment)}">${esc(initials(a.name))}</span>
+        <span>
+          <span class="name">${esc(a.name)} <span class="chip ${a.alignment}">${a.alignment}</span></span>
+          <span class="where"><span>${esc(stateOf(fa, pos))} · ${esc(where)}</span><span class="mood">· ${esc(fa.mood_label)}</span></span>
+        </span>
+        <span class="bars">
+          <span class="bar ${needClass(fa.hunger, true)}" title="Hunger ${fa.hunger} (100 = starving)"><i style="width:${fa.hunger}%"></i></span>
+          <span class="bar ${needClass(fa.energy)}" title="Energy ${fa.energy}"><i style="width:${fa.energy}%"></i></span>
+          <span class="bar ${needClass(fa.health)}" title="Health ${fa.health}"><i style="width:${fa.health}%"></i></span>
+          <span class="bar ${needClass(fa.social)}" title="Company ${fa.social}"><i style="width:${fa.social}%"></i></span>
+        </span></button>`;
+    }).join('');
+    box.innerHTML = html;
+    box.querySelectorAll('.cit').forEach((b) => b.addEventListener('click', () => select(Number(b.dataset.id))));
+    $('cntCitizens').textContent = [...S.agents.values()].filter((a) => frameAgent(f, a.id)?.alive).length;
+  }
+
+  // ---------------------------------------------------------------- events
+  function evKind(e) { return e.kind === 'talk' ? 'talk' : KIND_FILTER.trouble.includes(e.kind) ? 'trouble' : ''; }
+  function evHTML(e, cls) {
+    const a = S.agents.get(e.agent_id); const t = S.agents.get(e.target_id);
+    const who = a ? `<button data-id="${a.id}">${esc(a.name)}</button>` : '';
+    let txt;
+    if (e.kind === 'talk') txt = `to ${t ? `<button data-id="${t.id}">${esc(t.name)}</button>` : 'someone'}: <q>${esc(e.data?.line || '')}</q>`;
+    else if (e.kind === 'invalid_action') txt = `<span class="muted">tried to ${esc(e.data?.action)} but ${esc(e.data?.error || "couldn't")}</span>`;
+    else txt = esc(a ? e.summary.replace(a.name, '').replace(/^\s+/, '') : e.summary);
+    const at = e.location_id ? `<span class="at"> · ${esc(locName(e.location_id))}</span>` : '';
+    return `<div class="ev ${evKind(e)} ${cls || ''}"><span class="ic">${KIND_ICON[e.kind] || '•'}</span><span><span class="who">${who}</span> <span class="txt">${txt}</span>${at}</span></div>`;
+  }
+  function renderEvents() {
+    const f = curFrame(); if (!f) return;
+    const keep = S.filter === 'all' ? null : new Set(KIND_FILTER[S.filter]);
+    const evs = S.events.filter((e) => e.tick <= f.tick && (!keep || keep.has(e.kind)));
+    $('cntEvents').textContent = evs.length;
+    if (!evs.length) { $('feed').innerHTML = `<div class="empty">Nothing yet. The first hour is being lived.</div>`; return; }
+    const parts = []; let lastTick = null;
+    for (let i = evs.length - 1; i >= 0; i--) {
+      const e = evs[i];
+      if (e.tick !== lastTick) {
+        const fr = S.frames.find((x) => x.tick === e.tick);
+        parts.push(`<div class="tickhead">${fr ? `day ${fr.day} · ${hourLabel(fr.hour)} · ${fr.part_of_day}` : `tick ${e.tick}`}</div>`);
+        lastTick = e.tick;
+      }
+      parts.push(evHTML(e, e.id > S.seenEvent ? 'new' : ''));
+    }
+    $('feed').innerHTML = parts.join('');
+    $('feed').querySelectorAll('button[data-id]').forEach((b) => b.addEventListener('click', () => select(Number(b.dataset.id))));
+    S.seenEvent = Math.max(S.seenEvent, ...evs.map((e) => e.id));
+  }
+
+  // ---------------------------------------------------------------- costs
+  function renderCosts() {
+    const c = S.data.cost; const w = S.data.world;
+    const pct = Math.min(100, c.total_usd / w.budget_daily_usd * 100);
+    const rows = c.by_model.map((r) => `<tr><td>${esc(r.tier)}</td><td>${esc(r.model)}</td><td class="num">${r.calls}</td><td class="num">${r.input.toLocaleString()}</td><td class="num">${r.output.toLocaleString()}</td><td class="num">${r.cache_read.toLocaleString()}</td><td class="num">$${r.usd.toFixed(4)}</td></tr>`).join('');
+    $('tab-costs').innerHTML = `
+      <div class="stats">
+        <div class="stat"><div class="v">$${c.total_usd.toFixed(4)}</div><div class="k">spent so far</div></div>
+        <div class="stat"><div class="v">${c.calls}</div><div class="k">LLM calls</div></div>
+        <div class="stat"><div class="v">$${c.calls ? (c.total_usd / c.calls).toFixed(5) : '0'}</div><div class="k">per call</div></div>
+        <div class="stat"><div class="v">${S.frames.length}</div><div class="k">hours lived</div></div>
+      </div>
+      <div class="eyebrow">Daily budget cap $${w.budget_daily_usd.toFixed(2)} · all-time spend shown</div>
+      <div class="budget"><i style="width:${pct}%"></i></div>
+      <div style="overflow-x:auto;margin-top:14px"><table><thead><tr><th>tier</th><th>model</th><th class="num">calls</th><th class="num">in</th><th class="num">out</th><th class="num">cache read</th><th class="num">usd</th></tr></thead><tbody>${rows || '<tr><td colspan="7" class="empty">No calls yet</td></tr>'}</tbody></table></div>
+      <p style="color:var(--muted);font-size:13px;margin-top:12px">Workers think with Haiku, managers with Sonnet, notables with Opus. Sleeping citizens make no calls, which is the main cost lever.</p>`;
+  }
+
+  // ---------------------------------------------------------------- detail drawer
+  function select(id) {
+    S.selected = S.selected === id ? null : id;
+    renderDrawer(); renderMap(); renderCitizens();
+  }
+  function renderDrawer() {
+    const d = $('drawer'); const a = S.agents.get(S.selected);
+    if (!a) { d.hidden = true; d.innerHTML = ''; return; }
+    const f = curFrame(); const fa = frameAgent(f, a.id) || {}; const pos = agentPos(S.cur, a.id);
+    const where = !fa.alive ? `Dead (${a.cause_of_death || '—'})` : pos && pos.travelling ? `On the road to ${pos.to.name}` : `At ${locName(fa.loc)}${fa.loc === a.home_id ? ' (home)' : ''}`;
+    const inv = Object.entries(fa.inventory || {}).map(([k, v]) => `<span class="chip soft">${esc(k)} × ${v}</span>`).join('') || '<span class="chip soft">nothing</span>';
+    const need = (label, v, inverted, hint) => `<div class="need"><span>${label}</span><span class="bar ${needClass(v, inverted)}" title="${hint}"><i style="width:${v}%"></i></span><span class="num">${v}</span></div>`;
+    const trait = (k, v, dark) => `<div class="trait ${dark ? 'dark' : ''}"><span>${esc(k)}</span><span class="bar"><i style="width:${Math.round(v * 100)}%"></i></span></div>`;
+    const mine = S.events.filter((e) => e.tick <= f.tick && (e.agent_id === a.id || e.target_id === a.id)).slice(-14).reverse();
+    const minifeed = mine.map((e) => { const fr = S.frames.find((x) => x.tick === e.tick); return `<div><span class="t">${fr ? `d${fr.day} ${hourLabel(fr.hour)}` : 't' + e.tick}</span>${evHTML(e)}</div>`; }).join('') || '<div class="empty">Nothing yet.</div>';
+    const ap = a.appearance || {};
+    d.innerHTML = `
+      <div class="head">
+        <span class="avatar ${fa.asleep ? 'asleep' : ''}" style="background:${alignColor(a.alignment)}">${esc(initials(a.name))}</span>
+        <div><h2>${esc(a.name)}</h2><div class="meta">${a.age ?? '?'} years · from ${esc(a.birthplace || '?')} · ${esc(a.wealth_bracket || '')} family · <span class="chip ${a.alignment}">${a.alignment}</span> · ${TIER_LABEL[a.tier_name] || a.tier_name} (${esc(a.model)})</div></div>
+        <button class="btn close" id="closeDrawer" title="Close (Esc)">✕</button>
+      </div>
+      <div class="body">
+        <div class="sec"><h3>Right now · day ${f.day} ${hourLabel(f.hour)}</h3>
+          <dl class="kv"><dt>Where</dt><dd>${esc(where)}</dd><dt>Doing</dt><dd>${esc(stateOf(fa, pos))}</dd><dt>Mood</dt><dd>${esc(fa.mood_label)} (${fa.mood})</dd><dt>Money</dt><dd class="num">${money(fa.money || 0)} asaps</dd><dt>Carrying</dt><dd class="chips">${inv}</dd></dl>
+          ${fa.thought ? `<p class="thought" style="margin:10px 0 0">${esc(fa.thought)}</p>` : ''}
+        </div>
+        <div class="sec"><h3>Body</h3><div class="needs">
+          ${need('Hunger', fa.hunger ?? 0, true, '100 = starving; above 80 health suffers')}
+          ${need('Energy', fa.energy ?? 0, false, '0 = collapse')}
+          ${need('Health', fa.health ?? 0, false, '0 = death')}
+          ${need('Company', fa.social ?? 0, false, 'falls when alone, rises when talking')}
+        </div></div>
+        <div class="sec"><h3>Who they are</h3><div class="prose">
+          <p><em>${esc(ap.self_description || '')}</em></p>
+          <p>Hair ${esc(ap.hair)}; build ${esc(ap.build)}; wears ${esc(ap.clothing)}; never without ${esc(ap.signature_item)}.</p>
+          <p><strong>Speech:</strong> ${esc(a.speech_style)}</p>
+          ${a.unpleasant?.length ? `<p><span class="chip criminal">unpleasant</span> ${esc(a.unpleasant.join(', '))}</p>` : ''}
+        </div></div>
+        <div class="sec"><h3>Values · fears · ambitions</h3><div class="chips">
+          ${(a.values || []).map((v) => `<span class="chip soft">♥ ${esc(v)}</span>`).join('')}
+          ${(a.fears || []).map((v) => `<span class="chip soft">⚠ ${esc(v)}</span>`).join('')}
+          ${(a.ambitions || []).map((v) => `<span class="chip soft">→ ${esc(v)}</span>`).join('')}
+          ${(a.quirks || []).map((v) => `<span class="chip soft">~ ${esc(v)}</span>`).join('')}
+        </div></div>
+        ${a.secrets?.length ? `<div class="sec"><h3>Secrets (only you can see these)</h3><div class="prose">${a.secrets.map((s) => `<p>${esc(s)}</p>`).join('')}</div></div>` : ''}
+        <div class="sec"><h3>Traits (fixed at birth)</h3><div class="traits">
+          ${Object.entries(a.big_five || {}).map(([k, v]) => trait(k, v, false)).join('')}
+          ${Object.entries(a.dark_traits || {}).map(([k, v]) => trait(k, v, true)).join('')}
+        </div></div>
+        <div class="sec"><h3>Backstory</h3><div class="prose"><p>${esc(a.backstory)}</p></div></div>
+        <div class="sec"><h3>Their recent hours</h3><div class="minifeed">${minifeed}</div></div>
+        <div class="sec"><h3>Identity</h3><dl class="kv"><dt>Home</dt><dd>${esc(locName(a.home_id))}</dd><dt>Bedtime</dt><dd>${hourLabel(a.bedtime)}</dd><dt>MAC</dt><dd class="num">${esc(a.mac)}</dd><dt>IP</dt><dd class="num">${esc(a.ip)}</dd></dl></div>
+      </div>`;
+    d.hidden = false;
+    $('closeDrawer').addEventListener('click', () => select(S.selected));
+    d.querySelectorAll('.minifeed button[data-id]').forEach((b) => b.addEventListener('click', () => select(Number(b.dataset.id))));
+  }
+
+  // ---------------------------------------------------------------- render all
+  function render() {
+    renderClock(); renderTimeline(); renderMap(); renderCitizens(); renderEvents(); renderCosts(); renderDrawer();
+  }
+  function goTo(k, { byUser = false } = {}) {
+    k = Math.max(0, Math.min(S.frames.length - 1, k));
+    if (byUser) S.follow = k === S.frames.length - 1;
+    S.cur = k; render();
+  }
+
+  // ---------------------------------------------------------------- data in
+  function ingest(data) {
+    S.data = data;
+    S.agents = new Map(data.agents.map((a) => [a.id, a]));
+    S.locs = new Map(data.locations.map((l) => [l.id, l]));
+    S.frames = data.frames; S.events = data.events;
+    S.seenEvent = S.events.length ? S.events[S.events.length - 1].id : 0;
+    $('townName').textContent = data.world.name;
+    document.title = `${data.world.name} Live`;
+    drawMap();
+    S.cur = S.frames.length - 1; S.follow = true;
+    render();
+  }
+  function applyUpdate(u) {
+    let changed = false;
+    if (u.frames?.length) {
+      for (const f of u.frames) { if (!S.frames.length || f.tick > S.frames[S.frames.length - 1].tick) S.frames.push(f); }
+      changed = true;
+    }
+    if (u.events?.length) { const have = new Set(S.events.map((e) => e.id)); for (const e of u.events) if (!have.has(e.id)) S.events.push(e); changed = true; }
+    if (u.world) S.data.world = u.world;
+    if (u.cost) S.data.cost = u.cost;
+    if (S.follow) S.cur = S.frames.length - 1;
+    render();
+    if (changed && u.frames?.length && !S.follow) toast(`New hour lived: day ${u.frames[u.frames.length - 1].day} ${hourLabel(u.frames[u.frames.length - 1].hour)}`);
+  }
+
+  async function connectLive() {
+    const r = await fetch('/api/bootstrap'); if (!r.ok) throw new Error('bootstrap failed');
+    S.live = true; $('liveControls').hidden = false;
+    ingest(await r.json());
+    openSocket();
+  }
+  function openSocket() {
+    const sinceTick = S.frames.length ? S.frames[S.frames.length - 1].tick : -1;
+    const sinceEv = S.events.length ? S.events[S.events.length - 1].id : 0;
+    const url = `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws?since_tick=${sinceTick}&since_event=${sinceEv}`;
+    let ws; try { ws = new WebSocket(url); } catch (e) { startPolling(); return; }
+    S.ws = ws;
+    ws.onmessage = (m) => applyUpdate(JSON.parse(m.data));
+    ws.onclose = () => { S.ws = null; $('statusText').textContent = 'reconnecting…'; setTimeout(openSocket, 2000); };
+    ws.onerror = () => { try { ws.close(); } catch (e) { /* ignore */ } };
+  }
+  function startPolling() {
+    if (S.pollTimer) return;
+    S.pollTimer = setInterval(async () => {
+      const sinceTick = S.frames.length ? S.frames[S.frames.length - 1].tick : -1;
+      const sinceEv = S.events.length ? S.events[S.events.length - 1].id : 0;
+      try { const r = await fetch(`/api/updates?since_tick=${sinceTick}&since_event=${sinceEv}`); applyUpdate(await r.json()); } catch (e) { /* retry next time */ }
+    }, 2000);
+  }
+  async function control(action, value) {
+    try {
+      const r = await fetch('/api/control', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ action, value }) });
+      const j = await r.json(); if (j.ok) { S.data.world = j.world; renderClock(); toast(action === 'speed' ? `Speed ${value}×` : action === 'pause' ? 'World paused' : 'World resumed'); }
+    } catch (e) { toast('Could not reach the server'); }
+  }
+
+  // ---------------------------------------------------------------- wiring
+  $('scrub').addEventListener('input', (e) => goTo(Number(e.target.value), { byUser: true }));
+  $('btnFirst').addEventListener('click', () => goTo(0, { byUser: true }));
+  $('btnPrev').addEventListener('click', () => goTo(S.cur - 1, { byUser: true }));
+  $('btnNext').addEventListener('click', () => goTo(S.cur + 1, { byUser: true }));
+  $('btnLive').addEventListener('click', () => { S.follow = true; stopPlay(); goTo(S.frames.length - 1); });
+  function stopPlay() { S.playing = false; clearInterval(S.playTimer); S.playTimer = null; renderTimeline(); }
+  $('btnPlay').addEventListener('click', () => {
+    if (S.playing) return stopPlay();
+    if (S.cur >= S.frames.length - 1) S.cur = 0;
+    S.playing = true; S.follow = false;
+    S.playTimer = setInterval(() => { if (S.cur >= S.frames.length - 1) return stopPlay(); goTo(S.cur + 1); }, 900);
+    renderTimeline();
+  });
+  $('btnPause').addEventListener('click', () => control(S.data.world.paused ? 'resume' : 'pause'));
+  $('speedSel').addEventListener('change', (e) => control('speed', Number(e.target.value)));
+  document.querySelectorAll('.tab').forEach((t) => t.addEventListener('click', () => {
+    document.querySelectorAll('.tab').forEach((x) => x.setAttribute('aria-selected', x === t));
+    ['citizens', 'events', 'costs'].forEach((n) => { $('tab-' + n).hidden = n !== t.dataset.tab; });
+    S.tab = t.dataset.tab;
+    try { localStorage.setItem('asapville.tab', S.tab); } catch (e) { /* private window */ }
+  }));
+  $('filters').addEventListener('click', (e) => {
+    const b = e.target.closest('button'); if (!b) return;
+    S.filter = b.dataset.f; $('filters').querySelectorAll('button').forEach((x) => x.setAttribute('aria-pressed', x === b)); renderEvents();
+  });
+  document.addEventListener('keydown', (e) => {
+    if (e.target.matches('input, select, textarea')) return;
+    if (e.key === 'ArrowLeft') goTo(S.cur - 1, { byUser: true });
+    else if (e.key === 'ArrowRight') goTo(S.cur + 1, { byUser: true });
+    else if (e.key === 'Home') goTo(0, { byUser: true });
+    else if (e.key === 'End') { S.follow = true; goTo(S.frames.length - 1); }
+    else if (e.key === ' ') { e.preventDefault(); $('btnPlay').click(); }
+    else if (e.key === 'Escape' && S.selected != null) select(S.selected);
+  });
+  try { const t = localStorage.getItem('asapville.tab'); if (t) document.querySelector(`.tab[data-tab="${t}"]`)?.click(); } catch (e) { /* ignore */ }
+
+  // ---------------------------------------------------------------- boot
+  const slot = $('asapville-data');
+  const embedded = slot && slot.textContent.trim();
+  if (embedded) {
+    S.live = false;
+    ingest(JSON.parse(embedded));
+    $('townSub').textContent = 'Replay of a town that was lived with real LLM citizens';
+  } else {
+    connectLive().catch((err) => { $('statusText').textContent = 'no server'; console.error(err); });
+  }
+})();
+</script>
+</body>
+</html>

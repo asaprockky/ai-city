@@ -183,6 +183,42 @@ def persona_cards_markdown(session: Session, settings: Settings) -> str:
     return "\n".join(out)
 
 
+async def serve(settings: Settings, sessions: sessionmaker[Session], gateway: LLMGateway, *,
+                host: str, port: int, ticks: int | None, realtime: bool, run_world: bool) -> None:
+    """Serve the dashboard; by default also run the world in this process so updates are instant."""
+    import uvicorn
+
+    from asapville.dashboard.app import create_app
+    from asapville.world.events import EventBus
+
+    bus = EventBus()
+    world = World(settings, sessions, gateway, bus) if run_world else None
+    app = create_app(settings, sessions, bus if world else None)
+    server = uvicorn.Server(uvicorn.Config(app, host=host, port=port, log_level="warning"))
+    print(f"Asapville dashboard: http://{host}:{port}  (Ctrl-C to stop)")
+    server_task = asyncio.create_task(server.serve())
+    world_task = asyncio.create_task(world.run(ticks=ticks, realtime=realtime)) if world else None
+
+    async def announce_end() -> None:
+        if world_task is None:
+            return
+        try:
+            await world_task
+            print("world run finished; the dashboard stays up until Ctrl-C")
+        except asyncio.CancelledError:
+            pass
+        except Exception:
+            log.exception("world run failed")
+
+    end_task = asyncio.create_task(announce_end())
+    try:
+        await server_task
+    finally:
+        if world_task is not None and not world_task.done():
+            world_task.cancel()
+        await asyncio.gather(end_task, return_exceptions=True)
+
+
 def _set_flag(settings: Settings, **values: object) -> None:
     sessions = make_session_factory(make_engine(settings.db_url))
     with sessions() as s:
@@ -210,6 +246,16 @@ def main(argv: list[str] | None = None) -> int:
     p_rep.add_argument("--events", type=int, default=15)
     p_pers = sub.add_parser("personas", help="print every citizen's persona card")
     p_pers.add_argument("--out", help="write markdown persona cards to this file")
+    p_serve = sub.add_parser("serve", help="run the world with a live dashboard in the browser")
+    p_serve.add_argument("--host", default="127.0.0.1")
+    p_serve.add_argument("--port", type=int, default=8420)
+    p_serve.add_argument("--ticks", type=int, help="stop the world after N ticks (keeps serving)")
+    p_serve.add_argument("--days", type=float, help="stop the world after N simulated days")
+    p_serve.add_argument("--fast", action="store_true", help="don't wait between ticks")
+    p_serve.add_argument("--view-only", action="store_true",
+                         help="don't run the world here; just show the database (live if `run` is on)")
+    p_exp = sub.add_parser("export", help="write a self-contained replay page of the town")
+    p_exp.add_argument("--out", default="asapville.html")
     args = parser.parse_args(argv)
 
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
@@ -250,10 +296,31 @@ def main(argv: list[str] | None = None) -> int:
             else:
                 print(persona_cards(s))
         return 0
+    if args.cmd == "export":
+        from pathlib import Path
+
+        from asapville.dashboard.export import export_html
+
+        with sessions() as s:
+            Path(args.out).write_text(export_html(s, settings), encoding="utf-8")
+        print(f"wrote {args.out}")
+        return 0
+    if args.cmd == "serve":
+        ticks = args.ticks
+        if args.days is not None:
+            ticks = int(args.days * settings.clock.ticks_per_day)
+        upgrade_to_head(settings.db_url)
+        try:
+            asyncio.run(serve(settings, sessions, gateway, host=args.host, port=args.port,
+                              ticks=ticks, realtime=not args.fast, run_world=not args.view_only))
+        except KeyboardInterrupt:
+            print("stopped")
+        return 0
     if args.cmd == "run":
         ticks = args.ticks
         if args.days is not None:
             ticks = int(args.days * settings.clock.ticks_per_day)
+        upgrade_to_head(settings.db_url)
         world = World(settings, sessions, gateway)
         try:
             reports = asyncio.run(world.run(ticks=ticks, realtime=not args.fast))

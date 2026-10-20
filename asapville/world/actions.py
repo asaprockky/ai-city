@@ -130,6 +130,7 @@ class Move:
         if origin:
             emit(ctx.session, tick=ctx.tick, kind="depart", actor=agent, location_id=origin.id,
                  summary=f"{agent.name} left {origin.name} for {dest.name} ({hours}h)",
+                 data={"from": origin.id, "to": dest.id, "hours": hours},
                  actor_memory=f"I set off from {origin.name} toward {dest.name} "
                               f"(about {hours} hour{'s' if hours != 1 else ''}).",
                  importance=1)

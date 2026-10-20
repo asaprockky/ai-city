@@ -117,3 +117,20 @@ Choices made where the brief left room. Newest phase at the bottom.
   credentials) and the `X-Api-Key` header is left out, so the proxy's header is the only one sent.
 - **`init-world` checks credentials before touching the database**, so a missing key no longer
   leaves a half-made database file.
+
+## Phase 7 preview — live dashboard
+
+- **One snapshot row per agent per tick** (`agent_ticks`, migration 0002). The engine writes it at the
+  end of every tick, so the dashboard can replay the town hour by hour (positions, needs, mood,
+  thought, money, inventory) without re-deriving anything from events. ~10 rows per tick; cheap.
+- **`serve` runs the world and the web server in one process**, so the engine's `EventBus` wakes the
+  feed the moment a tick lands. `serve --view-only` (or `run` in another terminal) falls back to
+  polling the database once a second. Both paths read from the DB, so clients see one update shape.
+- **The page is one file, no framework.** `dashboard/static/index.html` renders live (fetch +
+  WebSocket, with polling as fallback) and as a replay: `asapville export` embeds the bootstrap JSON
+  in the same page. `export_html(fragment=True)` strips the document skeleton for hosts that add
+  their own.
+- **Observer-only.** Everything the dashboard shows (names, thoughts, secrets) is omniscient; citizens
+  never read these tables or endpoints. `system` events are hidden from the feed.
+- **Controls write `world_state`** (`paused`, `mode`, `speed`) exactly like the CLI does, so the page,
+  `asapville pause` and `asapville speed` stay interchangeable.
