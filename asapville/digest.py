@@ -82,6 +82,26 @@ involved, why it matters and what it may lead to, with a short real quote if the
 Plain text, no markdown. Never invent anything that is not in the material."""
 
 
+CHUNK_RULES = """You are the town chronicler of Asapville, posting to its Telegram channel after \
+every stretch of hours. Readers love short, lively bulletins: what each citizen got up to, with \
+their real words. You get the state of the town and the real events of those hours.
+
+Write in Russian, in plain text (no markdown, no asterisks), exactly in this shape:
+Часы <first>–<last> (<день N, время с–по>).
+
+• <Bold-sounding lead phrase>. <2–4 sentences: who did what, why, for how much, what came of it.>
+   ◦ <a sub-point or a short real quote, if useful>
+• ...
+
+<One closing line on food, money or what to watch next.>
+
+Write 6 to 9 bullets, the most dramatic first: deals and price wars, schemes, quarrels, kindness, \
+new businesses and dishes, the council and elections, hunger and illness. Name people by their \
+first names in Russian and keep numbers exact. Quote citizens' real words (translated into natural \
+Russian) in «». Never invent anything that is not in the material; if the hours were mostly night, \
+say so and keep it shorter."""
+
+
 class Quote(BaseModel):
     who: str = ""
     text: str = ""
@@ -243,6 +263,24 @@ def as_text(session: Session, settings: Settings, paper: Paper) -> str:
     if paper.next:
         out += ["", f"👀 Что дальше: {paper.next}"]
     return "\n".join(out)
+
+
+async def write_chunk(session: Session, settings: Settings, gateway: LLMGateway, *,
+                      hours: int = 12, note: str = "") -> str:
+    """The bulletin for the last `hours`: bullets with quotes, the way the channel likes it."""
+    ws = session.get(WorldState, 1)
+    tick = ws.tick if ws else 0
+    first = max(0, tick - hours)
+    _, start = _when(settings, first)
+    _, end = _when(settings, tick)
+    prompt = (f"HOURS {first}–{tick - 1} ({start} to {end}).\n\nTHE TOWN NOW:\n{facts(session, settings)}"
+              f"\n\nWHAT HAPPENED ([hour] kind: what):\n{happenings(session, first)}\n\nWrite the bulletin.")
+    req = LLMRequest(purpose="chunk", model=settings.llm.models.sonnet, tier=ANGEL, effort=None,
+                     system_rules=CHUNK_RULES, angel_role="reporter", max_tokens=4000,
+                     messages=[ChatMessage(role="user", content=prompt)], context={"tick": tick})
+    result = await gateway.call(req, tick=tick)
+    text = result.text.strip().replace("**", "")
+    return f"{text}\n\n🛠 {note}" if note else text
 
 
 # ------------------------------------------------------------------ breaking news

@@ -274,4 +274,6 @@ a map of who is where, money/fed/health bars and the shelves (`render_html`), se
 `asapville news` posts a short flash for each big moment (a death, an election result, a business
 bought, a default, a law, a secret deal, a candidacy) as soon as a chunk ends, whatever its length;
 a mark file remembers the last event posted. Nothing may be invented: only what is in the material.
+`asapville chunk` posts the bulletin the owner liked best after every 12 hours: "Часы X–Y", then
+6–9 bullets with real quotes and exact numbers, and an optional builder's note (what was fixed).
 Daily budget raised to $15 at the owner's request.

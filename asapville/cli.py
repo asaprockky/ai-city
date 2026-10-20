@@ -365,6 +365,10 @@ def main(argv: list[str] | None = None) -> int:
     p_dig.add_argument("--out", default="asapville-gazette", help="where to save the .json and .html")
     p_dig.add_argument("--post", action="store_true",
                        help="send it to Telegram (ASAPVILLE_TELEGRAM_TOKEN, ASAPVILLE_TELEGRAM_CHAT)")
+    p_chk = sub.add_parser("chunk", help="a bulletin of the last hours, bullets with quotes (and post it)")
+    p_chk.add_argument("--hours", type=int, default=12)
+    p_chk.add_argument("--note", default="", help="a line from the builder: what was fixed or changed")
+    p_chk.add_argument("--post", action="store_true")
     p_news = sub.add_parser("news", help="breaking-news posts for the big moments since the last run")
     p_news.add_argument("--max", type=int, default=4, help="at most this many posts per run")
     p_news.add_argument("--mark", default=".asapville-news", help="file remembering the last event posted")
@@ -468,7 +472,7 @@ def main(argv: list[str] | None = None) -> int:
             res = comic.post_telegram(out, f"Асапвиль, день {day}: {script.title}", token=token, chat=chat)
             print("posted" if res.get("ok") else f"telegram said: {res}")
         return 0
-    if args.cmd in ("digest", "news", "post-file"):
+    if args.cmd in ("digest", "news", "chunk", "post-file"):
         import os
         from pathlib import Path
 
@@ -484,7 +488,15 @@ def main(argv: list[str] | None = None) -> int:
             return 0
         with sessions() as s:
             gateway.guard.load(s)
-            if args.cmd == "news":
+            if args.cmd == "chunk":
+                text = asyncio.run(digest.write_chunk(s, settings, gateway, hours=args.hours, note=args.note))
+                print(text)
+                if len(text) < 80:
+                    raise SystemExit("the bulletin came back empty; not posting")
+                if args.post:
+                    res = comic.post_text(text, token=token, chat=chat)
+                    print("posted" if res.get("ok") else f"telegram said: {res}")
+            elif args.cmd == "news":
                 mark = Path(args.mark)
                 tick = get_world_state(s).tick
                 after = int(mark.read_text()) if mark.exists() else (s.scalar(
@@ -507,7 +519,7 @@ def main(argv: list[str] | None = None) -> int:
                 day = Clock(settings.clock).at(get_world_state(s).tick).day
             gateway.flush(s)
             s.commit()
-        if args.cmd == "news":
+        if args.cmd in ("news", "chunk"):
             return 0
         out = Path(args.out)
         out.with_suffix(".json").write_text(paper.model_dump_json(indent=1), encoding="utf-8")

@@ -34,3 +34,11 @@ async def test_big_moments_are_picked_for_breaking_news(world, sessions):
         s.commit()
         big = [e.summary for e in digest.breaking(s, 0) if digest.is_breaking(e)]
     assert big == ["The town elected its council", f"{a.name} bought the Mill"]
+
+
+async def test_a_bulletin_of_the_hours_with_a_builders_note(world, sessions, fake, settings):
+    await world.run(ticks=3, realtime=False)
+    with sessions() as s:
+        fake.script("chunk", "Часы 0–2 (день 1).\n\n• **Хлеб**. Рут печёт.")
+        text = await digest.write_chunk(s, settings, world.gateway, hours=3, note="Ничего не сломалось.")
+    assert text.startswith("Часы 0–2") and "**" not in text and text.endswith("🛠 Ничего не сломалось.")
