@@ -27,7 +27,8 @@ async def test_cook_pancakes_at_home_and_sell_them(world, sessions, settings):
     with sessions() as s:
         ctx = _ctx(world, s)
         a, b = list(s.scalars(select(Agent).order_by(Agent.id)))[:2]
-        a.location_id, a.destination_id, a.travel_ticks_left, a.asleep = ctx.by_key["square"].id, None, 0, False
+        a.location_id, a.destination_id, a.travel_ticks_left = ctx.by_key["square"].id, None, 0
+        a.asleep = False
         a.inventory, a.energy = {"flour": 1, "eggs": 1, "milk": 1}, 80
         assert "kitchen" in _do(ctx, a, ActionName.COOK, dish="pancakes")
         assert "could cook pancakes" in render_perception(build_perception(ctx, a))
