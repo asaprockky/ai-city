@@ -43,7 +43,8 @@ WAKE_ENERGY = 70.0
 LASTING_IMPORTANCE = 7  # memories this important stay with a citizen beyond the last few hours
 LASTING_MEMORIES = 5
 ROUT_MOOD = 6.0  # what a day of pure routine costs in mood
-STARVING_AWAKE = 90.0  # nobody sleeps through this much hunger
+STARVING_AWAKE = 90.0  # nobody sleeps through this much hunger...
+WAKE_ENERGY_MIN = 10.0  # ...unless too spent to rise
 REFLEX_HUNGER = 60.0  # without an LLM turn, a body this hungry eats what it carries
 REFLEX_ENERGY = 15.0
 # Actions an agent keeps doing on its own when it doesn't get an LLM turn (slow mode / capped).
@@ -166,7 +167,7 @@ class World:
                 arrive(ctx, a)  # arrived: may now fall asleep below
             in_window = in_sleep_window(ctx.time.hour, a.bedtime_hour, cfg.sleep.hours,
                                         cfg.clock.ticks_per_day)
-            if a.hunger >= STARVING_AWAKE and a.location_id is not None:
+            if a.hunger >= STARVING_AWAKE and a.energy > WAKE_ENERGY_MIN and a.location_id is not None:
                 if a.asleep:  # hunger wakes a sleeper before it kills them
                     a.asleep = False
                     emit(ctx.session, tick=ctx.tick, kind="wake", actor=a, location_id=a.location_id,

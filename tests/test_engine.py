@@ -173,3 +173,13 @@ async def test_a_starving_citizen_does_not_sleep_through_it(world, sessions, gat
     await world.step()
     with sessions() as s:
         assert s.scalar(select(Event).where(Event.kind == "wake", Event.agent_id == 1)) is not None
+
+
+async def test_hunger_does_not_wake_a_body_that_has_collapsed(world, sessions, gateway):
+    with sessions() as s:
+        a = s.get(Agent, 1)
+        a.hunger, a.asleep, a.energy, a.inventory, a.money_cents = 95, True, 0, {}, 0
+        s.commit()
+    await world.step()
+    with sessions() as s:
+        assert s.scalar(select(Event).where(Event.kind == "collapse", Event.agent_id == 1)) is None
