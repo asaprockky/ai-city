@@ -263,7 +263,8 @@ def _trim(png: Path, margin: int = 24) -> None:
         im.crop((0, 0, im.width, min(im.height, box[3] + margin))).save(png)
 
 
-GEMINI_MODELS = [m for m in (os.environ.get("ASAPVILLE_GEMINI_IMAGE_MODEL"), "gemini-3.1-flash-image",
+GEMINI_MODELS = [m for m in (os.environ.get("ASAPVILLE_GEMINI_IMAGE_MODEL"), "gemini-3.1-flash-lite-image",
+                               "gemini-3.1-flash-image",
                                "gemini-2.5-flash-image") if m]
 PORTRAIT_STYLE = ("Black-and-white Japanese manga character portrait, head and shoulders, clean ink lines, "
                   "screentone shading, plain white background, seinen manga style, no text, no lettering.")
