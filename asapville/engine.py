@@ -290,7 +290,7 @@ class World:
             error = actions.validate(ctx, a, d, perceived) if a.location_id else "You are on the road."
             a.last_thought = d.thought
             a.mood_label = d.mood[:64]
-            feelings.from_decision(a, d.feelings, ctx.tick, perceived)
+            feelings.from_decision(ctx.session, a, d.feelings, ctx.tick, perceived)
             if error:
                 report.invalid_actions += 1
                 emit(ctx.session, tick=ctx.tick, kind="invalid_action", actor=a,

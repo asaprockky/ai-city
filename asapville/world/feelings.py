@@ -77,8 +77,9 @@ def ru(emotion: str) -> str:
 
 
 def feel(agent: Agent, emotion: str, strength: float, *, why: str, tick: int,
-         toward: int | None = None) -> None:
-    """Add a feeling, or stir one already there (the same emotion about the same person)."""
+         toward: int | None = None, stir: bool = True) -> None:
+    """Add a feeling, or stir one already there (the same emotion about the same person).
+    With `stir` (something happened) it grows; without (the citizen names it again) it holds."""
     e = emotion_of(emotion)
     if e is None or not agent.alive or (toward is not None and toward == agent.id):
         return
@@ -87,7 +88,7 @@ def feel(agent: Agent, emotion: str, strength: float, *, why: str, tick: int,
     for f in out:
         if f["e"] == e and f.get("to") == toward:
             old = float(f["s"])
-            f["s"] = round(min(100.0, max(old, strength) + 0.25 * min(old, strength)), 1)
+            f["s"] = round(min(100.0, max(old, strength) + (0.25 * min(old, strength) if stir else 0)), 1)
             f["why"], f["t"] = why[:160], tick
             break
     else:
@@ -123,16 +124,19 @@ def hourly(agent: Agent, tick: int) -> None:
     agent.mood = max(0.0, min(100.0, agent.mood + mood_pull(agent)))
 
 
-def from_decision(agent: Agent, reported: list[Any], tick: int, perceived: set[int]) -> None:
+SELF_REPORT_CAP = 75.0  # what one hour's mood can start at; only events push a feeling past it
+
+
+def from_decision(session: Session, agent: Agent, reported: list[Any], tick: int,
+                  perceived: set[int]) -> None:
     """The feelings a citizen names in their own decision (at most three, about people they see
-    or know)."""
+    or know). Naming a feeling again keeps it alive but does not make it stronger."""
+    known = perceived | {r.other_id for r in session.scalars(
+        select(Relationship).where(Relationship.agent_id == agent.id))}
     for r in reported[:3]:
-        toward = r.toward if isinstance(r.toward, int) and r.toward in perceived | _known(agent) else None
-        feel(agent, r.emotion, min(90.0, r.strength), why=r.why or "", tick=tick, toward=toward)
-
-
-def _known(agent: Agent) -> set[int]:
-    return {int(f["to"]) for f in agent.feelings or [] if f.get("to") is not None}
+        toward = r.toward if isinstance(r.toward, int) and r.toward in known else None
+        feel(agent, r.emotion, min(SELF_REPORT_CAP, r.strength), why=r.why or "", tick=tick,
+             toward=toward, stir=False)
 
 
 def _cares(session: Session, about: int, threshold: float = 0.2) -> list[tuple[int, float]]:
@@ -193,7 +197,7 @@ def appraise(session: Session, ev: Event) -> None:
 
 
 def strength_word(s: float) -> str:
-    return "overwhelming" if s >= 70 else "strong" if s >= 40 else "mild"
+    return "overwhelming" if s >= 85 else "deep" if s >= 60 else "strong" if s >= 35 else "mild"
 
 
 def describe(session: Session, agent: Agent) -> list[str]:

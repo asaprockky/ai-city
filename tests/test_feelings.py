@@ -60,8 +60,10 @@ async def test_citizens_name_their_own_feelings_and_see_them(world, sessions):
     with sessions() as s:
         ctx = _ctx(world, s, tick=3)
         a, b = _pair(s)
-        feelings.from_decision(a, d.feelings, 3, perceived={b.id})
+        feelings.from_decision(s, a, d.feelings, 3, perceived={b.id})
         assert [(f["e"], f["to"]) for f in a.feelings] == [("envy", b.id), ("love", None)]
-        assert a.feelings[0]["s"] == 90  # capped: one hour's feeling never starts overwhelming at 100
+        assert a.feelings[0]["s"] == 75  # capped: one hour's mood never starts overwhelming
+        feelings.from_decision(s, a, d.feelings, 4, perceived={b.id})
+        assert a.feelings[0]["s"] == 75  # naming it again keeps it, it does not grow
         lines = perception.build_perception(ctx, a).feelings
-    assert lines[0].startswith("envy toward ") and "overwhelming" in lines[0] and "bakery" in lines[0]
+    assert lines[0].startswith("envy toward ") and "(deep)" in lines[0] and "bakery" in lines[0]

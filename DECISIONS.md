@@ -308,8 +308,12 @@ blow anger and fear, a death grief to everyone who cared and a little fear to al
 and shame, an election pride or disappointment, a default shame; and the body each hour: starving
 brings fear, long solitude loneliness. And the citizen themselves: each decision may name up to
 three feelings in character, which is where envy, love, guilt and hope mostly come from (capped at
-90 so one hour never starts at full strength). Each emotion fades at its own pace (irritation in
+75 so one hour never starts at full strength). Each emotion fades at its own pace (irritation in
 hours, grief and love over weeks) and while it lasts pulls the mood up or down. Citizens see their
 feelings ("envy toward Corwin (strong): he owns the bakery") with the reminder that real feelings
 colour what one says and does; they may act on them, hide them or fight them. The reports and the
 who-is-who page show them too.
+First live hours: nearly every feeling read "overwhelming", because a citizen naming the same
+feeling each hour kept stacking it. Now naming it again only keeps it alive; only events make a
+feeling grow. Self-named feelings start at most at 75, the words are mild/strong/deep/overwhelming
+(85+), and a feeling may be about anyone the citizen knows, not only those beside them.
