@@ -240,6 +240,7 @@ class Agent(Base):
     last_action: Mapped[str | None] = mapped_column(String(32), nullable=True)
     last_action_args: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
     last_thought: Mapped[str | None] = mapped_column(UnicodeText, nullable=True)
+    lead: Mapped[bool] = mapped_column(Boolean, default=False)  # a main hero: always the strong model
     # what they feel, strongest first: [{"e": emotion, "to": agent id or None, "s": 0-100, "why", "t": tick}]
     feelings: Mapped[list[dict[str, Any]]] = mapped_column(JSON, default=list)
 

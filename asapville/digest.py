@@ -75,7 +75,9 @@ does and what they pay, who is getting rich and who is broke>",
 one telling detail; one or two sentences>"}],
  "dead": "<names and causes, or empty>",
  "next": "<two or three sentences: what to watch in the coming hours>"}
-Write 3 to 5 stories, the strongest first. Every living citizen gets one entry in citizens."""
+Write 3 to 5 stories, the strongest first. The main heroes (marked ★) carry the paper: most stories \
+follow them, and the other townsfolk appear when they cross a hero's path or something big happens \
+to them. Every hero gets an entry in citizens; of the others, only those who did something notable."""
 
 FLASH_RULES = """You write breaking-news posts for the Asapville town channel. You get one big \
 moment that just happened in town and what led up to it. Write a short post in Russian: start \
@@ -97,6 +99,8 @@ Write in Russian, in plain text (no markdown, no asterisks), exactly in this sha
 
 <One closing line on food, money or what to watch next.>
 
+The main heroes (marked ★) are who readers follow: give them most of the bullets; the other \
+townsfolk appear when they cross a hero's path or something big happens to them. \
 Write 6 to 9 bullets, the most dramatic first: deals and price wars, schemes, quarrels, kindness, \
 new businesses and dishes, the council and elections, hunger and illness, and what people feel \
 (grief, anger, love, envy, gratitude) and how it drives them. Name people by their \
@@ -197,13 +201,17 @@ def facts(session: Session, settings: Settings) -> str:
         out.append("Owned businesses: " + "; ".join(owners))
 
     out.append("Citizens:")
-    for a in session.scalars(select(Agent).where(Agent.alive.is_(True)).order_by(Agent.id)):
+    out.append("(★ = a main hero of the story; the others are the townsfolk around them)")
+    for a in session.scalars(select(Agent).where(Agent.alive.is_(True))
+                             .order_by(Agent.lead.desc(), Agent.id)):
         where = locs[a.location_id].name if a.location_id in locs else "on the road"
-        out.append(f"- {a.name}, {a.role}, at {where}{' (asleep)' if a.asleep else ''}; "
+        size = 400 if a.lead else 150
+        out.append(f"- {'★ ' if a.lead else ''}{a.name}, {a.role}, at {where}"
+                   f"{' (asleep)' if a.asleep else ''}; "
                    f"{a.money_cents / 100:.2f} asaps; fed {100 - a.hunger:.0f}, health {a.health:.0f}, "
                    f"mood {a.mood_label}; feels {_feels(session, a) or 'nothing much'}. "
-                   f"Thinking: {(a.last_thought or '')[:400]} "
-                   f"Plan today: {(_plan(session, a) or '-')[:400]}")
+                   f"Thinking: {(a.last_thought or '')[:size]} "
+                   f"Plan today: {(_plan(session, a) or '-')[:size]}")
     dead = list(session.scalars(select(Agent).where(Agent.alive.is_(False))))
     if dead:
         out.append("Dead: " + ", ".join(f"{a.name} ({a.cause_of_death or 'unknown'})" for a in dead))
@@ -218,17 +226,25 @@ def _line(e: Event) -> str:
     return f"[{e.tick}] {e.kind}: {text[:600]}"
 
 
-def happenings(session: Session, since_tick: int, limit: int = 220) -> str:
-    """The hours' events, with what was said in full; meals and shifts are counted, not listed."""
+def happenings(session: Session, since_tick: int, limit: int = 220, others: int = 70) -> str:
+    """The hours' events, with what was said in full; meals and shifts are counted, not listed.
+    Everything the main heroes did or had done to them is kept; of the rest, the big moments and
+    the latest `others` lines."""
+    leads = set(session.scalars(select(Agent.id).where(Agent.lead.is_(True))))
     lines, meals, shifts = [], 0, 0
+    rest: list[tuple[int, str]] = []
     for e in session.scalars(select(Event).where(Event.tick >= since_tick).order_by(Event.id)):
         if e.kind == "eat":
             meals += 1
         elif e.kind == "work":
             shifts += 1
-        if e.kind not in QUIET_KINDS:
-            lines.append(_line(e))
-    lines = lines[-limit:]
+        if e.kind in QUIET_KINDS:
+            continue
+        if not leads or e.agent_id in leads or e.target_id in leads or is_breaking(e):
+            lines.append((e.id, _line(e)))
+        else:
+            rest.append((e.id, _line(e)))
+    lines = [line for _, line in sorted(lines + rest[-others:])][-limit:]
     lines.append(f"(Also {meals} meals eaten and {shifts} hours of paid work.)")
     return "\n".join(lines)
 
@@ -308,6 +324,8 @@ def breaking(session: Session, after_event_id: int) -> list[Event]:
 
 
 def is_breaking(e: Event) -> bool:
+    if e.kind == "arrival" and not (e.data or {}).get("lead", True):
+        return False  # townsfolk come and go; a new main hero is news
     return e.kind in BREAKING_KINDS or (e.data or {}).get("author") in BREAKING_AUTHORS
 
 

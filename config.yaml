@@ -38,6 +38,7 @@ budget:
   daily_usd: 15.00           # hard cap for all calls in one real (UTC) day
   per_agent_daily_usd: 1.00  # cap per citizen per real day on their usual model
   fallback_agent_daily_usd: 1.50  # then they keep thinking on the cheap model up to this hard cap
+  lead_agent_daily_usd: 2.00  # main heroes always think on Sonnet, up to this cap
   angel_opus_monthly_usd: 10.00
   slow_mode_threshold: 0.90  # fraction of daily cap that triggers slow mode
   slow_mode:
@@ -195,10 +196,10 @@ map:
     - {key: bank,       name: "AsapBank",      kind: bank,       x: 10, y: 8,  capacity: 20}
     - {key: town_hall,  name: "Town Hall",     kind: town_hall,  x: 8,  y: 10, capacity: 40}
     - {key: church,     name: "Chapel of the Hill", kind: church, x: 8, y: 7, capacity: 80}
-    - {key: clinic,     name: "Clinic",        kind: clinic,     x: 12, y: 8,  capacity: 12}
+    - {key: clinic,     name: "Clinic",        kind: clinic,     x: 12, y: 8,  capacity: 16}
     - {key: tavern,     name: "The Crooked Lantern", kind: tavern, x: 11, y: 12, capacity: 40}
-    - {key: bakery,     name: "Bakery",        kind: workplace,  x: 13, y: 11, capacity: 8}
-    - {key: mill,       name: "Mill",          kind: workplace,  x: 16, y: 13, capacity: 8}
+    - {key: bakery,     name: "Bakery",        kind: workplace,  x: 13, y: 11, capacity: 20}
+    - {key: mill,       name: "Mill",          kind: workplace,  x: 16, y: 13, capacity: 12}
     - {key: farm,       name: "Greenfield Farm", kind: farm,     x: 17, y: 16, capacity: 30}
     - {key: forest,     name: "Pinewood Forest", kind: forest,   x: 2,  y: 3,  capacity: 500}
     - {key: quarry,     name: "Grey Quarry",   kind: quarry,     x: 3,  y: 16, capacity: 30}
@@ -208,7 +209,7 @@ map:
     - {key: well_shop,  name: "The Empty Shop by the Well", kind: shop, x: 9, y: 9, capacity: 12}
     - {key: corner_shop, name: "The Corner Shop", kind: shop,   x: 14, y: 9,  capacity: 12}
   home_plots:                # one home per plot, laid out in a residential block
-    count: 12
+    count: 32
     origin: {x: 4, y: 9}
     columns: 4
     spacing: 1

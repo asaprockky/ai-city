@@ -225,7 +225,7 @@ async def serve(settings: Settings, sessions: sessionmaker[Session], gateway: LL
 
 async def arrive(settings: Settings, sessions: sessionmaker[Session], gateway: LLMGateway, *,
                  preset: str | None = None, works_for: str | None = None,
-                 advance_cents: int = 4000) -> Agent:
+                 advance_cents: int = 4000, lead: bool = False) -> Agent:
     """A newcomer is born (seed card rolled, or a preset), gets a free house if any, and arrives."""
     from asapville.agents.birth import roll_seed_card
     from asapville.agents.presets import PRESETS
@@ -236,19 +236,21 @@ async def arrive(settings: Settings, sessions: sessionmaker[Session], gateway: L
     with sessions() as s:
         gateway.guard.load(s)
         ws = get_world_state(s)
-        rng = random.Random(f"{settings.world.seed}:arrive:{ws.tick}")
+        n = s.scalar(select(func.count(Agent.id))) or 0
+        rng = random.Random(f"{settings.world.seed}:arrive:{ws.tick}:{n}")
+        seed_locations(s, settings.map)  # new house plots, if the town has grown
         seed = PRESETS[preset].model_copy() if preset else roll_seed_card(rng, settings)
         homes = s.scalars(select(Location).where(Location.kind == "home").order_by(Location.id))
         home = next((loc for loc in homes if loc.owner_id is None), None)
-        n = s.scalar(select(func.count(Agent.id))) or 0
         agent = await birth_agent(s, gateway, settings, rng, seed_index=n, home=home, tick=ws.tick,
                                   seed=seed)
         if home is not None:
             home.owner_id = agent.id
+        agent.lead = lead
         emit(s, tick=ws.tick, kind="arrival", actor=agent, location_id=agent.location_id,
              visibility="public",
              summary=f"A newcomer moved to {settings.world.name}: {agent.name}",
-             data={"preset": preset, "home": home.name if home else None},
+             data={"preset": preset, "home": home.name if home else None, "lead": lead},
              actor_memory=f"Today I moved to {settings.world.name}"
                           + (f" and took {home.name} as my home." if home
                              else ", with no home of my own yet."),
@@ -350,6 +352,8 @@ def main(argv: list[str] | None = None) -> int:
     p_arr.add_argument("--preset", help="a seed card from asapville/agents/presets.py, e.g. demagogue")
     p_arr.add_argument("--works-for", help="a citizen (name or first name) who secretly paid their way here")
     p_arr.add_argument("--advance", type=float, default=40.0, help="asaps the patron already paid them")
+    p_arr.add_argument("--count", type=int, default=1, help="how many newcomers arrive")
+    p_arr.add_argument("--lead", action="store_true", help="make them main heroes (always the strong model)")
     p_exp = sub.add_parser("export", help="write a self-contained replay page of the town")
     p_exp.add_argument("--out", default="asapville.html")
     p_por = sub.add_parser("portraits", help="draw manga portraits (Gemini) for citizens who have none")
@@ -422,9 +426,11 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     if args.cmd == "arrive":
         upgrade_to_head(settings.db_url)
-        agent = asyncio.run(arrive(settings, sessions, gateway, preset=args.preset,
-                                   works_for=args.works_for, advance_cents=round(args.advance * 100)))
-        print(f"{agent.name} arrived in {settings.world.name}")
+        for _ in range(args.count):
+            agent = asyncio.run(arrive(settings, sessions, gateway, preset=args.preset,
+                                       works_for=args.works_for, advance_cents=round(args.advance * 100),
+                                       lead=args.lead))
+            print(f"{agent.name} ({agent.role}) arrived in {settings.world.name}")
         return 0
     if args.cmd == "portraits":
         import os

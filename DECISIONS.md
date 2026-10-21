@@ -322,3 +322,17 @@ feeling grow. Self-named feelings start at most at 75, the words are mild/strong
 Dell lost a day: he runs a bread counter at the Town Hall and wanted to make soup there, but only
 a home or an owned business counted as a kitchen. A street cook with a pot is ordinary, so a
 citizen may now cook where they have a stall of their own.
+
+## Main heroes and twenty more townsfolk
+The owner wants a bigger town but to follow a few characters. Four citizens are main heroes
+(`Agent.lead`, migration 0012): Corwin (the dictator), Jory (the spy), Ruth Caddick and Tobias
+Renner. A hero always thinks on Sonnet, never falls back to the cheap model, and has a cap of their
+own (`lead_agent_daily_usd`, $2). Everyone else is townsfolk: routed by tier as before (Haiku unless
+rich or owning a business). The reports follow the heroes: `facts` marks them ★ and gives them more
+room, `happenings` keeps every event a hero is part of and only the latest 70 others plus the big
+moments, and the writers are told to give the heroes most of the stories and bullets. A townsfolk
+arrival is not breaking news. The who-is-who page shows the heroes first with full cards, then a
+table of everyone else, with what each one feels now.
+For room: 20 more house plots (32 in all), bakery for 20, mill 12, clinic 16; `seed_locations` now
+also brings existing places to the configured capacity. `asapville arrive --count N` brings several
+newcomers at once, each with their own seed (the seed now includes the head count).

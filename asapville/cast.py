@@ -127,8 +127,7 @@ def render_html(session: Session, settings: Settings, profiles: dict[str, Profil
     def name(a: Agent) -> str:
         return esc(_ru(profiles, a))
 
-    rows = []
-    for a in living:
+    def row(a: Agent) -> str:
         p = profiles.get(a.name, Profile(name=a.name))
         home = locs[a.home_id].name.replace("House No. ", "Дом\u00a0№") if a.home_id in locs else "—"
         acc = bank.get(a.id)
@@ -137,15 +136,21 @@ def render_html(session: Session, settings: Settings, profiles: dict[str, Profil
             money += f" (+{acc.deposit_cents / 100:.0f} в банке)"
         if acc and acc.loan_cents:
             money += f" (долг {acc.loan_cents / 100:.0f})"
-        rows.append(f'<tr><td class="ph">{_face(a, 96)}</td><td><b>{name(a)}</b><br>'
-                    f'<span class="role">{esc(a.name)}</span></td><td>{esc(p.who)}</td>'
-                    f"<td>{esc(ROLES_RU.get(a.role, a.role))}"
-                    f"{'<br><b>в совете</b>' if a.id in council else ''}</td>"
-                    f"<td>{esc(', '.join(owns.get(a.id, [])) or '—')}</td><td>{esc(home)}</td>"
-                    f"<td>{money}</td></tr>")
+        return (f'<tr><td class="ph">{_face(a, 96)}</td><td><b>{name(a)}</b><br>'
+                f'<span class="role">{esc(a.name)}</span></td><td>{esc(p.who)}</td>'
+                f"<td>{esc(ROLES_RU.get(a.role, a.role))}"
+                f"{'<br><b>в совете</b>' if a.id in council else ''}</td>"
+                f"<td>{esc(feelings.summary_ru(session, a)) or '—'}</td>"
+                f"<td>{esc(', '.join(owns.get(a.id, [])) or '—')}</td><td>{esc(home)}</td>"
+                f"<td>{money}</td></tr>")
+
+    head = ('<div class="wide"><table><thead><tr><th></th><th>Имя</th><th>Кто это</th><th>Работа</th>'
+            "<th>Чувствует</th><th>Владеет</th><th>Живёт</th><th>Деньги</th></tr></thead>")
+    leads = [a for a in living if a.lead]
+    others = [a for a in living if not a.lead]
 
     cards = []
-    for a in living:
+    for a in leads or living:
         p = profiles.get(a.name, Profile(name=a.name))
         rels = list(session.scalars(select(Relationship).where(Relationship.agent_id == a.id)))
         known = [r for r in rels if r.other_id in by_id and by_id[r.other_id].alive]
@@ -191,10 +196,11 @@ letter-spacing:.08em;padding:6px 8px;border-bottom:2px solid var(--rule)}
             f"<title>Кто есть кто в Асапвиле</title><style>{PAGE_STYLE}{extra}</style></head><body><main>"
             f'<header><div class="mast">Кто есть кто</div><div class="date">Асапвиль · обновлено: '
             f"{esc(when)}</div></header>"
-            f'<h2 class="sec">Все жители</h2><div class="wide"><table><thead><tr><th></th><th>Имя</th>'
-            f"<th>Кто это</th><th>Работа</th><th>Владеет</th><th>Живёт</th><th>Деньги</th></tr></thead>"
-            f'{"".join(rows)}</table></div>'
-            f'<h2 class="sec">Подробно</h2><div class="grid people">{"".join(cards)}</div>'
+            + (f'<h2 class="sec">Главные герои</h2>{head}{"".join(row(a) for a in leads)}</table></div>'
+               f'<div class="grid people">{"".join(cards)}</div>' if leads else
+               f'<h2 class="sec">Подробно</h2><div class="grid people">{"".join(cards)}</div>')
+            + (f'<h2 class="sec">{"Остальные жители" if leads else "Все жители"}</h2>{head}'
+               f'{"".join(row(a) for a in others)}</table></div>' if others else "")
             + (f'<h2 class="sec">Умерли</h2><table>{"".join(dead)}</table>' if dead else "")
             + "<footer>Тайны жителей знают только читатели: сами горожане о них не знают.</footer>"
             "</main></body></html>")
