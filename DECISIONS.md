@@ -351,3 +351,9 @@ brief describes the man, not any real person. A newcomer with no free house star
 (before, they had no place at all and could not act); house plots go to 40.
 The angel that writes the council's notices saw only the configured prices and kept posting
 "bread 3.00" while Corwin sold at 1.50; it now sees each shelf's real price.
+
+## Live page storage
+The live page's database hit its 100 MB limit: every hour's bundle carried the angels' whole
+history of anomalies and interventions since the town began (155 KB of 185 KB per hour, growing).
+A live tick now carries only the latest 40 of each (`LIVE_ANGEL_ROWS`); the full dashboard and
+export still show everything. The stored hours were trimmed of that history.

@@ -147,15 +147,23 @@ def relations_payload(session: Session) -> list[dict[str, Any]]:
     return out
 
 
-def angels_payload(session: Session) -> dict[str, Any]:
+LIVE_ANGEL_ROWS = 40  # a live tick carries only the latest angel work, not the town's whole history
+
+
+def angels_payload(session: Session, limit: int | None = None) -> dict[str, Any]:
+    """The angels' anomalies and interventions, oldest first; with `limit`, only the latest ones."""
+    an_q = select(Anomaly).order_by(Anomaly.id.desc())
+    iv_q = select(Intervention).order_by(Intervention.id.desc())
+    if limit is not None:
+        an_q, iv_q = an_q.limit(limit), iv_q.limit(limit)
     anomalies = [{"id": a.id, "tick": a.tick, "kind": a.kind, "severity": a.severity, "status": a.status,
                   "agent_id": a.agent_id, "detail": a.detail, "source": a.source,
                   "fix_attempts": a.fix_attempts}
-                 for a in session.scalars(select(Anomaly).order_by(Anomaly.id))]
+                 for a in reversed(list(session.scalars(an_q)))]
     interventions = [{"id": i.id, "tick": i.tick, "anomaly_id": i.anomaly_id, "target": i.target,
                       "applied": i.applied, "reason": i.reason, "model": i.model,
                       "before": i.before, "after": i.after}
-                     for i in session.scalars(select(Intervention).order_by(Intervention.id))]
+                     for i in reversed(list(session.scalars(iv_q)))]
     return {"anomalies": anomalies, "interventions": interventions}
 
 
@@ -205,5 +213,6 @@ def tick_bundle(session: Session, settings: Settings, tick: int) -> dict[str, An
         .order_by(Event.id))]
     return {"tick": tick, "frame": frame[0] if frame else None, "events": evs,
             "world": world_payload(ws, settings), "cost": cost(session),
-            "economy": economy_payload(session, settings), "angels": angels_payload(session),
+            "economy": economy_payload(session, settings),
+            "angels": angels_payload(session, limit=LIVE_ANGEL_ROWS),
             "relations": relations_payload(session)}
