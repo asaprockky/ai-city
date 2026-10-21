@@ -378,7 +378,7 @@ def main(argv: list[str] | None = None) -> int:
     p_cast.add_argument("--redo", action="store_true", help="rewrite every citizen's profile")
     p_cast.add_argument("--post", action="store_true", help="send it to the channel and pin it")
     p_news = sub.add_parser("news", help="breaking-news posts for the big moments since the last run")
-    p_news.add_argument("--max", type=int, default=4, help="at most this many posts per run")
+    p_news.add_argument("--max", type=int, default=2, help="at most this many posts per run")
     p_news.add_argument("--mark", default=".asapville-news", help="file remembering the last event posted")
     p_news.add_argument("--post", action="store_true")
     p_doc = sub.add_parser("post-file", help="send a file (an HTML page, say) to the Telegram channel")

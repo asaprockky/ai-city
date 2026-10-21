@@ -40,8 +40,8 @@ from asapville.world.clock import Clock
 SEASONS_RU = {"spring": "весна", "summer": "лето", "autumn": "осень", "winter": "зима"}
 QUIET_KINDS = {"move", "rest", "sleep", "idle", "travel", "depart", "arrive", "wake", "plan",
                "invalid_action", "tier_change", "angel", "eat", "work", "ballot"}
-BREAKING_KINDS = {"death", "property", "law", "proposal", "candidacy", "secret_deal",
-                  "open_stall", "collapse", "arrival"}
+# only what changes the town for good: proposals, candidacies, stalls and the like go in the bulletin
+BREAKING_KINDS = {"death", "property", "law", "secret_deal", "arrival"}
 BREAKING_AUTHORS = {"the town clerk", "AsapBank"}  # notices worth a flash: elections, defaults
 # (plain deposits and withdrawals are "bank" events and not news)
 _FENCE = re.compile(r"^```(?:json)?\s*|\s*```$", re.MULTILINE)
@@ -101,7 +101,8 @@ Write in Russian, in plain text (no markdown, no asterisks), exactly in this sha
 
 The main heroes (marked ★) are who readers follow: give them most of the bullets; the other \
 townsfolk appear when they cross a hero's path or something big happens to them. \
-Write 6 to 9 bullets, the most dramatic first: deals and price wars, schemes, quarrels, kindness, \
+Write 5 to 7 bullets, the most dramatic first, and keep the whole bulletin under 3500 characters so \
+it fits in one message: deals and price wars, schemes, quarrels, kindness, \
 new businesses and dishes, the council and elections, hunger and illness, and what people feel \
 (grief, anger, love, envy, gratitude) and how it drives them. Name people by their \
 first names in Russian and keep numbers exact. Quote citizens' real words (translated into natural \

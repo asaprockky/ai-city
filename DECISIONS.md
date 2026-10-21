@@ -336,3 +336,9 @@ table of everyone else, with what each one feels now.
 For room: 20 more house plots (32 in all), bakery for 20, mill 12, clinic 16; `seed_locations` now
 also brings existing places to the configured capacity. `asapville arrive --count N` brings several
 newcomers at once, each with their own seed (the seed now includes the head count).
+
+## Fewer posts in the channel
+With thirty citizens the channel filled up: every proposal, candidacy and new stall was a flash,
+and the bulletin ran to two or three messages. Now a flash is only for what changes the town for
+good (a death, a business bought, a law passed, a secret deal, a new hero, election results and
+bank defaults), at most two per chunk; the bulletin is 5-7 bullets under 3500 characters, one message.
