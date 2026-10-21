@@ -106,7 +106,45 @@ class ActionName(StrEnum):
     VOTE = "vote"
     FOUND_BUSINESS = "found_business"
     BORROW = "borrow"
+    IMPROVISE = "improvise"
+    OPEN_STALL = "open_stall"
+    BUY_PROPERTY = "buy_property"
+    STOCK_STALL = "stock_stall"
+    SET_PRICE = "set_price"
+    DEPOSIT = "deposit"
+    WITHDRAW = "withdraw"
+    REPAY = "repay"
+    COOK = "cook"
+    STAND = "stand"
+    ELECT = "elect"
     IDLE = "idle"
+
+
+class FeelingReport(BaseModel):
+    """One feeling a citizen names in their decision."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    emotion: str = Field(max_length=32)
+    toward: int | None = None  # ref of the person it is about, if any
+    why: str = Field(default="", max_length=200)
+    strength: float = Field(default=40, ge=0, le=100)
+
+    @field_validator("toward", mode="before")
+    @classmethod
+    def _ref_or_none(cls, v: Any) -> Any:
+        try:
+            return int(v) if v is not None and str(v).strip() not in ("", "null") else None
+        except (TypeError, ValueError):
+            return None
+
+    @field_validator("strength", mode="before")
+    @classmethod
+    def _clamp(cls, v: Any) -> Any:
+        try:
+            return max(0.0, min(100.0, float(v)))
+        except (TypeError, ValueError):
+            return 40
 
 
 class Decision(BaseModel):
@@ -117,6 +155,14 @@ class Decision(BaseModel):
     action_args: dict[str, Any] = Field(default_factory=dict)
     dialogue: str | None = Field(default=None, max_length=1000)
     mood: str = Field(default="calm", max_length=64)
+    feelings: list[FeelingReport] = Field(default_factory=list)
+
+    @field_validator("feelings", mode="before")
+    @classmethod
+    def _keep_readable_feelings(cls, v: Any) -> Any:
+        if not isinstance(v, list):
+            return []
+        return [f for f in v if isinstance(f, dict) and f.get("emotion")][:3]
 
     @field_validator("action", mode="before")
     @classmethod
@@ -142,6 +188,30 @@ class Destination(BaseModel):
     name: str
     kind: str
     travel_hours: int
+    sells: list[str] = Field(default_factory=list)
+    jobs: list[str] = Field(default_factory=list)
+    note: str | None = None  # e.g. "for sale, 300 asaps" or "owned by Hester Vance"
+
+
+class ShopItem(BaseModel):
+    item: str
+    price_cents: int
+    qty: int | None = None  # None = never runs out
+    seller: str | None = None  # a citizen's stall: its name and who runs it; None = the town shop
+
+
+class JobHere(BaseModel):
+    job: str
+    wage_cents: int
+    workers: int
+    active: int | None = None  # of those, how many turned up in the last day
+    no_demand: list[str] = Field(default_factory=list)  # its goods are piled up unsold: no paid work now
+
+
+class Notice(BaseModel):
+    text: str
+    author: str  # name if known, else a description or "the town council"
+    hours_ago: int
 
 
 class Perception(BaseModel):
@@ -154,6 +224,7 @@ class Perception(BaseModel):
     location_key: str
     location_name: str
     location_kind: str
+    location_note: str | None = None
     is_home: bool
     here: list[SeenAgent]
     destinations: list[Destination]
@@ -164,7 +235,28 @@ class Perception(BaseModel):
     social: int
     money_cents: int
     inventory: dict[str, int]
-    notices: list[str] = Field(default_factory=list)
+    notices: list[Notice] = Field(default_factory=list)
+    job: str | None = None  # the agent's job, if any
+    workplace: str | None = None  # name of where that job is done
+    wage_cents: int | None = None
+    job_output_cents: int | None = None  # shelf value of what one hour of that job makes
+    employer: str | None = None  # the citizen who owns the workplace, if any
+    job_unsold: list[str] = Field(default_factory=list)  # their job's goods pile up unsold: no pay now
+    bank: str | None = None  # their AsapBank account, in words
+    bank_offer: str | None = None  # at the bank: what it will do for them
+    kitchen: str | None = None  # what they could cook, and where
+    routine: str | None = None  # set when their days have been nothing but routine
+    civic: list[str] = Field(default_factory=list)  # the council and any election under way
+    setbacks: list[str] = Field(default_factory=list)  # what went wrong for them lately, and why
+    given: list[str] = Field(default_factory=list)  # money they handed to each person lately
+    feelings: list[str] = Field(default_factory=list)  # what they feel, toward whom, and why
+    shop: list[ShopItem] = Field(default_factory=list)  # for sale where the agent stands
+    jobs_here: list[JobHere] = Field(default_factory=list)
+    plan: str | None = None  # the citizen's own plan for today, in their words
+    businesses: list[str] = Field(default_factory=list)  # the citizen's own stalls, in words
+    proposals: list[str] = Field(default_factory=list)  # open votes, in words (incl. your vote)
+    decisions: list[str] = Field(default_factory=list)  # what the town decided lately
+    people: list[str] = Field(default_factory=list)  # how you stand with the people you know
     recent_dialogue: list[str] = Field(default_factory=list)
     recent_events: list[str] = Field(default_factory=list)
     available_actions: list[str] = Field(default_factory=list)

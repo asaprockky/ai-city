@@ -48,7 +48,7 @@ class EffortCfg(BaseModel):
 
 class LLMCfg(BaseModel):
     backend: Literal["fake", "anthropic"] = "fake"
-    # env: send ANTHROPIC_API_KEY from the environment.
+    # env: send ASAPVILLE_ANTHROPIC_KEY from the environment.
     # proxy: send no key; an egress proxy (e.g. a cloud "network secret") adds x-api-key.
     auth: Literal["env", "proxy"] = "env"
     max_concurrency: int = 8
@@ -67,6 +67,8 @@ class SlowModeCfg(BaseModel):
 class BudgetCfg(BaseModel):
     daily_usd: float = 5.0
     per_agent_daily_usd: float = 0.5
+    fallback_agent_daily_usd: float = 1.5  # past the cap a citizen keeps thinking on the cheap model
+    lead_agent_daily_usd: float = 2.0  # a main hero always thinks on the strong model, up to this cap
     angel_opus_monthly_usd: float = 10.0
     slow_mode_threshold: float = 0.9
     slow_mode: SlowModeCfg = SlowModeCfg()
@@ -95,6 +97,8 @@ class NeedsCfg(BaseModel):
     health_regen: float = 0.5
     collapse_energy: float = 0.0
     rough_sleep_mood_penalty: float = 10.0
+    boredom_mood: float = 8.0  # eating the same food three times running
+    variety_mood: float = 5.0  # eating something not had lately
 
 
 class SleepCfg(BaseModel):
@@ -105,6 +109,13 @@ class SleepCfg(BaseModel):
 
 class FoodItem(BaseModel):
     nutrition: float
+    health: float = 0.0  # medicine heals; ordinary food doesn't
+    mood: float = 0.0  # a good dish lifts the mood
+
+
+class RecipeCfg(BaseModel):
+    uses: dict[str, int]  # ingredients taken from what the cook carries
+    makes: int = 1  # portions of the dish
 
 
 class ForageSpot(BaseModel):
@@ -157,6 +168,54 @@ class MapCfg(BaseModel):
     home_plots: HomePlotsCfg = HomePlotsCfg()
 
 
+class JobCfg(BaseModel):
+    workplace: str  # location key where the work happens
+    wage_cents: int  # paid by the town treasury per hour worked
+    uses: dict[str, int] = Field(default_factory=dict)  # inputs taken from `source` each hour
+    source: str | None = None  # location key whose stock holds the inputs
+    makes: dict[str, int] = Field(default_factory=dict)  # outputs per hour
+    deliver: dict[str, str] = Field(default_factory=dict)  # item -> location key (default: workplace)
+    keep: dict[str, int] = Field(default_factory=dict)  # units of an output left at the workplace
+
+
+class EconomyCfg(BaseModel):
+    treasury_cents: int = 2_000_000  # the town fund: pays wages, takes what shops earn
+    prices: dict[str, int] = Field(default_factory=dict)  # cents per unit on the shelf
+    buyback: float = 0.6  # fraction of the shelf price a shop pays when a citizen sells
+    shops: dict[str, list[str]] = Field(default_factory=dict)  # location key -> items for sale
+    served: list[str] = Field(default_factory=list)  # eaten at the counter (tavern meals)
+    unlimited: list[str] = Field(default_factory=list)  # never run out (the tavern kitchen)
+    jobs: dict[str, JobCfg] = Field(default_factory=dict)
+    stock_start: dict[str, dict[str, int]] = Field(default_factory=dict)
+    work_energy_cost: float = 5.0
+    property_price_cents: int = 30_000
+    business_prices: dict[str, int] = Field(default_factory=dict)  # location key -> price to buy it
+    shelf_cap: int = 40  # a shelf holding this many of an item buys no more of it: no demand, no wage
+    sales_tax: float = 0.10  # the town's share of every sale by a citizen's business or stall
+    income_tax: float = 0.05  # the town's share of every wage
+    notice_ticks: int = 24  # how long a notice stays on the town board
+
+
+class AngelsCfg(BaseModel):
+    enabled: bool = True
+    # what the Fixer may do; the fewer, the more the town's fate is the citizens' own
+    allow: list[str] = Field(default_factory=lambda: ["notice", "restock", "grant", "give_food"])
+    fixer_every: int = 3  # at most one Fixer call per N ticks
+    max_restock: int = 50
+    max_grant_cents: int = 5000
+    max_food: int = 5
+    max_tokens: int = 2048
+
+
+class BankCfg(BaseModel):
+    deposit_rate: float = 0.005  # interest paid on savings, per day
+    loan_rate: float = 0.02  # interest charged on a loan, per day
+    loan_days: int = 7  # a loan is due this many days after it is taken
+    min_credit_cents: int = 2000  # what the bank lends anyone with a job
+    income_multiple: float = 2.0  # credit: this many times the wages earned in the last 3 days
+    collateral_share: float = 0.5  # plus this share of the price of the businesses one owns
+
+
 class Settings(BaseModel):
     world: WorldCfg = WorldCfg()
     clock: ClockCfg = ClockCfg()
@@ -166,11 +225,15 @@ class Settings(BaseModel):
     needs: NeedsCfg = NeedsCfg()
     sleep: SleepCfg = SleepCfg()
     food: dict[str, FoodItem] = Field(default_factory=dict)
+    recipes: dict[str, RecipeCfg] = Field(default_factory=dict)  # dish -> how to cook it
     forage: dict[str, ForageSpot] = Field(default_factory=dict)
     birth: BirthCfg = BirthCfg()
     conversation: ConversationCfg = ConversationCfg()
     memory: MemoryCfg = MemoryCfg()
     map: MapCfg = MapCfg()
+    economy: EconomyCfg = EconomyCfg()
+    bank: BankCfg = BankCfg()
+    angels: AngelsCfg = AngelsCfg()
     db_url: str = DEFAULT_DB_URL
 
 

@@ -77,7 +77,7 @@ async def test_starving_agent_dies_without_scripting(world, sessions, fake):
 
 
 async def test_budget_slow_mode_then_pause(settings, sessions):
-    settings.budget.daily_usd = 0.01  # small enough to hit before anyone can starve
+    settings.budget.daily_usd = 0.05  # small enough to hit before anyone can starve
     guard = BudgetGuard(settings.budget, today=lambda: "2026-10-20")
     gw = LLMGateway(FakeLLM(billable=True), settings.llm, guard)
     await init_world(settings, sessions=sessions, gateway=gw)
@@ -127,10 +127,59 @@ async def test_no_citizen_memory_mentions_angels_or_system(world, sessions):
 async def test_init_world_without_key_touches_no_database(settings, tmp_path, monkeypatch):
     import pytest
 
-    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    monkeypatch.delenv("ASAPVILLE_ANTHROPIC_KEY", raising=False)
     settings.llm.backend = "anthropic"
     db = tmp_path / "nokey.db"
     settings.db_url = f"sqlite:///{db}"
-    with pytest.raises(RuntimeError, match="ANTHROPIC_API_KEY"):
+    with pytest.raises(RuntimeError, match="ASAPVILLE_ANTHROPIC_KEY"):
         await init_world(settings)
     assert not db.exists() or db.stat().st_size == 0
+
+
+async def test_a_capped_citizen_still_eats_what_they_carry(world, sessions, gateway):
+    with sessions() as s:
+        a = s.get(Agent, 1)
+        a.hunger, a.inventory, a.bedtime_hour, a.energy = 95, {"bread": 2}, 22, 80
+        s.commit()
+    gateway.guard.spent_by_agent[1] = 999.0  # over their daily cap: no LLM turn
+    await world.step()
+    with sessions() as s:
+        a = s.get(Agent, 1)
+        assert a.inventory == {"bread": 1} and a.hunger < 95
+
+
+async def test_a_capped_citizen_with_money_buys_a_meal_where_they_stand(world, sessions, gateway):
+    from asapville.db.models import Location
+
+    with sessions() as s:
+        a = s.get(Agent, 1)
+        tavern = s.scalar(select(Location).where(Location.key == "tavern"))
+        a.location_id, a.destination_id, a.travel_ticks_left = tavern.id, None, 0
+        a.hunger, a.inventory, a.bedtime_hour, a.energy, a.money_cents = 100, {}, 22, 80, 2000
+        s.commit()
+    gateway.guard.spent_by_agent[1] = 999.0
+    await world.step()
+    with sessions() as s:
+        a = s.get(Agent, 1)
+        assert a.money_cents == 1500 and a.hunger < 100
+
+
+async def test_a_starving_citizen_does_not_sleep_through_it(world, sessions, gateway):
+    with sessions() as s:
+        a = s.get(Agent, 1)
+        a.hunger, a.asleep, a.inventory, a.money_cents = 95, True, {}, 0
+        a.bedtime_hour = (world.clock.at(s.get(WorldState, 1).tick).hour) % 24  # deep in their night
+        s.commit()
+    await world.step()
+    with sessions() as s:
+        assert s.scalar(select(Event).where(Event.kind == "wake", Event.agent_id == 1)) is not None
+
+
+async def test_hunger_does_not_wake_a_body_that_has_collapsed(world, sessions, gateway):
+    with sessions() as s:
+        a = s.get(Agent, 1)
+        a.hunger, a.asleep, a.energy, a.inventory, a.money_cents = 95, True, 0, {}, 0
+        s.commit()
+    await world.step()
+    with sessions() as s:
+        assert s.scalar(select(Event).where(Event.kind == "collapse", Event.agent_id == 1)) is None

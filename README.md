@@ -16,10 +16,36 @@ pytest                          # full test suite, $0
 
 Other commands: `asapville pause`, `asapville resume`, `asapville speed 2.0`.
 
+## Watch the town live
+
+```bash
+asapville serve                 # runs the world AND a live dashboard at http://127.0.0.1:8420
+asapville serve --days 2 --fast # run two days as fast as the LLM allows, keep serving afterwards
+asapville serve --view-only     # just show the database (live if `asapville run` is on elsewhere)
+asapville export --out town.html   # one self-contained replay page, no server needed
+```
+
+The dashboard shows the map with every citizen (walking, sleeping, talking), a scrubbable
+timeline of every hour lived, each citizen's needs, mood, thoughts and persona, the event feed,
+the town's shelves, fund and jobs, what the angels saw and did, and the LLM cost ledger. Pause,
+resume and speed work from the page.
+
+## How the town works
+
+- **Needs:** hunger rises, energy falls; starving damages health, health 0 is death (permanent).
+- **Money:** asaps. Shops sell for asaps; the town fund pays wages for hours worked.
+- **Food chain:** farmer (grain, vegetables) → miller (flour) → baker (bread). Nothing appears on a
+  shelf unless someone made it. Foraging (forest berries, river fish) is free but unreliable; the
+  tavern always serves stew, for a price.
+- **Jobs:** `apply` at the workplace, then `work` there. Wages and output are in `config.yaml`.
+- **The town board:** anyone can pin a notice at the Town Hall or Square; everyone reads it for a day.
+- **Angels:** the Watcher (code) flags trouble every hour; the Fixer (Sonnet/Opus) may post a
+  notice, send a cart, appoint someone, grant relief or hand out food. Citizens only see effects.
+
 ## Real Claude models
 
 ```bash
-export ANTHROPIC_API_KEY=...         # never put it in config.yaml
+export ASAPVILLE_ANTHROPIC_KEY=...         # never put it in config.yaml
 export ASAPVILLE_LLM_BACKEND=anthropic
 ```
 

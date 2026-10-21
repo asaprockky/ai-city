@@ -64,7 +64,7 @@ FAKE_PORTRAITS: list[dict[str, Any]] = [
 ]
 
 # Location keys the fake wanderer likes to visit.
-_WANDER = ["square", "market", "tavern", "church", "forest", "river", "farm"]
+_WANDER = ["square", "market", "tavern", "church", "forest", "river", "farm", "bakery", "mill"]
 
 
 def _stable_rng(*parts: Any) -> random.Random:
@@ -98,8 +98,25 @@ def fake_decide(req: LLMRequest, rng: random.Random) -> str:
         return json.dumps({"thought": thought, "action": action, "action_args": args or {},
                            "dialogue": dialogue, "mood": mood})
 
+    shop = {x["item"]: x for x in p.get("shop", [])}
+    money = p.get("money_cents", 0)
     if p.get("hunger", 0) >= 45 and food:
         return out("My stomach is growling.", "eat", {"item": food[0]}, mood="hungry")
+    if p.get("hunger", 0) >= 55 and not food:
+        for item in ("bread", "vegetables", "stew"):
+            x = shop.get(item)
+            if x and (x["qty"] is None or x["qty"] > 0) and money >= x["price_cents"]:
+                return out("I'll buy something to eat.", "buy", {"item": item, "qty": 1}, mood="hungry")
+        if money >= 300:
+            sellers = [d for d in dests.values() if set(d.get("sells", [])) & {"bread", "vegetables", "stew"}]
+            if sellers:
+                best = min(sellers, key=lambda d: d["travel_hours"])
+                return out("I have money; I'll buy food.", "move", {"to": best["key"]}, mood="hungry")
+    if p.get("job") and p.get("workplace") == p.get("location_name") and p.get("energy", 0) > 30 \
+            and rng.random() < 0.7:
+        return out("Back to work.", "work", mood="busy")
+    if not p.get("job") and p.get("jobs_here") and rng.random() < 0.6:
+        return out("I could use steady money.", "apply", {"job": p["jobs_here"][0]["job"]}, mood="hopeful")
     if p.get("hunger", 0) >= 55 and not food:
         if loc in ("forest", "river"):
             return out("Maybe I can find something to eat here.", "forage", mood="worried")
@@ -109,6 +126,14 @@ def fake_decide(req: LLMRequest, rng: random.Random) -> str:
             return out("I need food. The wild might provide.", "move", {"to": target}, mood="anxious")
     if p.get("energy", 100) <= 25:
         return out("I'm worn out.", "rest", mood="tired")
+    if rng.random() < 0.08:
+        return out("I could make something of this hour.", "improvise",
+                   {"what": rng.choice(["whittle a spoon from a stick", "sing an old song",
+                                        "sweep the step outside", "sketch the square"])}, mood="curious")
+    if here and food and rng.random() < 0.05:
+        other = rng.choice(here)
+        return out("They look like they need it more.", "give",
+                   {"to": other["ref"], "item": food[0], "qty": 1}, mood="kind")
     if here and rng.random() < 0.4:
         other = rng.choice(here)
         greeting = "Hello there." if other.get("name") is None else f"Good to see you, {other['name']}."
@@ -120,12 +145,55 @@ def fake_decide(req: LLMRequest, rng: random.Random) -> str:
     return out("Nothing pressing right now.", "idle")
 
 
+def fake_fixer(req: LLMRequest, rng: random.Random) -> str:
+    """A cautious angel: restock empty shelves, feed the dying, fill empty jobs, post a notice."""
+    ctx = req.context
+    anomalies = ctx.get("anomalies", [])
+    ivs: list[dict[str, Any]] = []
+    kinds = {a["kind"] for a in anomalies}
+    if "no_food_for_sale" in kinds:
+        ivs.append({"kind": "restock", "location": "bakery", "item": "bread", "qty": 20,
+                    "why": "every shelf is empty"})
+    for a in anomalies:
+        if a["kind"] == "starving" and a["severity"] >= 4 and a.get("agent_id"):
+            ivs.append({"kind": "give_food", "agent_id": a["agent_id"], "item": "bread", "qty": 2,
+                        "why": "about to die"})
+    ivs.append({"kind": "notice", "text": "Bread is sold at the Bakery for 3.00 asaps; the farm, mill, "
+                                          "bakery and quarry pay wages. Apply there.",
+                "why": "people don't know where food is"})
+    return json.dumps({"assessment": "The town is short of food and workers.",
+                       "interventions": ivs[:6]})
+
+
+def fake_plan(req: LLMRequest, rng: random.Random) -> str:
+    p = req.context.get("perception", {})
+    goal = rng.choice(["find steady work", "make a friend at the tavern", "carve something to sell",
+                       "explore the forest", "help whoever looks worst off"])
+    return json.dumps({"plan": f"Eat something at {p.get('location_name', 'home')}, then {goal}.",
+                       "mood": "hopeful"})
+
+
+def fake_judge(req: LLMRequest, rng: random.Random) -> str:
+    """Ordinary attempts work: a little energy, a small mood lift, a whittled spoon now and then."""
+    results = []
+    for a in req.context.get("attempts", []):
+        made = {"wooden spoon": 1} if "spoon" in a["what"] else {}
+        results.append({"agent_id": a["agent_id"], "success": True,
+                        "outcome": "{actor} spends the hour on it: " + a["what"] + ".",
+                        "memory": "I spent an hour trying to " + a["what"] + ".",
+                        "energy_cost": 4, "consume": {}, "produce": made, "mood": 3, "health": 0,
+                        "notice": None})
+    return json.dumps({"results": results})
+
+
 class FakeLLM:
     name = "fake"
 
     def __init__(self, *, billable: bool = False, handlers: dict[str, Handler] | None = None) -> None:
         self.billable = billable  # True lets tests exercise the budget guard with fake spend
-        self.handlers: dict[str, Handler] = {"birth": fake_birth, "decide": fake_decide}
+        self.handlers: dict[str, Handler] = {"birth": fake_birth, "decide": fake_decide,
+                                             "fixer": fake_fixer, "judge": fake_judge,
+                                             "plan": fake_plan}
         if handlers:
             self.handlers.update(handlers)
         self._scripts: dict[str, deque[str]] = defaultdict(deque)

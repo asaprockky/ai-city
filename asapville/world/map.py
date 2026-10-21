@@ -28,11 +28,13 @@ def home_plot_specs(cfg: MapCfg) -> list[dict]:
 
 
 def seed_locations(session: Session, cfg: MapCfg) -> list[Location]:
-    """Create all configured locations (idempotent by key)."""
-    existing = {loc.key for loc in session.scalars(select(Location))}
+    """Create all configured locations (idempotent by key); places already built take the
+    configured capacity, so a growing town can make room."""
+    existing = {loc.key: loc for loc in session.scalars(select(Location))}
     created = []
     for spec in [loc.model_dump() for loc in cfg.locations] + home_plot_specs(cfg):
         if spec["key"] in existing:
+            existing[spec["key"]].capacity = spec["capacity"]
             continue
         if not (0 <= spec["x"] < cfg.width and 0 <= spec["y"] < cfg.height):
             raise ValueError(f"location {spec['key']} is off the map")

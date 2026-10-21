@@ -1,0 +1,1379 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Asapville Live</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bitter:wght@500;600;700&family=Source+Sans+3:ital,wght@0,400;0,500;0,600;1,400&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: an observer's desk on one screen. A "Right now" strip of headlines on top, the town
+   map (with speech bubbles) on the left, a tabbed ledger on the right (story, people, town,
+   angels, ask), and the clock bar across the bottom. Narrow screens stack it all. */
+:root {
+  --bg: #eceee7;
+  --surface: #f9f9f5;
+  --surface-2: #e3e6dc;
+  --ink: #1d251f;
+  --muted: #5e6b62;
+  --line: #cfd5c8;
+  --accent: #1f6f6b;
+  --accent-ink: #ffffff;
+  --accent-soft: #d6e8e5;
+  --land: #dfe5d2;
+  --land-2: #d2dbc2;
+  --water: #a9c9d8;
+  --road: #cbd0bf;
+  --good: #2f8a5a;
+  --warn: #c2871c;
+  --crit: #b33a30;
+  --night: #0f1a33;
+  --bubble: #ffffff;
+  --al-lawful: #2d7fb8;
+  --al-neutral: #8a8f58;
+  --al-selfish: #c7891a;
+  --al-cruel: #8f3b8f;
+  --al-criminal: #b33a30;
+  --shadow: 0 1px 2px rgba(20, 30, 24, .12), 0 8px 24px rgba(20, 30, 24, .08);
+  --display: "Bitter", "Iowan Old Style", Georgia, serif;
+  --body: "Source Sans 3", "Segoe UI", system-ui, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #121814; --surface: #1a221d; --surface-2: #222c26; --ink: #e6ebe4; --muted: #96a398;
+    --line: #2d3932; --accent: #5cc2ba; --accent-ink: #0d1b19; --accent-soft: #1d3b39;
+    --land: #1f2b23; --land-2: #26342c; --water: #27485a; --road: #33403a;
+    --good: #4fb97e; --warn: #e0a53a; --crit: #e06057; --night: #050912; --bubble: #26332c;
+    --al-lawful: #5aa6dc; --al-neutral: #b3b878; --al-selfish: #e0a53a; --al-cruel: #c070c0;
+    --al-criminal: #e06057;
+    --shadow: 0 1px 2px rgba(0,0,0,.4), 0 8px 24px rgba(0,0,0,.35);
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #121814; --surface: #1a221d; --surface-2: #222c26; --ink: #e6ebe4; --muted: #96a398;
+  --line: #2d3932; --accent: #5cc2ba; --accent-ink: #0d1b19; --accent-soft: #1d3b39;
+  --land: #1f2b23; --land-2: #26342c; --water: #27485a; --road: #33403a;
+  --good: #4fb97e; --warn: #e0a53a; --crit: #e06057; --night: #050912; --bubble: #26332c;
+  --al-lawful: #5aa6dc; --al-neutral: #b3b878; --al-selfish: #e0a53a; --al-cruel: #c070c0;
+  --al-criminal: #e06057;
+  --shadow: 0 1px 2px rgba(0,0,0,.4), 0 8px 24px rgba(0,0,0,.35);
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+body {
+  margin: 0; background: var(--bg); color: var(--ink);
+  font-family: var(--body); font-size: 15px; line-height: 1.45;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 0;
+}
+[hidden] { display: none !important; }
+img { max-width: 100%; }
+button, select, input, textarea { font: inherit; color: inherit; }
+button { cursor: pointer; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+h1, h2, h3 { margin: 0; font-family: var(--display); text-wrap: balance; }
+.num { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+.eyebrow { font-family: var(--mono); font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.muted { color: var(--muted); }
+
+.app { height: 100%; display: grid; grid-template-rows: auto auto minmax(0, 1fr) auto; gap: 10px; padding-block: 10px; min-height: 0; }
+
+/* ---------- header */
+.top { display: flex; align-items: center; gap: 12px 16px; flex-wrap: wrap; }
+.brand { display: flex; align-items: center; gap: 10px; }
+.brand svg { width: 30px; height: 30px; flex: none; }
+.brand h1 { font-size: 22px; font-weight: 700; letter-spacing: -.01em; }
+.clock { display: flex; flex-direction: column; min-width: 0; }
+.clock .big { font-family: var(--display); font-size: 18px; font-weight: 600; }
+.clock .small { font-size: 12px; color: var(--muted); }
+.spacer { flex: 1; }
+.pill { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: 999px; font-size: 12px; font-weight: 600; border: 1px solid var(--line); background: var(--surface); white-space: nowrap; }
+.pill .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
+.pill.live .dot { background: var(--good); box-shadow: 0 0 0 3px color-mix(in srgb, var(--good) 25%, transparent); animation: beat 2s infinite; }
+@keyframes beat { 50% { box-shadow: 0 0 0 6px color-mix(in srgb, var(--good) 10%, transparent); } }
+.pill.paused .dot, .pill.slow .dot { background: var(--warn); }
+.pill.off .dot { background: var(--muted); }
+.controls { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.btn { border: 1px solid var(--line); background: var(--surface); border-radius: 8px; padding: 6px 12px; font-weight: 600; font-size: 13px; }
+.btn:hover { border-color: var(--accent); }
+.btn.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.btn.icon { padding: 6px 9px; }
+.btn:disabled { opacity: .5; cursor: default; }
+
+/* ---------- right now */
+.now { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(200px, 1fr); gap: 8px; overflow-x: auto; padding-bottom: 2px; }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 9px 12px; display: grid; gap: 3px; align-content: start; text-align: left; min-width: 0; }
+.card[role=button] { cursor: pointer; }
+.card[role=button]:hover { border-color: var(--accent); }
+.card .lab { display: flex; align-items: center; gap: 6px; font-family: var(--mono); font-size: 10.5px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.card .lab i { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); display: inline-block; }
+.card.good .lab i { background: var(--good); } .card.warn .lab i { background: var(--warn); } .card.crit .lab i { background: var(--crit); }
+.card .ttl { font-weight: 600; font-size: 15px; line-height: 1.25; }
+.card .det { font-size: 13px; color: var(--muted); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.card .faces { display: flex; gap: 2px; margin-top: 2px; }
+.card .faces span { width: 20px; height: 20px; border-radius: 50%; display: grid; place-items: center; font: 700 8.5px var(--display); color: #fff; }
+
+/* ---------- main */
+.main { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(320px, .95fr); gap: 10px; min-height: 0; }
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
+.map-wrap { position: relative; }
+.map-wrap svg { width: 100%; height: 100%; display: block; }
+.map-legend { position: absolute; left: 10px; bottom: 10px; display: flex; gap: 8px; flex-wrap: wrap; font-size: 11px; color: var(--muted); background: color-mix(in srgb, var(--surface) 88%, transparent); padding: 6px 8px; border-radius: 8px; max-width: calc(100% - 20px); }
+.map-legend span { display: inline-flex; align-items: center; gap: 4px; }
+.map-legend i { width: 9px; height: 9px; border-radius: 50%; display: inline-block; }
+.map-hint { position: absolute; right: 10px; top: 10px; font-size: 11px; color: var(--muted); background: color-mix(in srgb, var(--surface) 88%, transparent); padding: 4px 8px; border-radius: 8px; }
+
+.tabs { display: flex; border-bottom: 1px solid var(--line); padding: 0 6px; gap: 0; overflow-x: auto; flex: none; }
+.tab { background: none; border: 0; padding: 10px 10px; font-weight: 600; color: var(--muted); border-bottom: 2px solid transparent; margin-bottom: -1px; white-space: nowrap; }
+.tab[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--accent); }
+.tab .count { font-family: var(--mono); font-size: 11px; color: var(--muted); margin-left: 4px; }
+.tabpanel { overflow: auto; min-height: 0; flex: 1; padding: 10px; }
+
+/* story */
+.filters { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 8px; }
+.filters button { border: 1px solid var(--line); background: var(--surface); border-radius: 999px; padding: 3px 10px; font-size: 12px; font-weight: 600; color: var(--muted); }
+.filters button[aria-pressed="true"] { background: var(--accent-soft); color: var(--ink); border-color: var(--accent); }
+.hour { display: grid; gap: 6px; padding-bottom: 10px; }
+.hourhead { position: sticky; top: -10px; background: var(--surface); padding: 8px 2px 4px; font-family: var(--mono); font-size: 11px; color: var(--muted); border-bottom: 1px solid var(--line); z-index: 1; display: flex; justify-content: space-between; gap: 8px; }
+.hourhead button { background: none; border: 0; padding: 0; color: var(--accent); font: inherit; text-decoration: underline; }
+.convo { background: var(--surface-2); border-radius: 10px; padding: 8px 10px; display: grid; gap: 6px; }
+.convo .where { font-size: 12px; color: var(--muted); font-weight: 600; }
+.line { display: grid; grid-template-columns: 26px 1fr; gap: 8px; align-items: start; }
+.mini { width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; font: 700 10px var(--display); color: #fff; background: var(--al-neutral); border: 0; padding: 0; }
+.line .who { font-weight: 600; font-size: 13px; }
+.line .to { color: var(--muted); font-weight: 400; }
+.line q { display: block; font-size: 14px; quotes: "«" "»"; }
+.ev { display: grid; grid-template-columns: 22px 1fr; gap: 8px; padding: 3px 4px; align-items: start; font-size: 14px; }
+.new { animation: pop .6s ease-out; border-radius: 8px; }
+@keyframes pop { from { background: var(--accent-soft); } to { background: transparent; } }
+.ev .ic { width: 22px; height: 22px; border-radius: 6px; display: grid; place-items: center; background: var(--surface-2); font-size: 12px; }
+.ev.trouble .ic { background: color-mix(in srgb, var(--crit) 18%, transparent); }
+.ev.angel .ic { background: color-mix(in srgb, var(--accent) 22%, transparent); }
+.ev.idea { background: color-mix(in srgb, var(--warn) 9%, transparent); border-radius: 8px; padding: 6px; }
+.ev.idea .ic { background: color-mix(in srgb, var(--warn) 25%, transparent); }
+.ev q { font-style: italic; quotes: "«" "»"; }
+.ev .at { font-size: 12px; color: var(--muted); }
+.pname { background: none; border: 0; padding: 0; font-weight: 600; color: var(--ink); text-decoration: underline dotted var(--muted); text-underline-offset: 2px; }
+.empty { color: var(--muted); padding: 24px 8px; text-align: center; }
+
+/* people */
+.citizens { display: grid; gap: 8px; }
+.cit { display: grid; grid-template-columns: 40px minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 8px 10px; border-radius: 10px; border: 1px solid transparent; background: var(--surface-2); text-align: left; width: 100%; }
+.cit:hover { border-color: var(--accent); }
+.cit.selected { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+.cit.dead { opacity: .55; }
+.avatar { width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center; font-family: var(--display); font-weight: 700; font-size: 15px; color: #fff; background: var(--al-neutral); position: relative; flex: none; }
+.avatar.asleep::after { content: "z"; position: absolute; right: -3px; top: -4px; font: 700 11px var(--mono); color: var(--ink); background: var(--surface); border-radius: 50%; width: 16px; height: 16px; display: grid; place-items: center; border: 1px solid var(--line); }
+.cit .name { font-weight: 600; display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.cit .where { font-size: 12px; color: var(--muted); }
+.cit .where .mood { font-style: italic; }
+.cit .said { font-size: 12.5px; font-style: italic; color: var(--ink); opacity: .85; display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical; overflow: hidden; }
+.bars { display: grid; grid-template-columns: repeat(2, 44px); gap: 5px 6px; }
+.bar { height: 6px; border-radius: 3px; background: var(--line); position: relative; overflow: hidden; }
+.bar i { position: absolute; inset: 0 auto 0 0; background: var(--good); border-radius: 3px; transition: width .4s; }
+.bar.warn i { background: var(--warn); } .bar.crit i { background: var(--crit); }
+.chip { font-size: 11px; font-weight: 600; padding: 1px 7px; border-radius: 999px; color: #fff; background: var(--al-neutral); letter-spacing: .02em; white-space: nowrap; }
+.chip.lawful-good { background: var(--al-lawful); } .chip.neutral { background: var(--al-neutral); }
+.chip.selfish { background: var(--al-selfish); } .chip.cruel { background: var(--al-cruel); } .chip.criminal { background: var(--al-criminal); }
+.chip.soft { background: var(--surface-2); color: var(--ink); border: 1px solid var(--line); font-weight: 500; }
+.chip.job { background: var(--accent-soft); color: var(--ink); border: 1px solid var(--accent); font-weight: 500; }
+.barkey { display: flex; gap: 12px; flex-wrap: wrap; font-size: 11px; color: var(--muted); margin-bottom: 8px; }
+
+/* town + angels */
+.stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 8px; margin-bottom: 12px; }
+.stat { background: var(--surface-2); border-radius: 10px; padding: 10px 12px; }
+.stat .v { font-family: var(--mono); font-size: 20px; font-weight: 500; }
+.stat .k { font-size: 12px; color: var(--muted); }
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+th, td { text-align: left; padding: 6px 6px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { font-family: var(--mono); font-size: 11px; font-weight: 500; color: var(--muted); letter-spacing: .04em; text-transform: uppercase; }
+td.num, th.num { text-align: right; }
+.budget { height: 8px; border-radius: 4px; background: var(--line); overflow: hidden; margin-top: 6px; }
+.budget i { display: block; height: 100%; background: var(--accent); }
+.shelves { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
+.shelf { background: var(--surface-2); border-radius: 10px; padding: 8px 10px; }
+.shelf .nm { font-weight: 600; font-size: 13px; }
+.shelf .it { display: flex; justify-content: space-between; font-size: 13px; gap: 8px; }
+.zero { color: var(--crit); }
+.ivs { display: grid; gap: 6px; }
+.iv { display: grid; grid-template-columns: 58px 1fr; gap: 8px; padding: 8px 10px; border-radius: 10px; background: var(--surface-2); }
+.iv.rejected { opacity: .65; }
+.iv .t { font-family: var(--mono); font-size: 11px; color: var(--muted); }
+.iv .tg { font-weight: 600; }
+.iv .why { font-size: 13px; color: var(--muted); }
+.anom { display: grid; grid-template-columns: 58px minmax(0, 1fr) auto; gap: 8px; padding: 6px 10px; border-radius: 8px; font-size: 13px; align-items: start; }
+.anom .sev { font-family: var(--mono); font-size: 11px; padding: 1px 6px; border-radius: 999px; color: #fff; background: var(--warn); }
+.anom .sev.hi { background: var(--crit); }
+.anom.fixed { opacity: .6; }
+.assess { font-style: italic; padding: 8px 12px; background: var(--surface-2); border-radius: 10px; margin-bottom: 10px; }
+
+/* ask */
+.ask { display: grid; gap: 10px; align-content: start; }
+.presets { display: flex; gap: 6px; flex-wrap: wrap; }
+.presets button { border: 1px solid var(--line); background: var(--surface); border-radius: 999px; padding: 4px 11px; font-size: 13px; }
+.presets button:hover { border-color: var(--accent); }
+.askbox { display: grid; grid-template-columns: 1fr auto; gap: 8px; align-items: end; }
+.askbox textarea { resize: vertical; min-height: 44px; max-height: 160px; border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; background: var(--surface); }
+.qa { display: grid; gap: 8px; }
+.q { justify-self: end; background: var(--accent-soft); border-radius: 12px 12px 2px 12px; padding: 7px 11px; max-width: 90%; }
+.a { background: var(--surface-2); border-radius: 12px 12px 12px 2px; padding: 9px 12px; white-space: pre-wrap; max-width: 100%; }
+.a.thinking { color: var(--muted); font-style: italic; }
+.note { font-size: 13px; color: var(--muted); }
+
+/* ---------- timeline */
+.timeline { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 12px; align-items: center; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 8px 12px; }
+.timeline .tl-left, .timeline .tl-right { display: flex; align-items: center; gap: 6px; }
+.timeline input[type=range] { width: 100%; accent-color: var(--accent); }
+.tl-mid { display: grid; gap: 2px; min-width: 0; }
+.tl-mid .lab { display: flex; justify-content: space-between; gap: 8px; font-family: var(--mono); font-size: 11px; color: var(--muted); }
+.daystrip { height: 6px; border-radius: 3px; background: var(--line); position: relative; overflow: hidden; }
+.daystrip i { position: absolute; top: 0; bottom: 0; background: var(--night); opacity: .35; }
+
+/* ---------- drawer */
+.drawer { position: absolute; inset: 0; background: var(--surface); display: flex; flex-direction: column; z-index: 3; }
+.drawer .head { display: flex; gap: 12px; align-items: center; padding: 12px; border-bottom: 1px solid var(--line); }
+.drawer .head .avatar { width: 52px; height: 52px; font-size: 20px; }
+.drawer .head h2 { font-size: 20px; }
+.drawer .head .meta { font-size: 12px; color: var(--muted); }
+.drawer .body { overflow: auto; padding: 12px; display: grid; gap: 16px; align-content: start; }
+.drawer .close { margin-left: auto; }
+.sec h3 { font-size: 12px; font-family: var(--mono); font-weight: 500; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin-bottom: 6px; }
+.thought { font-style: italic; padding: 8px 12px; color: var(--ink); background: var(--surface-2); border-radius: 10px; margin: 10px 0 0; }
+.kv { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; font-size: 14px; margin: 0; }
+.kv dt { color: var(--muted); } .kv dd { margin: 0; }
+.needs { display: grid; gap: 6px; }
+.need { display: grid; grid-template-columns: 84px 1fr 36px; gap: 8px; align-items: center; font-size: 13px; }
+.need .bar { height: 8px; }
+.traits { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 14px; font-size: 12px; }
+.trait { display: grid; grid-template-columns: 1fr 70px; gap: 6px; align-items: center; }
+.trait .bar i { background: var(--accent); }
+.trait.dark .bar i { background: var(--crit); }
+.chips { display: flex; flex-wrap: wrap; gap: 4px; }
+.prose { max-width: 62ch; }
+.prose p { margin: 0 0 8px; }
+.toast { position: fixed; left: 50%; bottom: calc(16px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); background: var(--ink); color: var(--bg); padding: 8px 14px; border-radius: 999px; font-size: 13px; z-index: 9; box-shadow: var(--shadow); }
+
+/* ---------- svg map */
+.loc-label { font-family: var(--body); font-size: 11px; font-weight: 600; fill: var(--ink); text-anchor: middle; pointer-events: none; paint-order: stroke; stroke: var(--land); stroke-width: 3px; stroke-linejoin: round; }
+.loc-label.small { font-size: 9px; font-weight: 500; fill: var(--muted); stroke: none; }
+.bld { fill: var(--surface); stroke: var(--muted); stroke-width: 1.2; }
+.bld-roof { fill: var(--accent); opacity: .85; }
+.home-roof { fill: var(--muted); }
+.plaza { fill: var(--land-2); stroke: var(--road); stroke-width: 1; }
+.tree { fill: var(--good); opacity: .8; }
+.trunk { fill: var(--muted); }
+.water { fill: var(--water); }
+.rock { fill: var(--road); stroke: var(--muted); stroke-width: .8; }
+.field { stroke: var(--land-2); stroke-width: 4; }
+.path { stroke: var(--muted); stroke-dasharray: 3 4; stroke-width: 1.2; fill: none; opacity: .7; }
+.agent { cursor: pointer; }
+.agent .body { stroke: var(--surface); stroke-width: 2; }
+.agent text { font-family: var(--display); font-weight: 700; font-size: 9px; fill: #fff; text-anchor: middle; dominant-baseline: central; pointer-events: none; }
+.agent .zz { font-family: var(--mono); font-size: 9px; fill: var(--ink); font-weight: 500; }
+.agent.asleep .body { opacity: .55; }
+.agent.dead .body { fill: var(--muted); opacity: .4; }
+.agent.dead text, .agent.dead .agent-name { opacity: .5; }
+.agent.selected .ring { stroke: var(--accent); stroke-width: 2.5; fill: none; }
+.agent .ring { stroke: none; fill: none; }
+.agent-name { font-family: var(--body); font-size: 9px; fill: var(--ink); text-anchor: middle; pointer-events: none; paint-order: stroke; stroke: var(--land); stroke-width: 3px; stroke-linejoin: round; }
+.night-overlay { fill: var(--night); pointer-events: none; transition: opacity 1s; }
+.map-frame { fill: var(--land); }
+.grid-line { stroke: var(--land-2); stroke-width: .6; }
+.stock-badge { font-family: var(--mono); font-size: 8.5px; fill: var(--muted); text-anchor: middle; pointer-events: none; paint-order: stroke; stroke: var(--land); stroke-width: 3px; stroke-linejoin: round; }
+.stock-badge.empty { fill: var(--crit); font-weight: 500; }
+.bub { font-family: var(--body); font-size: 10.5px; line-height: 1.25; color: var(--ink); background: var(--bubble); border: 1px solid var(--line); border-radius: 9px; padding: 4px 7px; box-shadow: var(--shadow); display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.bub b { font-weight: 600; }
+.bub.idea { border-color: var(--warn); }
+.bubwrap { pointer-events: none; }
+@media (prefers-reduced-motion: no-preference) {
+  .agent { transition: transform .7s cubic-bezier(.4,.1,.3,1); }
+  .bubwrap { animation: rise .5s ease-out; }
+  @keyframes rise { from { opacity: 0; transform: translateY(6px); } }
+}
+
+/* ---------- narrow */
+@media (max-width: 900px) {
+  .app { height: auto; grid-template-rows: none; }
+  .main { grid-template-columns: 1fr; }
+  .map-wrap { aspect-ratio: 1 / 1; max-width: 100%; }
+  .panel.right { height: 75vh; }
+  .clock .big { font-size: 15px; }
+  .timeline { grid-template-columns: 1fr; }
+  .timeline .tl-right { justify-content: flex-end; }
+  .now { grid-auto-columns: minmax(220px, 80%); }
+}
+</style>
+</head>
+<body>
+<script id="asapville-data" type="application/json"></script>
+<div class="app" id="app">
+  <header class="top">
+    <div class="brand">
+      <svg viewBox="0 0 32 32" aria-hidden="true"><polygon points="16,2 29,9 29,23 16,30 3,23 3,9" fill="#1f6f6b"/><polyline points="9,19 16,11 23,19" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      <h1 id="townName">Asapville</h1>
+    </div>
+    <div class="clock">
+      <div class="big" id="clockBig">—</div>
+      <div class="small" id="clockSmall">—</div>
+    </div>
+    <div class="spacer"></div>
+    <span class="pill" id="statusPill"><span class="dot"></span><span id="statusText">…</span></span>
+    <span class="pill" id="fundPill"><span id="fundLab">казна</span><span class="num" id="fundText">—</span></span>
+    <span class="pill" id="spendPill"><span>$</span><span class="num" id="spendText">0</span></span>
+    <div class="controls" id="liveControls" hidden>
+      <button class="btn" id="btnPause"></button>
+      <select class="btn" id="speedSel" aria-label="speed">
+        <option value="0.5">0.5×</option><option value="1" selected>1×</option><option value="2">2×</option>
+        <option value="5">5×</option><option value="10">10×</option>
+      </select>
+    </div>
+    <button class="btn" id="langBtn" title="Language / Язык">EN</button>
+  </header>
+
+  <section class="now" id="now" aria-live="polite"></section>
+
+  <section class="main">
+    <div class="panel map-wrap">
+      <svg id="map" viewBox="0 0 800 800" role="img"></svg>
+      <div class="map-hint" id="mapHint"></div>
+      <div class="map-legend" id="legend"></div>
+    </div>
+    <div class="panel right" id="rightPanel" style="position:relative">
+      <div class="tabs" role="tablist" id="tabs"></div>
+      <div class="tabpanel" id="tab-story" role="tabpanel">
+        <div class="filters" id="filters"></div>
+        <div id="feed"></div>
+      </div>
+      <div class="tabpanel" id="tab-people" role="tabpanel" hidden></div>
+      <div class="tabpanel" id="tab-town" role="tabpanel" hidden></div>
+      <div class="tabpanel" id="tab-angels" role="tabpanel" hidden></div>
+      <div class="tabpanel" id="tab-ask" role="tabpanel" hidden>
+        <div class="ask">
+          <p class="note" id="askIntro"></p>
+          <div class="presets" id="presets"></div>
+          <div class="qa" id="qa"></div>
+          <div class="askbox">
+            <textarea id="askInput" rows="2"></textarea>
+            <div style="display:grid;gap:6px">
+              <button class="btn primary" id="askBtn"></button>
+              <button class="btn" id="stopBtn" hidden></button>
+            </div>
+          </div>
+          <p class="note" id="askNote"></p>
+        </div>
+      </div>
+      <div class="drawer" id="drawer" hidden></div>
+    </div>
+  </section>
+
+  <footer class="timeline">
+    <div class="tl-left">
+      <button class="btn icon" id="btnPrev">◀</button>
+      <button class="btn" id="btnPlay"></button>
+      <button class="btn icon" id="btnNext">▶</button>
+    </div>
+    <div class="tl-mid">
+      <input type="range" id="scrub" min="0" max="0" value="0">
+      <div class="daystrip" id="daystrip"></div>
+      <div class="lab"><span id="tlStart"></span><span id="tlCur"></span><span id="tlEnd"></span></div>
+    </div>
+    <div class="tl-right">
+      <button class="btn primary" id="btnLive"></button>
+    </div>
+  </footer>
+</div>
+
+<script>
+(function () {
+  'use strict';
+  const $ = (id) => document.getElementById(id);
+  const CELL = 40;
+  const ALIGN = { 'lawful-good': 'lawful', neutral: 'neutral', selfish: 'selfish', cruel: 'cruel', criminal: 'criminal' };
+  const alignColor = (a) => `var(--al-${ALIGN[a] || 'neutral'})`;
+  const ICON = {
+    talk: '💬', depart: '🚶', arrive: '📍', turned_away: '🚪', sleep: '🌙', wake: '☀️', eat: '🍞',
+    forage: '🌿', collapse: '💫', death: '✝', invalid_action: '✗', budget_paused: '⏸', buy: '🛒',
+    sell: '💰', work: '🔨', hired: '📋', quit: '🚪', notice: '📜', angel: '👁', relief: '🎁',
+    delivery: '🛻', give: '🤝', improvise: '✨', plan: '📝', open_stall: '🏪', stock_stall: '📦', wages: '⚖', proposal: '🗳', vote: '✋', law: '🏛', arrival: '🧳', secret_deal: '🕵', steal: '🫳', attack: '👊', property: '🔑',
+  };
+  const FILTERS = {
+    all: null, talk: ['talk'], deeds: ['plan', 'property', 'proposal', 'vote', 'law', 'improvise', 'open_stall', 'stock_stall', 'wages', 'give', 'buy', 'sell', 'work', 'hired', 'quit', 'notice'],
+    trouble: ['collapse', 'death', 'steal', 'attack', 'invalid_action', 'turned_away', 'budget_paused', 'secret_deal'],
+    angels: ['angel', 'relief', 'delivery'],
+  };
+  const ROUTINE = new Set(['sleep', 'wake', 'arrive', 'eat']);
+
+  // ---------------------------------------------------------------- words
+  const L = {
+    ru: {
+      tabs: { story: 'История', people: 'Жители', town: 'Город', angels: 'Ангелы', ask: 'Спросить' },
+      filters: { all: 'Всё', talk: 'Разговоры', deeds: 'Дела', trouble: 'Беды', angels: 'Ангелы' },
+      routine: 'показать рутину', hideRoutine: 'скрыть рутину',
+      fund: 'казна', spendTip: 'Потрачено на модели Claude', fundTip: 'Казна города (AsapBank): платит зарплаты, получает выручку лавок',
+      live: 'В эфире', replay: 'Запись', paused: 'Пауза', budget: 'Пауза: бюджет', slow: 'Медленно', reconnecting: 'переподключение…',
+      liveTip: 'Новые часы появляются сами, пока город запущен', replayTip: (m) => m == null ? 'Запись. Новые часы появятся, когда город снова запустят' : `Последний новый час пришёл ${m} мин назад`,
+      pause: 'Пауза города', resume: 'Запустить город',
+      prev: 'Предыдущий час (←)', next: 'Следующий час (→)', play: '▶ Проиграть', stop: '❚❚ Стоп', playTip: 'Проиграть записанные часы (пробел)',
+      latest: '● Сейчас', toLatest: '○ К последнему часу', latestTip: 'Следить за последним часом (End)',
+      hoursLived: (n) => `прожито ${n} ч`, behind: (n) => `${n} ч до последнего`, newest: 'последний час',
+      hint: 'Нажмите на жителя, чтобы открыть его досье',
+      asleep: 'спит',
+      day: 'день', tick: 'час',
+      now: { crowd: 'Толпа', danger: 'Опасность', econ: 'Экономика', just: 'Только что', said: 'Слова', calm: 'Спокойно' },
+      crowdTtl: (n, p) => `${n} ${plural(n, 'житель', 'жителя', 'жителей')} · ${p}`,
+      dangerNone: 'Никому не грозит смерть', dangerDead: (n) => `Погибших: ${n}`,
+      econTtl: (w) => w ? `Работали ${w} ${plural(w, 'час', 'часа', 'часов')} за 6 ч` : 'Никто не работает',
+      econDet: (b, f, g) => `хлеба ${b} · муки ${f} · зерна ${g}`,
+      quiet: 'Тихо', quietDet: 'за этот час ничего заметного',
+      doing: { talk: 'разговаривают', idle: 'стоят без дела', rest: 'отдыхают', sleep: 'спят', eat: 'едят', buy: 'покупают',
+        work: 'работают', move: 'только пришли', improvise: 'что-то затевают', give: 'делятся', forage: 'ищут еду',
+        apply: 'ищут работу', write_notice: 'пишут объявление', sell: 'продают', quit: 'увольняются' },
+      state: { dead: 'погиб', asleep: 'спит', walking: 'в пути' },
+      needs: { hunger: 'Голод', energy: 'Силы', health: 'Здоровье', social: 'Общение' },
+      needTips: { hunger: '100 = умирает от голода; выше 80 страдает здоровье', energy: '0 = падает без сил', health: '0 = смерть', social: 'падает в одиночестве, растёт в разговоре' },
+      barKey: 'полоски: голод · силы · здоровье · общение',
+      people: 'жителей', alive: 'живы',
+      nothing: 'ничего', none: 'нет', home: 'дома',
+      drawer: { now: 'Сейчас', where: 'Где', doing: 'Занят', job: 'Работа', mood: 'Настроение', money: 'Деньги', carrying: 'Несёт',
+        body: 'Тело', who: 'Кто это', values: 'Ценности · страхи · мечты', secrets: 'Секреты (видите только вы)', traits: 'Черты (с рождения)',
+        backstory: 'Прошлое', hours: 'Последние часы', identity: 'Паспорт', homeL: 'Дом', bedtime: 'Отбой', speech: 'Речь',
+        plan: 'План на сегодня (своими словами)', rel: 'Отношения · кому верит, на кого зол и почему', noRel: 'Пока ни с кем не сложилось.', trustW: (t) => t > .35 ? 'доверяет' : t > .1 ? 'немного доверяет' : t < -.35 ? 'не верит' : t < -.1 ? 'настороже' : '', likeW: (a) => a > .3 ? 'симпатия' : a < -.3 ? 'обида' : '', unpleasant: 'неприятный', years: 'лет', from: 'из', family: 'семья', thought: 'Мысли (по-английски, как он думает)',
+        close: 'Закрыть (Esc)', look: (h, b, c, s) => `Волосы: ${h}. Сложение: ${b}. Одежда: ${c}. Всегда с собой: ${s}.` },
+      asaps: 'асапов',
+      onRoad: (p) => `в пути → ${p}`, at: (p) => p, deadOf: (c) => `погиб: ${c}`,
+      story: { empty: 'Пока ничего. Первый час ещё идёт.', hourAt: (d, h, p) => `день ${d} · ${h} · ${p}`, convoAt: (p) => `💬 ${p}`, show: 'показать на карте' },
+      town: { fund: 'асапов в казне', loaves: 'хлеба на полках', employed: 'жителей с работой', shelves: 'Полки · в этот час',
+        jobs: 'Работа · зарплату платит казна', biz: 'Дела жителей · своя цена, свои деньги', noBiz: 'Пока никто не открыл своё дело.', bizRow: (q, s) => `на прилавке ${q} · продано ${s}`, spend: 'Расходы на ИИ', spent: 'потрачено', calls: 'вызовов модели', perCall: 'за вызов',
+        hours: 'часов прожито', cap: (c) => `Дневной лимит $${c} · показан весь расход`, uses: 'берёт', makes: 'даёт', nobody: 'никого',
+        modelsNote: 'Рабочие думают на Haiku, ангелы на Sonnet (и Opus, когда под угрозой жизнь). Спящие не тратят ничего.',
+        th: ['уровень', 'модель', 'вызовы', 'вход', 'выход', 'кэш', '$'], none: 'Пока нет вызовов', always: '∞', empty: 'пусто', soldOut: 'распродано' },
+      angels: { intro: '<strong>Наблюдатель</strong> (обычный код, бесплатно) каждый час ищет беду. <strong>Исправитель</strong> (Sonnet, или Opus, если под угрозой жизнь) читает его находки и вмешивается как можно мягче: объявление, телега с товаром, назначение на работу, помощь. <strong>Судья</strong> решает, чем кончаются свободные затеи жителей. Жители видят только последствия.',
+        latest: 'Последняя оценка Исправителя', ivs: 'Вмешательства', saw: 'Что заметил Наблюдатель', noIv: 'Вмешательств пока не было: город справляется сам.', noAnom: 'Ничего не замечено.', rejected: 'отклонено',
+        notice: (t) => `Повесил объявление: «${t}»`, cart: (q, i, p) => `Телега привезла ${q} ${i} в ${p}`, appoint: (n, j) => `Назначил ${n} на работу: ${j}`,
+        grant: (n, a) => `Выдал ${n} ${a} асапов помощи`, parcel: (n) => `Передал ${n} посылку с едой`, sev: (s) => `опасность ${s} из 5` },
+      ask: { intro: 'Спросите что угодно о городе. Claude прочитает, что происходит в выбранный час (жители, полки, события), и ответит по-русски. Вопрос тратит ваши лимиты Claude.',
+        ph: 'Ваш вопрос…', send: 'Спросить', stop: 'Стоп', thinking: 'Думаю…',
+        presets: ['Что сейчас происходит?', 'Почему город не может прокормить себя?', 'Кто в опасности и почему?', 'Перескажи последние разговоры', 'Кто что задумал?'],
+        about: (n) => `Что на уме у ${n}?`,
+        off: 'Вопросы к Claude работают, когда страница открыта в claude.ai.',
+        err: { not_granted: 'Доступ к Claude не разрешён для этой страницы.', sampling_disabled: 'Claude недоступен для этого аккаунта.', rate_limited: 'Слишком много вопросов подряд. Попробуйте через минуту.', session_expired: 'Войдите в claude.ai заново.', refused: 'Claude не стал отвечать на этот вопрос. Переформулируйте.', prompt_too_large: 'Слишком много данных. Выберите более ранний час.', other: 'Не получилось ответить. Попробуйте ещё раз.' },
+        lang: 'Russian', cut: 'Ответ обрезан, спросите короче.' },
+      toastNew: (d, h) => `Новый час: день ${d}, ${h}`, toastSpeed: (v) => `Скорость ${v}×`, toastPause: 'Город на паузе', toastResume: 'Город запущен', noServer: 'Нет связи с сервером',
+      season: { spring: 'весна', summer: 'лето', autumn: 'осень', winter: 'зима' },
+      part: { morning: 'утро', afternoon: 'день', evening: 'вечер', night: 'ночь' },
+      weather: { clear: 'ясно', rain: 'дождь', snow: 'снег', fog: 'туман', storm: 'гроза' },
+      align: { 'lawful-good': 'добрый', neutral: 'нейтральный', selfish: 'эгоист', cruel: 'жестокий', criminal: 'преступник' },
+      job: { farmer: 'фермер', miller: 'мельник', baker: 'пекарь', quarryman: 'каменотёс', unemployed: 'без работы' },
+      item: { bread: 'хлеб', vegetables: 'овощи', berries: 'ягоды', fish: 'рыба', stew: 'похлёбка', grain: 'зерно', flour: 'мука', stone: 'камень', treatment: 'лечение' },
+      itemGen: { bread: 'хлеба', vegetables: 'овощей', berries: 'ягод', fish: 'рыбы', stew: 'похлёбки', grain: 'зерна', flour: 'муки', stone: 'камня', treatment: 'лечения' },
+      cause: { starvation: 'голод', exhaustion: 'истощение' },
+      place: { square: 'Площадь', market: 'Рынок', bank: 'AsapBank', town_hall: 'Ратуша', church: 'Часовня на холме', clinic: 'Клиника',
+        tavern: 'Кривой фонарь', bakery: 'Пекарня', mill: 'Мельница', farm: 'Ферма', forest: 'Сосновый лес', quarry: 'Серый карьер',
+        river: 'Берег реки', jail: 'Тюрьма', well_shop: 'Пустая лавка у колодца', corner_shop: 'Угловая лавка' },
+      house: (n) => `Дом ${n}`,
+      ev: {
+        depart: (a, f, t, h) => `${a} в пути: ${f} → ${t}${h ? `, ${h} ч` : ''}`,
+        arrive: (a, p) => `${a} на месте: ${p}`, sleep: (a) => `${a} засыпает`, wake: (a) => `${a} просыпается`,
+        eat: (a, i) => `${a} ест: ${i}`, buy: (a, q, i, c) => `${a} покупает ${q} × ${i} за ${c}`, sell: (a, q, i, c) => `${a} продаёт ${q} × ${i} за ${c}`,
+        workOk: (a, j, m, w) => `${a} работает (${j}): ${m}, +${w}`, workNo: (a, j, x) => `${a} не может работать (${j}): нет ${x}`,
+        hired: (a, j, byCouncil) => `${a} теперь ${j}${byCouncil ? ' (назначение совета)' : ''}`, quit: (a, j) => `${a} бросает работу (${j})`,
+        notice: (a, t) => `${a} вешает объявление: <q>${t}</q>`, council: (t) => `Совет: <q>${t}</q>`,
+        reliefMoney: (a, c) => `Совет помог ${a}: ${c} асапов`, reliefFood: (a, q, i) => `Совет передал ${a} посылку: ${q} × ${i}`,
+        delivery: (q, i, p) => `Телега привезла ${q} × ${i} в ${p}`, collapse: (a) => `${a} падает без сил`, death: (a, c) => `${a} умирает (${c})`,
+        turned: (a, p) => `${a}: ${p} переполнено`, invalid: (a, x, e) => `${a} пытается ${x}, но: ${e}`,
+        plan: (a, p) => `${a} задумал на день: <q>${p}</q>`,
+        wages: (t) => `Новые зарплаты: ${t}`,
+        arrival: (a, h) => `В город приехал новый житель: ${a}${h ? ` (поселился: ${h})` : ''}`,
+        secretDeal: (a, t, c) => `Тайно: ${a} заплатил ${t} ${c} асапов, чтобы шпионить за городом (знают только они)`,
+        steal: (a, t, w, how) => `${a} крадёт у ${t}: ${w} — ${how}`, stealHow: { caught: 'пойман за руку', seen: 'кто-то видел', unseen: 'никто не заметил', empty: 'красть было нечего' },
+        attack: (a, t, z) => `${a} нападает на ${t}${z ? ' во сне' : ''}`,
+        property: (a, p, c) => `${a} покупает ${p} за ${c} асапов`,
+        proposal: (a, n, t, c) => `${a} выносит на голосование №${n}: <q>${t}</q>${c}`,
+        vote: (a, n, y, t) => `${a} голосует ${y ? 'ЗА' : 'ПРОТИВ'} №${n} (сейчас ${t[0]}–${t[1]})`,
+        law: (n, t, y, no, ok) => `Город проголосовал по №${n} <q>${t}</q>: ${y}–${no}, ${ok ? 'ПРИНЯТО' : 'не принято'}`,
+        changeWage: (j, v) => ` (зарплата ${j} → ${v})`, changePrice: (i, v) => ` (цена ${i} → ${v})`,
+        openStall: (a, n, i, c, p) => `${a} открывает своё дело «${n}» (${p}): ${i} по ${c}`,
+        stockStall: (a, n, q, i, c) => `${a} выкладывает товар в «${n}»: ${q} × ${i} по ${c}`,
+        buyStall: (a, q, i, n, c) => `${a} покупает ${q} × ${i} в «${n}» за ${c}`,
+        give: (a, t, w) => `${a} даёт ${t}: ${w}`, angel: (t) => `Исправитель: <q>${t}</q>`, forageOk: (a, q, i) => `${a} находит ${q} × ${i}`, forageNo: (a, p) => `${a} ищет еду (${p}), но ничего не находит`,
+        to: '→',
+      },
+    },
+    en: {
+      tabs: { story: 'Story', people: 'People', town: 'Town', angels: 'Angels', ask: 'Ask' },
+      filters: { all: 'All', talk: 'Talk', deeds: 'Deeds', trouble: 'Trouble', angels: 'Angels' },
+      routine: 'show routine', hideRoutine: 'hide routine',
+      fund: 'fund', spendTip: 'Spent on Claude models', fundTip: 'The town fund (AsapBank): pays wages, takes what shops earn',
+      live: 'Live', replay: 'Recording', paused: 'Paused', budget: 'Paused: budget', slow: 'Slow mode', reconnecting: 'reconnecting…',
+      liveTip: 'New hours arrive on their own while the town runs', replayTip: (m) => m == null ? 'A recording. New hours appear when the town runs again' : `The last new hour arrived ${m} min ago`,
+      pause: 'Pause town', resume: 'Resume town',
+      prev: 'Previous hour (←)', next: 'Next hour (→)', play: '▶ Replay', stop: '❚❚ Stop', playTip: 'Play back the recorded hours (Space)',
+      latest: '● Now', toLatest: '○ Jump to latest', latestTip: 'Follow the newest hour (End)',
+      hoursLived: (n) => `${n} hours lived`, behind: (n) => `${n}h behind the newest`, newest: 'newest hour',
+      hint: 'Click a citizen to open their file',
+      asleep: 'asleep', day: 'day', tick: 'tick',
+      now: { crowd: 'Crowd', danger: 'Danger', econ: 'Economy', just: 'Just now', said: 'Overheard', calm: 'Calm' },
+      crowdTtl: (n, p) => `${n} people · ${p}`,
+      dangerNone: 'Nobody is close to death', dangerDead: (n) => `Dead: ${n}`,
+      econTtl: (w) => w ? `${w} hours worked in the last 6h` : 'Nobody is working',
+      econDet: (b, f, g) => `bread ${b} · flour ${f} · grain ${g}`,
+      quiet: 'Quiet', quietDet: 'nothing notable this hour',
+      doing: { talk: 'talking', idle: 'standing around', rest: 'resting', sleep: 'asleep', eat: 'eating', buy: 'shopping',
+        work: 'working', move: 'just arrived', improvise: 'up to something', give: 'sharing', forage: 'foraging',
+        apply: 'looking for work', write_notice: 'writing a notice', sell: 'selling', quit: 'quitting' },
+      state: { dead: 'dead', asleep: 'asleep', walking: 'walking' },
+      needs: { hunger: 'Hunger', energy: 'Energy', health: 'Health', social: 'Company' },
+      needTips: { hunger: '100 = starving; above 80 health suffers', energy: '0 = collapse', health: '0 = death', social: 'falls when alone, rises when talking' },
+      barKey: 'bars: hunger · energy · health · company',
+      people: 'citizens', alive: 'alive',
+      nothing: 'nothing', none: 'none', home: 'home',
+      drawer: { now: 'Right now', where: 'Where', doing: 'Doing', job: 'Job', mood: 'Mood', money: 'Money', carrying: 'Carrying',
+        body: 'Body', who: 'Who they are', values: 'Values · fears · ambitions', secrets: 'Secrets (only you can see these)', traits: 'Traits (fixed at birth)',
+        backstory: 'Backstory', hours: 'Their recent hours', identity: 'Identity', homeL: 'Home', bedtime: 'Bedtime', speech: 'Speech',
+        plan: 'Plan for today (in their own words)', rel: 'Relationships · whom they trust, resent, and why', noRel: 'No ties yet.', trustW: (t) => t > .35 ? 'trusts' : t > .1 ? 'somewhat trusts' : t < -.35 ? 'distrusts' : t < -.1 ? 'wary' : '', likeW: (a) => a > .3 ? 'likes' : a < -.3 ? 'resents' : '', unpleasant: 'unpleasant', years: 'years', from: 'from', family: 'family', thought: 'Thinking',
+        close: 'Close (Esc)', look: (h, b, c, s) => `Hair ${h}; build ${b}; wears ${c}; never without ${s}.` },
+      asaps: 'asaps',
+      onRoad: (p) => `on the road to ${p}`, at: (p) => p, deadOf: (c) => `died: ${c}`,
+      story: { empty: 'Nothing yet. The first hour is being lived.', hourAt: (d, h, p) => `day ${d} · ${h} · ${p}`, convoAt: (p) => `💬 ${p}`, show: 'show on map' },
+      town: { fund: 'asaps in the town fund', loaves: 'loaves on shelves', employed: 'citizens with a job', shelves: 'Shelves · this hour',
+        jobs: 'Jobs · the fund pays wages', biz: 'Citizens\' businesses · their price, their money', noBiz: 'Nobody has opened a business yet.', bizRow: (q, s) => `${q} on the stall · ${s} sold`, spend: 'AI spend', spent: 'spent', calls: 'model calls', perCall: 'per call',
+        hours: 'hours lived', cap: (c) => `Daily cap $${c} · all-time spend shown`, uses: 'uses', makes: 'makes', nobody: 'nobody',
+        modelsNote: 'Workers think with Haiku, angels with Sonnet (Opus when a life is at risk). Sleepers cost nothing.',
+        th: ['tier', 'model', 'calls', 'in', 'out', 'cache', '$'], none: 'No calls yet', always: '∞', empty: 'empty', soldOut: 'sold out' },
+      angels: { intro: 'The <strong>Watcher</strong> (plain code, free) looks for trouble every hour. The <strong>Fixer</strong> (Sonnet, or Opus when a life is at risk) reads its findings and intervenes as lightly as it can: a notice, a cart of goods, a job, relief. The <strong>Judge</strong> decides how citizens\' own ideas turn out. Citizens only see the effects.',
+        latest: 'Latest assessment by the Fixer', ivs: 'Interventions', saw: 'What the Watcher saw', noIv: 'No interventions yet: the town is running itself.', noAnom: 'Nothing flagged.', rejected: 'rejected',
+        notice: (t) => `Pinned a notice: «${t}»`, cart: (q, i, p) => `A cart brought ${q} ${i} to ${p}`, appoint: (n, j) => `Appointed ${n} as ${j}`,
+        grant: (n, a) => `Granted ${n} ${a} asaps of relief`, parcel: (n) => `Handed ${n} a food parcel`, sev: (s) => `severity ${s} of 5` },
+      ask: { intro: 'Ask anything about the town. Claude reads what is happening at the hour you are viewing (people, shelves, events) and answers. Questions use your own Claude usage.',
+        ph: 'Your question…', send: 'Ask', stop: 'Stop', thinking: 'Thinking…',
+        presets: ["What's happening right now?", "Why can't the town feed itself?", 'Who is in danger, and why?', 'Retell the latest conversations', 'Who is planning what?'],
+        about: (n) => `What is on ${n}'s mind?`,
+        off: 'Questions to Claude work when this page is open on claude.ai.',
+        err: { not_granted: 'Claude is not allowed for this page.', sampling_disabled: 'Claude is not available for this account.', rate_limited: 'Too many questions in a row. Try again in a minute.', session_expired: 'Sign in to claude.ai again.', refused: 'Claude declined this one. Try rewording it.', prompt_too_large: 'Too much data. Pick an earlier hour.', other: 'Could not answer. Try again.' },
+        lang: 'English', cut: 'The answer was cut short; ask something narrower.' },
+      toastNew: (d, h) => `New hour: day ${d}, ${h}`, toastSpeed: (v) => `Speed ${v}×`, toastPause: 'Town paused', toastResume: 'Town running', noServer: 'Could not reach the server',
+      season: {}, part: {}, weather: {}, align: {}, job: {}, item: {}, itemGen: {}, cause: {}, place: {},
+      house: (n) => `House No. ${n}`,
+      ev: {
+        depart: (a, f, t, h) => `${a} sets off: ${f} → ${t}${h ? ` (${h}h)` : ''}`,
+        arrive: (a, p) => `${a} arrives at ${p}`, sleep: (a) => `${a} falls asleep`, wake: (a) => `${a} wakes up`,
+        eat: (a, i) => `${a} eats ${i}`, buy: (a, q, i, c) => `${a} buys ${q} ${i} for ${c}`, sell: (a, q, i, c) => `${a} sells ${q} ${i} for ${c}`,
+        workOk: (a, j, m, w) => `${a} works as ${j}: ${m}, +${w}`, workNo: (a, j, x) => `${a} can't work as ${j}: no ${x}`,
+        hired: (a, j, byCouncil) => `${a} is now a ${j}${byCouncil ? ' (appointed by the council)' : ''}`, quit: (a, j) => `${a} quits as ${j}`,
+        notice: (a, t) => `${a} pins a notice: <q>${t}</q>`, council: (t) => `Council: <q>${t}</q>`,
+        reliefMoney: (a, c) => `The council gives ${a} ${c} asaps`, reliefFood: (a, q, i) => `The council hands ${a} ${q} ${i}`,
+        delivery: (q, i, p) => `A cart brings ${q} ${i} to ${p}`, collapse: (a) => `${a} collapses from exhaustion`, death: (a, c) => `${a} dies (${c})`,
+        turned: (a, p) => `${a} finds ${p} full`, invalid: (a, x, e) => `${a} tries to ${x}, but: ${e}`,
+        plan: (a, p) => `${a} plans the day: <q>${p}</q>`,
+        wages: (t) => `New wages: ${t}`,
+        arrival: (a, h) => `A newcomer moved to town: ${a}${h ? ` (lives at ${h})` : ''}`,
+        secretDeal: (a, t, c) => `Secretly: ${a} paid ${t} ${c} asaps to spy on the town (only the two know)`,
+        steal: (a, t, w, how) => `${a} steals ${w} from ${t} — ${how}`, stealHow: { caught: 'caught in the act', seen: 'someone saw', unseen: 'nobody noticed', empty: 'nothing to take' },
+        attack: (a, t, z) => `${a} attacks ${t}${z ? ' in their sleep' : ''}`,
+        property: (a, p, c) => `${a} buys ${p} for ${c} asaps`,
+        proposal: (a, n, t, c) => `${a} puts #${n} to a vote: <q>${t}</q>${c}`,
+        vote: (a, n, y, t) => `${a} votes ${y ? 'YES' : 'NO'} on #${n} (now ${t[0]}–${t[1]})`,
+        law: (n, t, y, no, ok) => `The town voted on #${n} <q>${t}</q>: ${y}–${no}, ${ok ? 'PASSED' : 'not passed'}`,
+        changeWage: (j, v) => ` (${j} wage → ${v})`, changePrice: (i, v) => ` (${i} price → ${v})`,
+        openStall: (a, n, i, c, p) => `${a} opens a business, “${n}” (${p}): ${i} at ${c}`,
+        stockStall: (a, n, q, i, c) => `${a} stocks “${n}”: ${q} ${i} at ${c}`,
+        buyStall: (a, q, i, n, c) => `${a} buys ${q} ${i} from “${n}” for ${c}`,
+        give: (a, t, w) => `${a} gives ${t} ${w}`, angel: (t) => `The Fixer: <q>${t}</q>`, forageOk: (a, q, i) => `${a} finds ${q} ${i}`, forageNo: (a, p) => `${a} forages at ${p} and finds nothing`,
+        to: '→',
+      },
+    },
+  };
+  let LANG = 'ru';
+  try { const l = localStorage.getItem('asapville.lang'); if (l === 'en' || l === 'ru') LANG = l; } catch (e) { /* private window */ }
+  const W = () => L[LANG];
+  function plural(n, one, few, many) {
+    const m10 = n % 10, m100 = n % 100;
+    if (m10 === 1 && m100 !== 11) return one;
+    if (m10 >= 2 && m10 <= 4 && (m100 < 12 || m100 > 14)) return few;
+    return many;
+  }
+  const tr = (group, k) => (W()[group] || {})[k] || k;
+
+  // ---------------------------------------------------------------- state
+  const S = {
+    live: false, server: false, data: null, agents: new Map(), locs: new Map(), frames: [], events: [],
+    cur: 0, follow: true, playing: false, playTimer: null, selected: null, tab: 'story', filter: 'all',
+    routine: false, seenEvent: 0, lastLive: null, roles: new Map(), qa: [], askCtl: null,
+  };
+
+  // ---------------------------------------------------------------- helpers
+  const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const initials = (name) => name.split(/\s+/).map((w) => w[0]).slice(0, 2).join('').toUpperCase();
+  const first = (name) => name.split(' ')[0];
+  const money = (c) => (c / 100).toFixed(2);
+  const hh = (h) => `${String(h).padStart(2, '0')}:00`;
+  const lastSeen = new Map();
+  function frameAgent(f, id) {
+    if (!f) return undefined;
+    const hit = f.agents.find((a) => a.id === id); if (hit) return hit;
+    const key = `${f.tick}:${id}`; if (lastSeen.has(key)) return lastSeen.get(key);
+    let found;
+    for (let j = S.frames.indexOf(f) - 1; j >= 0; j--) { const p = S.frames[j].agents.find((a) => a.id === id); if (p) { found = { ...p, alive: false, asleep: false, action: null }; break; } }
+    lastSeen.set(key, found); return found;
+  }
+  const needClass = (v, inverted) => { const x = inverted ? 100 - v : v; return x <= 20 ? 'crit' : x <= 40 ? 'warn' : ''; };
+  const curFrame = () => S.frames[S.cur];
+  const frameAt = (tick) => S.frames.find((x) => x.tick === tick);
+  const item = (i) => tr('item', i);
+  const jobName = (j) => tr('job', j);
+  function placeName(l) {
+    if (!l) return '?';
+    if (l.kind === 'home') { const n = l.name.replace(/^House No\.\s*/, ''); return W().house(n); }
+    return W().place[l.key] || l.name;
+  }
+  const locName = (id) => placeName(S.locs.get(id));
+  const locByKey = (k) => [...S.locs.values()].find((l) => l.key === k);
+  function pbtn(id, short) {
+    const a = S.agents.get(id); if (!a) return '';
+    return `<button class="pname" data-id="${a.id}">${esc(short ? first(a.name) : a.name)}</button>`;
+  }
+  function face(id) {
+    const a = S.agents.get(id); if (!a) return '';
+    return `<button class="mini" data-id="${a.id}" style="background:${alignColor(a.alignment)}" title="${esc(a.name)}">${esc(initials(a.name))}</button>`;
+  }
+  function wireNames(root) { root.querySelectorAll('[data-id]').forEach((b) => { if (b.tagName === 'BUTTON' && !b.dataset.wired) { b.dataset.wired = 1; b.addEventListener('click', (e) => { e.stopPropagation(); select(Number(b.dataset.id)); }); } }); }
+  function toast(msg) {
+    let t = document.querySelector('.toast');
+    if (!t) { t = document.createElement('div'); t.className = 'toast'; document.body.appendChild(t); }
+    t.textContent = msg; t.hidden = false;
+    clearTimeout(t._h); t._h = setTimeout(() => { t.hidden = true; }, 2600);
+  }
+  const eventsUpTo = (tick) => S.events.filter((e) => e.tick <= tick);
+
+  // Jobs as they were at a given hour, rebuilt from hired/quit events (everyone is born unemployed).
+  function rebuildRoles() {
+    S.roles = new Map();
+    for (const e of S.events) if (e.kind === 'hired' || e.kind === 'quit') {
+      if (!S.roles.has(e.agent_id)) S.roles.set(e.agent_id, []);
+      S.roles.get(e.agent_id).push([e.tick, e.kind === 'hired' ? (e.data?.job || 'unemployed') : 'unemployed']);
+    }
+  }
+  function roleAt(id) {
+    const f = curFrame(); let role = 'unemployed';
+    for (const [t, r] of S.roles.get(id) || []) { if (f && t > f.tick) break; role = r; }
+    return role;
+  }
+  const jobOf = (id) => { const r = roleAt(id); return (S.data.economy?.jobs || {})[r] ? r : null; };
+
+  // Where is this agent (in px) at frame index k? Travellers are interpolated along the road.
+  function agentPos(k, id) {
+    const f = S.frames[k]; const a = frameAgent(f, id); const ag = S.agents.get(id);
+    if (!a) return null;
+    if (a.loc != null) return { loc: a.loc, travelling: false };
+    const dest = S.locs.get(a.dest); if (!dest) return null;
+    let originId = ag.home_id, departTick = f.tick;
+    for (let j = k - 1; j >= 0; j--) {
+      const p = frameAgent(S.frames[j], id);
+      if (p && p.loc != null) { originId = p.loc; departTick = S.frames[j].tick + 1; break; }
+    }
+    const o = S.locs.get(originId) || dest;
+    const total = (f.tick - departTick) + a.left + 1;
+    const prog = Math.min(1, Math.max(0.08, (f.tick - departTick + 1) / Math.max(1, total)));
+    const cx = (p) => (p.x + .5) * CELL, cy = (p) => (p.y + .5) * CELL;
+    return { loc: null, travelling: true, from: o, to: dest, x: cx(o) + (cx(dest) - cx(o)) * prog, y: cy(o) + (cy(dest) - cy(o)) * prog };
+  }
+  function stateOf(fa, pos) {
+    const w = W();
+    if (!fa.alive) return w.state.dead;
+    if (fa.asleep) return w.state.asleep;
+    if (pos && pos.travelling) return w.state.walking;
+    return w.doing[fa.action] || fa.action || '—';
+  }
+
+  // ---------------------------------------------------------------- event text
+  function evText(e) {
+    const w = W().ev; const d = e.data || {};
+    const A = e.agent_id ? pbtn(e.agent_id) : ''; const T = e.target_id ? pbtn(e.target_id) : '';
+    const place = e.location_id ? esc(locName(e.location_id)) : '';
+    switch (e.kind) {
+      case 'depart': return d.to != null ? w.depart(A, esc(locName(d.from)), esc(locName(d.to)), d.hours) : esc(e.summary);
+      case 'arrive': return w.arrive(A, place);
+      case 'sleep': return w.sleep(A);
+      case 'wake': return w.wake(A);
+      case 'eat': { const m = /ate (.+)$/.exec(e.summary); return w.eat(A, esc(item(m ? m[1] : '?'))); }
+      case 'buy': return d.stall ? w.buyStall(A, d.qty, esc(item(d.item)), esc(d.stall), money(d.cents || 0)) : w.buy(A, d.qty, esc(item(d.item)), money(d.cents || 0));
+      case 'wages': return w.wages(esc(Object.entries(d.changes || {}).map(([j, [o, n]]) => `${jobName(j)} ${money(n)} (${n > o ? '↑' : '↓'} ${money(o)})`).join(' · ')));
+      case 'arrival': return w.arrival(A, place);
+      case 'secret_deal': return w.secretDeal(A, T, money(d.cents || 0));
+      case 'steal': return w.steal(A, T, esc(d.cents ? `${money(d.cents)} ${W().asaps}` : `${d.qty || 0} × ${item(d.item)}`), w.stealHow[d.empty ? 'empty' : d.noticed ? 'caught' : (d.witnesses || []).length ? 'seen' : 'unseen']);
+      case 'attack': return w.attack(A, T, d.asleep);
+      case 'property': return w.property(A, place, money(d.cents || 0));
+      case 'proposal': return w.proposal(A, d.proposal, esc(d.text), d.kind === 'wage' ? w.changeWage(esc(jobName(d.target)), money(d.value)) : d.kind === 'price' ? w.changePrice(esc(item(d.target)), money(d.value)) : '');
+      case 'vote': return w.vote(A, d.proposal, d.yes, d.tally || [0, 0]);
+      case 'law': return w.law(d.proposal, esc(d.text), d.yes, d.no, d.passed);
+      case 'open_stall': return w.openStall(A, esc(d.stall), esc(item(d.item)), money(d.price || 0), place);
+      case 'stock_stall': return w.stockStall(A, esc(d.stall), d.qty, esc(item(d.item)), money(d.price || 0));
+      case 'sell': return w.sell(A, d.qty, esc(item(d.item)), money(d.cents || 0));
+      case 'work': return d.success ? w.workOk(A, esc(jobName(d.job)), esc(Object.entries(d.made || {}).map(([k, v]) => `${v} ${item(k)}`).join(', ')), money(d.wage_cents || 0))
+        : w.workNo(A, esc(jobName(d.job)), esc(d.missing === 'wages' ? (LANG === 'ru' ? 'денег в казне' : 'money in the fund') : tr('itemGen', d.missing)));
+      case 'hired': return w.hired(A, esc(jobName(d.job)), d.by === 'council');
+      case 'quit': return w.quit(A, esc(jobName(d.job)));
+      case 'notice': return e.agent_id ? w.notice(A, esc(d.text)) : w.council(esc(d.text));
+      case 'relief': return d.cents ? w.reliefMoney(A, money(d.cents)) : w.reliefFood(A, d.qty, esc(item(d.item)));
+      case 'delivery': return w.delivery(d.qty, esc(item(d.item)), place);
+      case 'collapse': return w.collapse(A);
+      case 'death': return w.death(A, esc(tr('cause', d.cause) || d.cause));
+      case 'turned_away': { const m = /found (.+) full/.exec(e.summary); const l = m && [...S.locs.values()].find((x) => x.name === m[1]); return w.turned(A, esc(l ? placeName(l) : m ? m[1] : '?')); }
+      case 'invalid_action': return w.invalid(A, esc(d.action), `<span class="muted">${esc(d.error)}</span>`);
+      case 'give': return w.give(A, T, esc(d.cents ? `${money(d.cents)} ${W().asaps}` : `${d.qty} × ${item(d.item)}`));
+      case 'angel': return w.angel(esc(d.assessment || e.summary));
+      case 'plan': return w.plan(A, esc(d.plan || ''));
+      case 'forage': return d.success ? w.forageOk(A, d.qty, esc(item(d.item))) : w.forageNo(A, place);
+      case 'improvise': {
+        let s = esc(d.outcome || e.summary);
+        const a = S.agents.get(e.agent_id); const t = S.agents.get(e.target_id);
+        if (a) s = s.replace(esc(a.name), A); if (t) s = s.replace(esc(t.name), T);
+        return `${s} <span class="muted">— «${esc(d.what)}»</span>`;
+      }
+      default: return esc(e.summary);
+    }
+  }
+  const evClass = (e) => ['improvise', 'plan', 'open_stall', 'proposal', 'law', 'arrival', 'property'].includes(e.kind) ? 'idea' : FILTERS.trouble.includes(e.kind) ? 'trouble' : FILTERS.angels.includes(e.kind) || (e.kind === 'notice' && !e.agent_id) ? 'angel' : '';
+  const evLine = (e, cls) => `<div class="ev ${evClass(e)} ${cls || ''}"><span class="ic">${ICON[e.kind] || '•'}</span><span>${evText(e)}</span></div>`;
+
+  // ---------------------------------------------------------------- map
+  const SLOTS = [[0, 27], [-18, 27], [18, 27], [-36, 27], [36, 27], [-9, 43], [9, 43], [-27, 43], [27, 43], [0, 59], [-18, 59], [18, 59]];
+  const HOME_SLOTS = [[0, 20], [-12, 22], [12, 22], [0, 34]];
+  const PLAZA_SLOTS = [[0, 20], [-22, 12], [22, 12], [-22, 36], [22, 36], [0, 42], [-44, 24], [44, 24], [-44, 48], [44, 48], [0, 60], [-22, 60]];
+
+  function buildingSVG(l) {
+    const cx = (l.x + .5) * CELL, cy = (l.y + .5) * CELL; const k = l.kind;
+    const label = (dy) => `<text class="loc-label" x="${cx}" y="${cy + dy}">${esc(placeName(l))}</text>`;
+    if (k === 'home') {
+      const n = l.name.replace(/^House No\.\s*/, '');
+      return `<g><path class="home-roof" d="M${cx - 15},${cy - 2} L${cx},${cy - 14} L${cx + 15},${cy - 2} Z"/>
+        <rect class="bld" x="${cx - 11}" y="${cy - 2}" width="22" height="16" rx="1.5"/>
+        <text class="loc-label small" x="${cx}" y="${cy + 10}">${esc(n)}</text></g>`;
+    }
+    if (k === 'square') return `<g><circle class="plaza" cx="${cx}" cy="${cy}" r="58"/><circle class="water" cx="${cx}" cy="${cy}" r="9"/><circle class="bld" cx="${cx}" cy="${cy}" r="3"/><text class="loc-label" x="${cx}" y="${cy - 62}">${esc(placeName(l))}</text></g>`;
+    if (k === 'forest') {
+      const trees = [[-30, -10], [-10, -24], [12, -14], [30, -2], [-22, 14], [2, 6], [24, 20], [-6, 28]].map(([dx, dy]) =>
+        `<rect class="trunk" x="${cx + dx - 1.5}" y="${cy + dy + 4}" width="3" height="8"/><path class="tree" d="M${cx + dx - 9},${cy + dy + 6} L${cx + dx},${cy + dy - 12} L${cx + dx + 9},${cy + dy + 6} Z"/>`).join('');
+      return `<g>${trees}${label(46)}</g>`;
+    }
+    if (k === 'river') return `<g><path class="water" d="M${cx - 60},${cy - 70} C${cx - 30},${cy - 40} ${cx - 50},${cy - 10} ${cx - 20},${cy + 10} C${cx},${cy + 24} ${cx - 10},${cy + 50} ${cx + 10},${cy + 80} L${cx + 40},${cy + 80} C${cx + 20},${cy + 50} ${cx + 30},${cy + 24} ${cx + 8},${cy + 8} C${cx - 18},${cy - 12} ${cx - 2},${cy - 40} ${cx - 30},${cy - 70} Z"/>${label(44)}</g>`;
+    if (k === 'quarry') return `<g><path class="rock" d="M${cx - 34},${cy + 14} L${cx - 20},${cy - 14} L${cx - 2},${cy - 6} L${cx + 8},${cy - 20} L${cx + 30},${cy + 2} L${cx + 34},${cy + 16} Z"/><path class="rock" d="M${cx - 10},${cy + 16} L${cx + 2},${cy + 2} L${cx + 16},${cy + 16} Z"/>${label(30)}</g>`;
+    if (k === 'farm') {
+      const rows = [-16, -8, 0, 8, 16].map((dy) => `<line class="field" x1="${cx - 34}" y1="${cy + dy}" x2="${cx + 34}" y2="${cy + dy}"/>`).join('');
+      return `<g><rect class="plaza" x="${cx - 38}" y="${cy - 22}" width="76" height="44" rx="4"/>${rows}<rect class="bld" x="${cx + 14}" y="${cy - 36}" width="20" height="14"/><path class="bld-roof" d="M${cx + 12},${cy - 36} L${cx + 24},${cy - 46} L${cx + 36},${cy - 36} Z"/>${label(30)}</g>`;
+    }
+    const w = 52, h = 32; const x = cx - w / 2, y = cy - h / 2 + 4;
+    let deco = '';
+    if (k === 'church') deco = `<rect class="bld" x="${cx - 6}" y="${y - 22}" width="12" height="22"/><path class="bld-roof" d="M${cx - 8},${y - 22} L${cx},${y - 34} L${cx + 8},${y - 22} Z"/><path d="M${cx},${y - 40} v8 M${cx - 3},${y - 37} h6" stroke="var(--ink)" stroke-width="1.5"/>`;
+    else if (k === 'clinic') deco = `<path d="M${cx},${cy - 2} v12 M${cx - 6},${cy + 4} h12" stroke="var(--crit)" stroke-width="3"/>`;
+    else if (k === 'bank') deco = [-16, -5, 6, 17].map((dx) => `<rect x="${cx + dx - 1.5}" y="${y + 6}" width="3" height="${h - 10}" fill="var(--muted)"/>`).join('');
+    else if (k === 'market') deco = [0, 1, 2, 3, 4].map((i) => `<rect x="${x + i * (w / 5)}" y="${y - 6}" width="${w / 5}" height="7" fill="${i % 2 ? 'var(--accent)' : 'var(--surface)'}" stroke="var(--muted)" stroke-width=".6"/>`).join('');
+    else if (k === 'jail') deco = [-12, -4, 4, 12].map((dx) => `<rect x="${cx + dx - 1}" y="${y + 6}" width="2" height="${h - 12}" fill="var(--ink)"/>`).join('');
+    else if (k === 'tavern') deco = `<circle cx="${cx + 18}" cy="${y - 8}" r="5" fill="var(--warn)"/><rect x="${cx + 17}" y="${y - 20}" width="2" height="8" fill="var(--muted)"/>`;
+    else if (k === 'town_hall') deco = `<rect x="${cx - 1}" y="${y - 24}" width="2" height="20" fill="var(--muted)"/><path d="M${cx + 1},${y - 24} h14 l-4,4 l4,4 h-14 Z" fill="var(--accent)"/>`;
+    else if (k === 'workplace') deco = `<circle cx="${cx + 16}" cy="${cy + 4}" r="7" fill="none" stroke="var(--muted)" stroke-width="2" stroke-dasharray="2 2"/>`;
+    const roof = (k === 'church' || k === 'bank' || k === 'town_hall')
+      ? `<rect class="bld-roof" x="${x - 3}" y="${y - 6}" width="${w + 6}" height="7"/>`
+      : `<path class="bld-roof" d="M${x - 3},${y} L${cx},${y - 14} L${x + w + 3},${y} Z"/>`;
+    return `<g><rect class="bld" x="${x}" y="${y}" width="${w}" height="${h}" rx="2"/>${roof}${deco}${label(30)}</g>`;
+  }
+
+  function drawMap() {
+    const m = S.data.map; const Wd = m.width * CELL, H = m.height * CELL;
+    const svg = $('map');
+    const xs = [...S.locs.values()].map((l) => l.x), ys = [...S.locs.values()].map((l) => l.y);
+    const vx = Math.max(0, (Math.min(...xs) - .6) * CELL), vy = Math.max(0, (Math.min(...ys) - .9) * CELL);
+    const vw = Math.min(Wd, (Math.max(...xs) + 1.6) * CELL) - vx, vh = Math.min(H, (Math.max(...ys) + 2.2) * CELL) - vy;
+    svg.setAttribute('viewBox', `${vx} ${vy} ${vw} ${vh}`);
+    S.view = { x: vx, y: vy, w: vw, h: vh };
+    let grid = '';
+    for (let i = 0; i <= m.width; i++) grid += `<line class="grid-line" x1="${i * CELL}" y1="0" x2="${i * CELL}" y2="${H}"/>`;
+    for (let i = 0; i <= m.height; i++) grid += `<line class="grid-line" x1="0" y1="${i * CELL}" x2="${Wd}" y2="${i * CELL}"/>`;
+    const locs = [...S.locs.values()];
+    const order = { forest: 0, river: 0, farm: 0, quarry: 0, square: 1 };
+    locs.sort((a, b) => (order[a.kind] ?? 2) - (order[b.kind] ?? 2));
+    const econ = S.data.economy || {};
+    const badged = locs.filter((l) => (econ.shops || {})[l.key] || Object.values(econ.jobs || {}).some((j) => j.workplace === l.key));
+    svg.innerHTML = `<rect class="map-frame" width="${Wd}" height="${H}"/>${grid}
+      <g id="places">${locs.map(buildingSVG).join('')}</g>
+      <g id="badges">${badged.map((l) => `<text class="stock-badge" data-key="${l.key}" x="${(l.x + .5) * CELL}" y="${(l.y + .5) * CELL + 41}"></text>`).join('')}</g>
+      <g id="paths"></g><g id="agents"></g>
+      <rect class="night-overlay" id="night" width="${Wd}" height="${H}" opacity="0"/>
+      <g id="bubbles"></g>`;
+    const g = svg.querySelector('#agents');
+    for (const a of S.agents.values()) {
+      const el = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+      el.setAttribute('class', 'agent'); el.dataset.id = a.id;
+      el.innerHTML = `<circle class="ring" r="14"/><circle class="body" r="10" fill="${alignColor(a.alignment)}"/>
+        <text>${esc(initials(a.name))}</text><text class="zz" x="9" y="-9">z</text>
+        <text class="agent-name" y="22">${esc(first(a.name))}</text><title></title>`;
+      el.addEventListener('click', () => select(a.id));
+      g.appendChild(el);
+    }
+    renderLegend();
+  }
+  function renderLegend() {
+    $('legend').innerHTML = ['lawful-good', 'neutral', 'selfish', 'cruel', 'criminal']
+      .map((k) => `<span><i style="background:${alignColor(k)}"></i>${esc(tr('align', k))}</span>`).join('') +
+      `<span><i style="background:var(--muted);opacity:.5"></i>${esc(W().asleep)}</span>`;
+    $('mapHint').textContent = W().hint;
+    $('map').setAttribute('aria-label', LANG === 'ru' ? 'Карта города со всеми жителями' : 'Map of the town with every citizen');
+  }
+
+  const posCache = new Map();
+  function renderMap() {
+    const f = curFrame(); if (!f) return;
+    const byLoc = new Map(); const paths = []; posCache.clear();
+    for (const a of S.agents.values()) {
+      const p = agentPos(S.cur, a.id); const fa = frameAgent(f, a.id);
+      const el = document.querySelector(`#agents .agent[data-id="${a.id}"]`); if (!el || !p || !fa) continue;
+      let x, y;
+      if (p.travelling) {
+        x = p.x; y = p.y;
+        paths.push(`<line class="path" x1="${(p.from.x + .5) * CELL}" y1="${(p.from.y + .5) * CELL}" x2="${(p.to.x + .5) * CELL}" y2="${(p.to.y + .5) * CELL}"/>`);
+      } else {
+        const l = S.locs.get(p.loc); const n = byLoc.get(p.loc) || 0; byLoc.set(p.loc, n + 1);
+        const slots = l.kind === 'home' ? HOME_SLOTS : l.kind === 'square' ? PLAZA_SLOTS : SLOTS;
+        const [dx, dy] = slots[n % slots.length]; const ring = Math.floor(n / slots.length) * 14;
+        x = (l.x + .5) * CELL + dx; y = (l.y + .5) * CELL + dy + ring;
+      }
+      posCache.set(a.id, [x, y]);
+      el.style.transform = `translate(${x}px, ${y}px)`;
+      el.classList.toggle('asleep', !!fa.asleep); el.classList.toggle('dead', !fa.alive);
+      el.classList.toggle('selected', S.selected === a.id);
+      el.querySelector('.zz').style.display = fa.asleep ? '' : 'none';
+      el.querySelector('title').textContent = `${a.name} · ${stateOf(fa, p)} · ${p.travelling ? placeName(p.to) : locName(p.loc)} · ${fa.mood_label}`;
+    }
+    document.querySelector('#paths').innerHTML = paths.join('');
+    const h = f.hour;
+    $('night').setAttribute('opacity', h >= 21 || h < 5 ? .3 : h >= 19 ? .18 : h < 7 ? .15 : 0);
+    // shelves under the shops
+    const stocks = frameStocks(); const e = S.data.economy || {};
+    document.querySelectorAll('#badges .stock-badge').forEach((el) => {
+      const k = el.dataset.key; const items = Object.entries(stocks[k] || {}).filter(([it]) => !(e.unlimited || []).includes(it));
+      const sells = ((e.shops || {})[k] || []).filter((it) => !(e.unlimited || []).includes(it));
+      const out = sells.filter((it) => !(stocks[k] || {})[it]);
+      el.textContent = items.length ? items.map(([it, q]) => `${item(it)} ${q}`).join(' · ') : (sells.length && out.length ? W().town.soldOut : '');
+      el.classList.toggle('empty', !items.length && out.length > 0);
+    });
+    renderBubbles(f);
+  }
+  // One speech bubble per place: the last thing said (or attempted) there this hour.
+  function renderBubbles(f) {
+    const evs = S.events.filter((e) => e.tick === f.tick && (e.kind === 'talk' || e.kind === 'improvise') && e.agent_id);
+    const byPlace = new Map();
+    for (const e of evs) byPlace.set(e.location_id ?? `a${e.agent_id}`, e);
+    const out = [];
+    for (const e of byPlace.values()) {
+      const pos = posCache.get(e.agent_id); if (!pos) continue;
+      const a = S.agents.get(e.agent_id);
+      const text = e.kind === 'talk' ? `«${(e.data?.line || '').slice(0, 140)}»` : `✨ ${(e.data?.what || '').slice(0, 120)}`;
+      const bw = 190, bh = 58;
+      const v = S.view; const bx = Math.max(v.x + 4, Math.min(v.x + v.w - bw - 4, pos[0] - bw / 2)), by = Math.max(v.y + 4, pos[1] - bh - 14);
+      out.push(`<g class="bubwrap"><foreignObject x="${bx}" y="${by}" width="${bw}" height="${bh}"><div xmlns="http://www.w3.org/1999/xhtml" class="bub ${e.kind === 'improvise' ? 'idea' : ''}"><b>${esc(first(a.name))}:</b> ${esc(text)}</div></foreignObject></g>`);
+    }
+    $('bubbles').innerHTML = out.join('');
+  }
+
+  // ---------------------------------------------------------------- header + timeline
+  function frameStocks() { const f = curFrame(); return (f && f.stocks) || S.data.economy?.stocks || {}; }
+  function frameTreasury() { const f = curFrame(); return f && f.treasury != null ? f.treasury : S.data.economy?.treasury; }
+  function renderClock() {
+    const f = curFrame(); const w = S.data.world; const T = W(); if (!f) return;
+    const season = tr('season', f.season); const part = tr('part', f.part_of_day);
+    $('clockBig').textContent = `${season[0].toUpperCase() + season.slice(1)} · ${LANG === 'ru' ? 'день' : 'Day'} ${f.day} · ${hh(f.hour)}`;
+    const latest = S.frames[S.frames.length - 1];
+    const note = S.cur === S.frames.length - 1 ? T.newest : T.behind(latest.tick - f.tick);
+    $('clockSmall').textContent = `${part} · ${tr('weather', w.weather)} · ${note}`;
+    const pill = $('statusPill'); pill.className = 'pill';
+    const fresh = S.lastLive && Date.now() - S.lastLive < 3 * 60 * 1000;
+    if (S.server && w.paused) { pill.classList.add('paused'); $('statusText').textContent = w.mode === 'budget_paused' ? T.budget : T.paused; }
+    else if (S.server || fresh) { pill.classList.add('live'); $('statusText').textContent = T.live; pill.title = T.liveTip; }
+    else { pill.classList.add('off'); $('statusText').textContent = T.replay; pill.title = T.replayTip(S.lastLive ? Math.round((Date.now() - S.lastLive) / 60000) : null); }
+    $('spendText').textContent = S.data.cost.total_usd.toFixed(2);
+    $('spendPill').title = T.spendTip; $('fundPill').title = T.fundTip; $('fundLab').textContent = T.fund;
+    const fund = frameTreasury();
+    $('fundText').textContent = fund != null ? Math.round(fund / 100).toLocaleString(LANG) : '—';
+    $('btnPause').textContent = w.paused ? T.resume : T.pause;
+    $('btnPause').classList.toggle('primary', !!w.paused);
+    const sel = $('speedSel'); if (document.activeElement !== sel) sel.value = String(w.speed);
+  }
+  function renderTimeline() {
+    const T = W(); const n = S.frames.length; const sc = $('scrub');
+    sc.max = Math.max(0, n - 1); if (Number(sc.value) !== S.cur) sc.value = S.cur;
+    sc.setAttribute('aria-label', LANG === 'ru' ? 'Час симуляции' : 'Hour of the simulation');
+    const f = curFrame();
+    $('tlCur').textContent = f ? `${T.day} ${f.day} · ${hh(f.hour)}` : '';
+    $('tlEnd').textContent = T.hoursLived(n);
+    $('tlStart').textContent = S.frames[0] ? `${T.day} ${S.frames[0].day} · ${hh(S.frames[0].hour)}` : '';
+    let bands = '', start = null;
+    for (let i = 0; i < n; i++) {
+      const night = S.frames[i].hour >= 21 || S.frames[i].hour < 6;
+      if (night && start === null) start = i;
+      if ((!night || i === n - 1) && start !== null) { const end = night ? i + 1 : i; bands += `<i style="left:${start / n * 100}%;width:${(end - start) / n * 100}%"></i>`; start = null; }
+    }
+    $('daystrip').innerHTML = bands;
+    $('btnLive').classList.toggle('primary', S.follow);
+    $('btnLive').textContent = S.follow ? T.latest : T.toLatest; $('btnLive').title = T.latestTip;
+    $('btnPlay').textContent = S.playing ? T.stop : T.play; $('btnPlay').title = T.playTip;
+    $('btnPrev').title = T.prev; $('btnNext').title = T.next;
+  }
+
+  // ---------------------------------------------------------------- right now
+  function renderNow() {
+    const f = curFrame(); if (!f) return; const T = W(); const cards = [];
+    const alive = f.agents.filter((x) => x.alive);
+    // 1. the biggest crowd away from home
+    const groups = new Map();
+    for (const x of alive) { if (x.loc == null) continue; const l = S.locs.get(x.loc); if (!l || l.kind === 'home') continue; if (!groups.has(x.loc)) groups.set(x.loc, []); groups.get(x.loc).push(x); }
+    const big = [...groups.entries()].sort((a, b) => b[1].length - a[1].length)[0];
+    if (big && big[1].length >= 2) {
+      const acts = new Map(); for (const x of big[1]) { const k = x.asleep ? 'sleep' : (x.action || 'idle'); acts.set(k, (acts.get(k) || 0) + 1); }
+      const top = [...acts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 2).map(([k]) => T.doing[k] || k).join(', ');
+      cards.push({ cls: big[1].length >= 5 ? 'warn' : '', lab: T.now.crowd, ttl: T.crowdTtl(big[1].length, locName(big[0])), det: top, faces: big[1].map((x) => x.id), act: () => select(big[1][0].id) });
+    }
+    // 2. danger
+    const risk = alive.filter((x) => x.health < 30 || x.hunger > 75).sort((a, b) => a.health - b.health);
+    const dead = [...S.agents.keys()].filter((id) => frameAgent(f, id) && !frameAgent(f, id).alive).length;
+    if (risk.length) cards.push({ cls: 'crit', lab: T.now.danger, ttl: risk.slice(0, 3).map((x) => `${first(S.agents.get(x.id).name)} ${x.health}`).join(' · ') + (risk.length > 3 ? ' …' : ''),
+      det: (LANG === 'ru' ? 'здоровье из 100' : 'health out of 100') + (dead ? ` · ${T.dangerDead(dead)}` : ''), faces: risk.map((x) => x.id), act: () => select(risk[0].id) });
+    else cards.push({ cls: 'good', lab: T.now.calm, ttl: T.dangerNone, det: dead ? T.dangerDead(dead) : '' });
+    // 3. economy
+    const worked = S.events.filter((e) => e.kind === 'work' && e.data?.success && e.tick <= f.tick && e.tick > f.tick - 6).length;
+    const st = frameStocks(); const sum = (it) => Object.values(st).reduce((n, s) => n + (s[it] || 0), 0);
+    cards.push({ cls: worked ? 'good' : 'crit', lab: T.now.econ, ttl: T.econTtl(worked), det: T.econDet(sum('bread'), sum('flour'), sum('grain')), act: () => openTab('town') });
+    // 4. the newest notable thing
+    const notable = S.events.filter((e) => e.tick <= f.tick && !ROUTINE.has(e.kind) && !['talk', 'depart', 'invalid_action', 'buy', 'plan', 'vote'].includes(e.kind)).slice(-1)[0];
+    if (notable) cards.push({ cls: notable.kind === 'death' ? 'crit' : notable.kind === 'improvise' ? 'warn' : '', lab: `${T.now.just} · ${hh(frameAt(notable.tick)?.hour ?? 0)}`, ttl: '', det: '', html: evText(notable), act: () => { openTab('story'); } });
+    // 5. the last thing said
+    const said = S.events.filter((e) => e.tick <= f.tick && e.kind === 'talk').slice(-1)[0];
+    if (said) cards.push({ cls: '', lab: `${T.now.said} · ${hh(frameAt(said.tick)?.hour ?? 0)}`, ttl: `${first(S.agents.get(said.agent_id)?.name || '?')} ${T.ev.to} ${first(S.agents.get(said.target_id)?.name || '?')}`, det: `«${said.data?.line || ''}»`, act: () => select(said.agent_id) });
+    $('now').innerHTML = cards.map((c, i) => `<div class="card ${c.cls}" data-i="${i}" ${c.act ? 'role="button" tabindex="0"' : ''}>
+      <span class="lab"><i></i>${esc(c.lab)}</span>
+      ${c.ttl ? `<span class="ttl">${esc(c.ttl)}</span>` : ''}
+      ${c.html ? `<span class="det" style="color:var(--ink);-webkit-line-clamp:3">${c.html}</span>` : ''}
+      ${c.det ? `<span class="det">${esc(c.det)}</span>` : ''}
+      ${c.faces ? `<span class="faces">${c.faces.slice(0, 9).map((id) => { const a = S.agents.get(id); return `<span style="background:${alignColor(a.alignment)}">${esc(initials(a.name))}</span>`; }).join('')}</span>` : ''}
+    </div>`).join('');
+    $('now').querySelectorAll('.card').forEach((el) => {
+      const run = (ev) => { if (ev.target.closest('.pname')) return; const c = cards[Number(el.dataset.i)]; if (c.act) c.act(); };
+      el.addEventListener('click', run);
+      el.addEventListener('keydown', (ev) => { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); run(ev); } });
+    });
+    wireNames($('now'));
+  }
+
+  // ---------------------------------------------------------------- story
+  function renderFilters() {
+    const T = W();
+    $('filters').innerHTML = Object.keys(FILTERS).map((k) => `<button data-f="${k}" aria-pressed="${S.filter === k}">${esc(T.filters[k])}</button>`).join('') +
+      `<button data-f="routine" aria-pressed="${S.routine}">${esc(S.routine ? T.hideRoutine : T.routine)}</button>`;
+  }
+  function renderStory() {
+    const f = curFrame(); if (!f) return; const T = W();
+    const keep = FILTERS[S.filter] ? new Set(FILTERS[S.filter]) : null;
+    const evs = S.events.filter((e) => e.tick <= f.tick && (!keep || keep.has(e.kind)) && (S.routine || S.filter !== 'all' || !ROUTINE.has(e.kind)));
+    if (!evs.length) { $('feed').innerHTML = `<div class="empty">${esc(T.story.empty)}</div>`; return; }
+    const byTick = new Map();
+    for (const e of evs) { if (!byTick.has(e.tick)) byTick.set(e.tick, []); byTick.get(e.tick).push(e); }
+    const ticks = [...byTick.keys()].sort((a, b) => b - a).slice(0, 48);
+    const html = ticks.map((t) => {
+      const fr = frameAt(t); const list = byTick.get(t);
+      const convos = new Map(); const rest = [];
+      for (const e of list) { if (e.kind === 'talk') { const k = e.location_id ?? 0; if (!convos.has(k)) convos.set(k, []); convos.get(k).push(e); } else rest.push(e); }
+      const order = { death: 0, law: 1, proposal: 1, open_stall: 1, improvise: 2, plan: 3, angel: 4, notice: 5, give: 6 };
+      rest.sort((a, b) => (order[a.kind] ?? 9) - (order[b.kind] ?? 9));
+      const convoHTML = [...convos.entries()].map(([loc, lines]) => `<div class="convo"><div class="where">${esc(T.story.convoAt(locName(loc)))}</div>${lines.map((e) =>
+        `<div class="line ${e.id > S.seenEvent ? 'new' : ''}">${face(e.agent_id)}<div><span class="who">${esc(S.agents.get(e.agent_id)?.name || '?')} <span class="to">${T.ev.to} ${esc(S.agents.get(e.target_id)?.name || '')}</span></span><q>${esc(e.data?.line || '')}</q></div></div>`).join('')}</div>`).join('');
+      const idx = S.frames.indexOf(fr);
+      return `<section class="hour"><div class="hourhead"><span>${fr ? esc(T.story.hourAt(fr.day, hh(fr.hour), tr('part', fr.part_of_day))) : `${T.tick} ${t}`}</span>${idx >= 0 && idx !== S.cur ? `<button data-go="${idx}">${esc(T.story.show)}</button>` : ''}</div>
+        ${rest.map((e) => evLine(e, e.id > S.seenEvent ? 'new' : '')).join('')}${convoHTML}</section>`;
+    }).join('');
+    $('feed').innerHTML = html;
+    wireNames($('feed'));
+    $('feed').querySelectorAll('[data-go]').forEach((b) => b.addEventListener('click', () => goTo(Number(b.dataset.go), { byUser: true })));
+    S.seenEvent = Math.max(S.seenEvent, ...evs.map((e) => e.id));
+  }
+
+  // ---------------------------------------------------------------- people
+  function renderPeople() {
+    const f = curFrame(); if (!f) return; const T = W();
+    const lastSaid = new Map();
+    for (const e of S.events) if (e.kind === 'talk' && e.tick <= f.tick) lastSaid.set(e.agent_id, e);
+    const rows = [...S.agents.values()].map((a) => {
+      const fa = frameAgent(f, a.id); if (!fa) return '';
+      const pos = agentPos(S.cur, a.id); const job = jobOf(a.id);
+      const where = !fa.alive ? T.deadOf(tr('cause', a.cause_of_death) || '—') : pos && pos.travelling ? T.onRoad(placeName(pos.to)) : locName(fa.loc);
+      const said = lastSaid.get(a.id);
+      return `<button class="cit ${fa.alive ? '' : 'dead'} ${S.selected === a.id ? 'selected' : ''}" data-id="${a.id}">
+        <span class="avatar ${fa.asleep ? 'asleep' : ''}" style="background:${alignColor(a.alignment)}">${esc(initials(a.name))}</span>
+        <span style="min-width:0">
+          <span class="name">${esc(a.name)} <span class="chip ${a.alignment}">${esc(tr('align', a.alignment))}</span>${job ? ` <span class="chip job">${esc(jobName(job))}</span>` : ''}</span>
+          <span class="where">${esc(stateOf(fa, pos))} · ${esc(where)} · <span class="mood">${esc(fa.mood_label)}</span> · <span class="num">${money(fa.money)}</span></span>
+          ${said && fa.alive ? `<span class="said">«${esc(said.data?.line || '')}»</span>` : ''}
+        </span>
+        <span class="bars">
+          ${['hunger', 'energy', 'health', 'social'].map((k) => `<span class="bar ${needClass(fa[k], k === 'hunger')}" title="${esc(T.needs[k])} ${fa[k]}: ${esc(T.needTips[k])}"><i style="width:${fa[k]}%"></i></span>`).join('')}
+        </span></button>`;
+    }).join('');
+    const nAlive = [...S.agents.keys()].filter((id) => frameAgent(f, id)?.alive).length;
+    $('tab-people').innerHTML = `<div class="barkey"><span>${nAlive} ${esc(T.alive)} / ${S.agents.size} ${esc(T.people)}</span><span>${esc(T.barKey)}</span></div><div class="citizens">${rows}</div>`;
+    $('tab-people').querySelectorAll('.cit').forEach((b) => b.addEventListener('click', () => select(Number(b.dataset.id))));
+  }
+
+  // ---------------------------------------------------------------- town
+  function renderTown() {
+    const c = S.data.cost; const w = S.data.world; const e = S.data.economy || { stocks: {}, jobs: {}, shops: {}, prices: {} };
+    const T = W().town; const f = curFrame(); const stocks = frameStocks();
+    const pct = Math.min(100, c.total_usd / w.budget_daily_usd * 100);
+    const placeKeys = [...new Set([...Object.keys(e.shops || {}), ...Object.values(e.jobs || {}).map((j) => j.workplace)])];
+    const price = (it) => ((e.prices || {})[it] || 0) / 100;
+    const shelves = placeKeys.map((k) => {
+      const l = locByKey(k); if (!l) return '';
+      const sells = (e.shops || {})[k] || [];
+      const items = Object.entries(stocks[k] || {}).filter(([it]) => !(e.unlimited || []).includes(it));
+      const lines = items.map(([it, q]) => `<div class="it"><span>${esc(item(it))}${sells.includes(it) ? ` <span class="num muted">${price(it)}</span>` : ''}</span><span class="num ${q ? '' : 'zero'}">${q}</span></div>`).join('');
+      const always = sells.filter((it) => (e.unlimited || []).includes(it)).map((it) => `<div class="it"><span>${esc(item(it))} <span class="num muted">${price(it)}</span></span><span class="num">${T.always}</span></div>`).join('');
+      return `<div class="shelf"><div class="nm">${esc(placeName(l))}</div>${lines || always ? lines + always : `<div class="it"><span class="num zero">${esc(T.empty)}</span></div>`}</div>`;
+    }).join('');
+    const jobs = Object.entries(e.jobs || {}).map(([name, j]) => {
+      const workers = [...S.agents.keys()].filter((id) => roleAt(id) === name && frameAgent(f, id)?.alive).map((id) => `<button class="chip job" data-id="${id}">${esc(S.agents.get(id).name)}</button>`).join(' ') || `<span class="chip soft">${esc(T.nobody)}</span>`;
+      const chain = [Object.keys(j.uses || {}).length ? `${T.uses} ${Object.entries(j.uses).map(([k, v]) => `${v} ${item(k)}`).join(', ')}` : '', Object.keys(j.makes || {}).length ? `${T.makes} ${Object.entries(j.makes).map(([k, v]) => `${v} ${item(k)}`).join(', ')}` : ''].filter(Boolean).join(' → ');
+      return `<tr><td><strong>${esc(jobName(name))}</strong><br><span class="muted" style="font-size:12px">${esc(locName(locByKey(j.workplace)?.id))} · ${(j.wage_cents / 100).toFixed(2)}/h${chain ? ' · ' + esc(chain) : ''}</span></td><td class="chips">${workers}</td></tr>`;
+    }).join('');
+    const employed = [...S.agents.keys()].filter((id) => jobOf(id) && frameAgent(f, id)?.alive).length;
+    const bread = Object.values(stocks).reduce((n, s) => n + (s.bread || 0), 0);
+    const rows = c.by_model.map((r) => `<tr><td>${esc(r.tier)}</td><td>${esc(r.model)}</td><td class="num">${r.calls}</td><td class="num">${r.input.toLocaleString()}</td><td class="num">${r.output.toLocaleString()}</td><td class="num">${r.cache_read.toLocaleString()}</td><td class="num">${r.usd.toFixed(3)}</td></tr>`).join('');
+    const fund = frameTreasury();
+    $('tab-town').innerHTML = `
+      <div class="stats">
+        <div class="stat"><div class="v">${fund != null ? Math.round(fund / 100).toLocaleString(LANG) : '—'}</div><div class="k">${esc(T.fund)}</div></div>
+        <div class="stat"><div class="v">${bread}</div><div class="k">${esc(T.loaves)}</div></div>
+        <div class="stat"><div class="v">${employed}</div><div class="k">${esc(T.employed)}</div></div>
+      </div>
+      <div class="eyebrow" style="margin:8px 0 6px">${esc(T.shelves)}</div>
+      <div class="shelves">${shelves}</div>
+      <div class="eyebrow" style="margin:14px 0 6px">${esc(T.biz)}</div>
+      ${(e.stalls || []).length ? `<div class="shelves">${e.stalls.map((st) => `<div class="shelf"><div class="nm">🏪 ${esc(st.name)}</div><div class="it"><span>${pbtn(st.owner_id)} · ${esc(locName(st.location_id))}</span></div><div class="it"><span>${esc(item(st.item))} <span class="num muted">${money(st.price)}</span></span><span class="num ${st.qty ? '' : 'zero'}">${st.qty}</span></div><div class="it muted" style="font-size:12px"><span>${esc(T.bizRow(st.qty, st.sold))}</span></div></div>`).join('')}</div>` : `<p class="note">${esc(T.noBiz)}</p>`}
+      <div class="eyebrow" style="margin:14px 0 6px">${esc(T.jobs)}</div>
+      <div style="overflow-x:auto"><table><tbody>${jobs}</tbody></table></div>
+      <div class="eyebrow" style="margin:16px 0 6px">${esc(T.spend)}</div>
+      <div class="stats">
+        <div class="stat"><div class="v">$${c.total_usd.toFixed(2)}</div><div class="k">${esc(T.spent)}</div></div>
+        <div class="stat"><div class="v">${c.calls}</div><div class="k">${esc(T.calls)}</div></div>
+        <div class="stat"><div class="v">${S.frames.length}</div><div class="k">${esc(T.hours)}</div></div>
+      </div>
+      <div class="eyebrow">${esc(T.cap(w.budget_daily_usd.toFixed(2)))}</div>
+      <div class="budget"><i style="width:${pct}%"></i></div>
+      <div style="overflow-x:auto;margin-top:12px"><table><thead><tr>${T.th.map((h, i) => `<th class="${i > 1 ? 'num' : ''}">${esc(h)}</th>`).join('')}</tr></thead><tbody>${rows || `<tr><td colspan="7" class="empty">${esc(T.none)}</td></tr>`}</tbody></table></div>
+      <p class="note">${esc(T.modelsNote)}</p>`;
+    wireNames($('tab-town'));
+  }
+
+  // ---------------------------------------------------------------- angels
+  function renderAngels() {
+    const f = curFrame(); const g = S.data.angels || { anomalies: [], interventions: [] }; const T = W().angels;
+    const tickOf = (t) => { const fr = frameAt(t); return fr ? `d${fr.day} ${hh(fr.hour)}` : `t${t}`; };
+    const ivs = g.interventions.filter((i) => !f || i.tick <= f.tick).slice().reverse();
+    const anoms = g.anomalies.filter((a) => !f || a.tick <= f.tick).slice().reverse();
+    const rounds = S.events.filter((e) => e.kind === 'angel' && (!f || e.tick <= f.tick));
+    const latest = rounds[rounds.length - 1];
+    $('cntAngels').textContent = ivs.filter((i) => i.applied).length || '';
+    const ivText = (i) => {
+      const t = i.target || '';
+      if (t === 'notice') return T.notice(esc(i.after?.text || ''));
+      if (t.startsWith('stock:')) { const [, loc, it] = t.split(':'); return T.cart((i.after?.qty ?? 0) - (i.before?.qty ?? 0), esc(item(it)), esc(locName(locByKey(loc)?.id))); }
+      if (t.endsWith(':role')) return T.appoint(pbtn(Number(t.split(':')[1])), esc(jobName(i.after?.role)));
+      if (t.endsWith(':money')) return T.grant(pbtn(Number(t.split(':')[1])), money((i.after?.money_cents ?? 0) - (i.before?.money_cents ?? 0)));
+      if (t.endsWith(':inventory')) return T.parcel(pbtn(Number(t.split(':')[1])));
+      return esc(t || i.reason || '');
+    };
+    $('tab-angels').innerHTML = `
+      <p class="note" style="margin-top:0">${T.intro}</p>
+      ${latest ? `<div class="assess"><div class="eyebrow" style="margin-bottom:4px">${esc(T.latest)} · ${tickOf(latest.tick)} · ${esc(latest.data?.model || '')}</div>${esc(latest.data?.assessment || latest.summary)}</div>` : ''}
+      <div class="eyebrow" style="margin:8px 0 6px">${esc(T.ivs)} (${ivs.length})</div>
+      <div class="ivs">${ivs.map((i) => `<div class="iv ${i.applied ? '' : 'rejected'}"><span class="t">${tickOf(i.tick)}</span><div><div class="tg">${ivText(i)}${i.applied ? '' : ` <span class="chip soft">${esc(T.rejected)}</span>`}</div><div class="why">${esc(i.reason || '')}</div></div></div>`).join('') || `<div class="empty">${esc(T.noIv)}</div>`}</div>
+      <div class="eyebrow" style="margin:14px 0 6px">${esc(T.saw)} (${anoms.length})</div>
+      <div>${anoms.map((a) => `<div class="anom ${a.status === 'open' ? '' : 'fixed'}"><span class="t num muted">${tickOf(a.tick)}</span><span><strong>${esc(a.kind.replace(/_/g, ' '))}</strong> ${a.agent_id ? pbtn(a.agent_id) : ''}<br><span class="muted">${esc(a.detail)}</span></span><span class="sev ${a.severity >= 4 ? 'hi' : ''}" title="${esc(T.sev(a.severity))}">${a.severity}</span></div>`).join('') || `<div class="empty">${esc(T.noAnom)}</div>`}</div>`;
+    wireNames($('tab-angels'));
+  }
+
+  // ---------------------------------------------------------------- drawer
+  function select(id) {
+    S.selected = S.selected === id ? null : id;
+    renderDrawer(); renderMap(); if (S.tab === 'people') renderPeople(); renderPresets();
+  }
+  function renderDrawer() {
+    const d = $('drawer'); const a = S.agents.get(S.selected); const T = W(); const D = T.drawer;
+    if (!a) { d.hidden = true; d.innerHTML = ''; return; }
+    const f = curFrame(); const fa = frameAgent(f, a.id) || {}; const pos = agentPos(S.cur, a.id); const job = jobOf(a.id);
+    const where = !fa.alive ? T.deadOf(tr('cause', a.cause_of_death) || '—') : pos && pos.travelling ? T.onRoad(placeName(pos.to)) : `${locName(fa.loc)}${fa.loc === a.home_id ? ` (${T.home})` : ''}`;
+    const inv = Object.entries(fa.inventory || {}).map(([k, v]) => `<span class="chip soft">${esc(item(k))} × ${v}</span>`).join('') || `<span class="chip soft">${esc(T.nothing)}</span>`;
+    const need = (k, inverted) => `<div class="need"><span>${esc(T.needs[k])}</span><span class="bar ${needClass(fa[k] ?? 0, inverted)}" title="${esc(T.needTips[k])}"><i style="width:${fa[k] ?? 0}%"></i></span><span class="num">${fa[k] ?? 0}</span></div>`;
+    const trait = (k, v, dark) => `<div class="trait ${dark ? 'dark' : ''}"><span>${esc(k)}</span><span class="bar"><i style="width:${Math.round(v * 100)}%"></i></span></div>`;
+    const mine = S.events.filter((e) => e.tick <= f.tick && (e.agent_id === a.id || e.target_id === a.id) && !ROUTINE.has(e.kind)).slice(-16).reverse();
+    const minifeed = mine.map((e) => { const fr = frameAt(e.tick); return `<div style="display:grid;grid-template-columns:52px 1fr;gap:6px"><span class="num muted" style="font-size:11px;padding-top:4px">${fr ? `d${fr.day} ${hh(fr.hour)}` : 't' + e.tick}</span>${e.kind === 'talk' ? `<div class="ev"><span class="ic">💬</span><span>${pbtn(e.agent_id, true)} ${T.ev.to} ${pbtn(e.target_id, true)}: <q>${esc(e.data?.line || '')}</q></span></div>` : evLine(e)}</div>`; }).join('') || `<div class="empty">${esc(T.nothing)}</div>`;
+    const ap = a.appearance || {};
+    d.innerHTML = `
+      <div class="head">
+        <span class="avatar ${fa.asleep ? 'asleep' : ''}" style="background:${alignColor(a.alignment)}">${esc(initials(a.name))}</span>
+        <div style="min-width:0"><h2>${esc(a.name)}</h2><div class="meta">${a.age ?? '?'} ${esc(D.years)} · ${esc(D.from)} ${esc(a.birthplace || '?')} · <span class="chip ${a.alignment}">${esc(tr('align', a.alignment))}</span>${job ? ` <span class="chip job">${esc(jobName(job))}</span>` : ''}</div></div>
+        <button class="btn close" id="closeDrawer" title="${esc(D.close)}">✕</button>
+      </div>
+      <div class="body">
+        <div class="sec"><h3>${esc(D.now)} · ${esc(T.day)} ${f.day} ${hh(f.hour)}</h3>
+          <dl class="kv"><dt>${esc(D.where)}</dt><dd>${esc(where)}</dd><dt>${esc(D.doing)}</dt><dd>${esc(stateOf(fa, pos))}</dd>
+          <dt>${esc(D.job)}</dt><dd>${job ? `${esc(jobName(job))} · ${esc(locName(locByKey(S.data.economy.jobs[job].workplace)?.id))} · ${(S.data.economy.jobs[job].wage_cents / 100).toFixed(2)}/h` : esc(T.none)}</dd>
+          <dt>${esc(D.mood)}</dt><dd>${esc(fa.mood_label)} (${fa.mood})</dd><dt>${esc(D.money)}</dt><dd class="num">${money(fa.money || 0)} ${esc(T.asaps)}</dd><dt>${esc(D.carrying)}</dt><dd class="chips">${inv}</dd></dl>
+          ${(() => { const p = S.events.filter((e) => e.kind === 'plan' && e.agent_id === a.id && e.tick <= f.tick && frameAt(e.tick)?.day === f.day).slice(-1)[0]; return p ? `<div class="eyebrow" style="margin-top:10px">${esc(D.plan)}</div><p class="thought">📝 ${esc(p.data?.plan || '')}</p>` : ''; })()}
+          ${fa.thought ? `<div class="eyebrow" style="margin-top:10px">${esc(D.thought)}</div><p class="thought">${esc(fa.thought)}</p>` : ''}
+        </div>
+        <div class="sec"><h3>${esc(D.body)}</h3><div class="needs">${need('hunger', true)}${need('energy')}${need('health')}${need('social')}</div></div>
+        <div class="sec"><h3>${esc(D.rel)}</h3>${(() => { const rs = (S.data.relations || []).filter((r) => r.a === a.id).sort((x, y) => (Math.abs(y.trust) + Math.abs(y.affinity)) - (Math.abs(x.trust) + Math.abs(x.affinity))).slice(0, 8);
+          return rs.length ? `<div style="display:grid;gap:6px">${rs.map((r) => { const words = [D.trustW(r.trust), D.likeW(r.affinity)].filter(Boolean).join(' · '); const tone = r.trust + r.affinity; return `<div style="display:grid;grid-template-columns:auto 1fr;gap:8px;align-items:start">${face(r.b)}<div><strong>${esc(S.agents.get(r.b)?.name || '?')}</strong>${words ? ` <span class="chip ${tone < -0.2 ? 'criminal' : tone > 0.2 ? 'lawful-good' : 'soft'}">${esc(words)}</span>` : ''}<div class="muted" style="font-size:13px">${esc((r.history || []).map((h) => h.did).join(' · '))}</div></div></div>`; }).join('')}</div>` : `<p class="note">${esc(D.noRel)}</p>`; })()}</div>
+        <div class="sec"><h3>${esc(D.hours)}</h3><div style="display:grid;gap:2px">${minifeed}</div></div>
+        <div class="sec"><h3>${esc(D.who)}</h3><div class="prose">
+          <p><em>${esc(ap.self_description || '')}</em></p>
+          <p>${esc(D.look(ap.hair, ap.build, ap.clothing, ap.signature_item))}</p>
+          <p><strong>${esc(D.speech)}:</strong> ${esc(a.speech_style)}</p>
+          ${a.unpleasant?.length ? `<p><span class="chip criminal">${esc(D.unpleasant)}</span> ${esc(a.unpleasant.join(', '))}</p>` : ''}
+        </div></div>
+        <div class="sec"><h3>${esc(D.values)}</h3><div class="chips">
+          ${(a.values || []).map((v) => `<span class="chip soft">♥ ${esc(v)}</span>`).join('')}
+          ${(a.fears || []).map((v) => `<span class="chip soft">⚠ ${esc(v)}</span>`).join('')}
+          ${(a.ambitions || []).map((v) => `<span class="chip soft">→ ${esc(v)}</span>`).join('')}
+          ${(a.quirks || []).map((v) => `<span class="chip soft">~ ${esc(v)}</span>`).join('')}
+        </div></div>
+        ${a.secrets?.length ? `<div class="sec"><h3>${esc(D.secrets)}</h3><div class="prose">${a.secrets.map((s) => `<p>${esc(s)}</p>`).join('')}</div></div>` : ''}
+        <div class="sec"><h3>${esc(D.traits)}</h3><div class="traits">
+          ${Object.entries(a.big_five || {}).map(([k, v]) => trait(k, v, false)).join('')}
+          ${Object.entries(a.dark_traits || {}).map(([k, v]) => trait(k, v, true)).join('')}
+        </div></div>
+        <div class="sec"><h3>${esc(D.backstory)}</h3><div class="prose"><p>${esc(a.backstory)}</p></div></div>
+        <div class="sec"><h3>${esc(D.identity)}</h3><dl class="kv"><dt>${esc(D.homeL)}</dt><dd>${esc(locName(a.home_id))}</dd><dt>${esc(D.bedtime)}</dt><dd>${hh(a.bedtime)}</dd><dt>MAC</dt><dd class="num">${esc(a.mac)}</dd><dt>IP</dt><dd class="num">${esc(a.ip)}</dd></dl></div>
+      </div>`;
+    d.hidden = false;
+    $('closeDrawer').addEventListener('click', () => select(S.selected));
+    wireNames(d);
+  }
+
+  // ---------------------------------------------------------------- ask Claude
+  let sampleFn = null;
+  function renderAskStatic() {
+    const T = W().ask;
+    $('askIntro').textContent = T.intro; $('askInput').placeholder = T.ph; $('askBtn').textContent = T.send; $('stopBtn').textContent = T.stop;
+    renderPresets(); renderQA();
+  }
+  function renderPresets() {
+    const T = W().ask; const sel = S.agents.get(S.selected);
+    const list = [...T.presets, ...(sel ? [T.about(first(sel.name))] : [])];
+    $('presets').innerHTML = list.map((q) => `<button data-q="${esc(q)}">${esc(q)}</button>`).join('');
+    $('presets').querySelectorAll('button').forEach((b) => b.addEventListener('click', () => ask(b.dataset.q)));
+  }
+  function renderQA() {
+    $('qa').innerHTML = S.qa.map((x) => `<div class="q">${esc(x.q)}</div><div class="a ${x.pending ? 'thinking' : ''}">${esc(x.a || W().ask.thinking)}</div>`).join('');
+    const p = $('tab-ask'); p.scrollTop = p.scrollHeight;
+  }
+  function townContext() {
+    const f = curFrame(); const e = S.data.economy || {}; const stocks = frameStocks();
+    const lines = [`Asapville at day ${f.day}, ${hh(f.hour)} (${f.part_of_day}, ${f.season}). Town fund: ${Math.round((frameTreasury() || 0) / 100)} asaps.`];
+    lines.push('Shelves: ' + Object.entries(stocks).map(([k, s]) => `${k}: ` + Object.entries(s).map(([i, q]) => `${i} ${q}`).join(', ')).join('; '));
+    lines.push('Prices (asaps): ' + Object.entries(e.prices || {}).map(([k, v]) => `${k} ${v / 100}`).join(', '));
+    lines.push('Jobs: ' + Object.entries(e.jobs || {}).map(([n, j]) => `${n} at ${j.workplace} (${j.wage_cents / 100}/h, uses ${JSON.stringify(j.uses || {})}, makes ${JSON.stringify(j.makes || {})}): ${[...S.agents.keys()].filter((id) => roleAt(id) === n).map((id) => S.agents.get(id).name).join(', ') || 'nobody'}`).join('; '));
+    lines.push('Citizens:');
+    for (const a of S.agents.values()) {
+      const fa = frameAgent(f, a.id); if (!fa) continue; const pos = agentPos(S.cur, a.id);
+      lines.push(`- ${a.name} (${a.age}, ${a.alignment}, job ${roleAt(a.id)}): ${!fa.alive ? 'DEAD ' + (a.cause_of_death || '') : `${pos && pos.travelling ? 'walking to ' + pos.to.name : S.locs.get(fa.loc)?.name}, ${fa.asleep ? 'asleep' : fa.action || 'idle'}, hunger ${fa.hunger}, energy ${fa.energy}, health ${fa.health}, ${money(fa.money)} asaps, carries ${JSON.stringify(fa.inventory || {})}, mood "${fa.mood_label}", thinking: "${(fa.thought || '').slice(0, 220)}"`}`);
+    }
+    lines.push('Recent events (oldest first):');
+    const evs = S.events.filter((x) => x.tick <= f.tick && !ROUTINE.has(x.kind)).slice(-90);
+    for (const x of evs) { const fr = frameAt(x.tick); lines.push(`[d${fr ? fr.day : '?'} ${fr ? hh(fr.hour) : x.tick}] ${x.kind === 'talk' ? `${S.agents.get(x.agent_id)?.name} to ${S.agents.get(x.target_id)?.name}: "${x.data?.line}"` : x.summary}`); }
+    return lines.join('\n');
+  }
+  async function ask(q) {
+    q = (q || '').trim(); if (!q || S.askCtl) return; const T = W().ask;
+    openTab('ask');
+    if (!sampleFn) { $('askNote').textContent = T.off; return; }
+    const entry = { q, a: '', pending: true }; S.qa.push(entry); renderQA();
+    $('askInput').value = ''; $('askBtn').disabled = true; $('stopBtn').hidden = false; $('askNote').textContent = '';
+    const history = S.qa.slice(-4, -1).filter((x) => x.a && !x.pending).map((x) => `Q: ${x.q}\nA: ${x.a}`).join('\n\n');
+    const prompt = `You narrate Asapville, a simulated small town whose citizens are AI agents with real needs, money and permanent death. Answer the viewer's question using ONLY the data below; never invent facts. Be concrete: names, places, numbers, quotes. Keep it short: a few sentences or a short list, plain text, no headings. Answer in ${T.lang}; keep citizens' names as written, and you may translate their quotes.\n\n=== DATA ===\n${townContext()}\n=== END DATA ===\n${history ? `\nEarlier in this conversation:\n${history}\n` : ''}\nQuestion: ${q}`;
+    const ctl = new AbortController(); S.askCtl = ctl;
+    try {
+      const r = await sampleFn(prompt, { signal: ctl.signal, cache: false, onText: ({ text }) => { entry.a = text; entry.pending = false; renderQA(); } });
+      entry.a = r.text; entry.pending = false;
+      if (r.truncated) $('askNote').textContent = T.cut;
+    } catch (e) {
+      entry.pending = false; entry.a = e && e.text ? e.text : '';
+      if (!e || e.code !== 'cancelled') { $('askNote').textContent = T.err[e && e.code] || T.err.other; if (!entry.a) S.qa.pop(); }
+      if (e && ['not_granted', 'sampling_disabled', 'not_declared', 'capability_disabled', 'capability_removed'].includes(e.code)) sampleFn = null;
+    } finally {
+      S.askCtl = null; $('askBtn').disabled = false; $('stopBtn').hidden = true; renderQA();
+    }
+  }
+  $('askBtn').addEventListener('click', () => ask($('askInput').value));
+  $('stopBtn').addEventListener('click', () => S.askCtl && S.askCtl.abort());
+  $('askInput').addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); ask($('askInput').value); } });
+
+  // ---------------------------------------------------------------- tabs, render, navigation
+  const TAB_KEYS = ['story', 'people', 'town', 'angels', 'ask'];
+  function renderTabs() {
+    const T = W();
+    $('tabs').innerHTML = TAB_KEYS.map((k) => `<button class="tab" role="tab" data-tab="${k}" aria-selected="${S.tab === k}">${esc(T.tabs[k])}${k === 'angels' ? '<span class="count" id="cntAngels"></span>' : ''}</button>`).join('');
+    $('tabs').querySelectorAll('.tab').forEach((t) => t.addEventListener('click', () => openTab(t.dataset.tab)));
+  }
+  function openTab(k) {
+    S.tab = k;
+    $('tabs').querySelectorAll('.tab').forEach((x) => x.setAttribute('aria-selected', x.dataset.tab === k));
+    TAB_KEYS.forEach((n) => { $('tab-' + n).hidden = n !== k; });
+    if (S.selected != null && k !== 'people') { /* keep the drawer when switching to people only */ }
+    try { localStorage.setItem('asapville.tab', k); } catch (e) { /* private window */ }
+    renderActive();
+  }
+  function renderActive() {
+    if (S.tab === 'story') renderStory(); else if (S.tab === 'people') renderPeople();
+    else if (S.tab === 'town') renderTown(); else if (S.tab === 'angels') renderAngels();
+  }
+  function render() {
+    renderClock(); renderTimeline(); renderNow(); renderMap(); renderActive(); renderAngelsCount(); renderDrawer();
+  }
+  function renderAngelsCount() {
+    const f = curFrame(); const g = S.data.angels || { interventions: [] };
+    const n = g.interventions.filter((i) => i.applied && (!f || i.tick <= f.tick)).length;
+    const el = $('cntAngels'); if (el) el.textContent = n || '';
+  }
+  function renderAll() {
+    document.documentElement.lang = LANG; $('langBtn').textContent = LANG === 'ru' ? 'EN' : 'RU';
+    renderTabs(); renderFilters(); renderLegend(); drawMap(); renderAskStatic(); render();
+  }
+  function goTo(k, { byUser = false } = {}) {
+    k = Math.max(0, Math.min(S.frames.length - 1, k));
+    if (byUser) S.follow = k === S.frames.length - 1;
+    S.cur = k; render();
+  }
+
+  // ---------------------------------------------------------------- data in
+  function ingest(data) {
+    S.data = data;
+    S.agents = new Map(data.agents.map((a) => [a.id, a]));
+    S.locs = new Map(data.locations.map((l) => [l.id, l]));
+    S.frames = data.frames; S.events = data.events;
+    S.seenEvent = S.events.length ? S.events[S.events.length - 1].id : 0;
+    rebuildRoles();
+    $('townName').textContent = data.world.name;
+    S.cur = S.frames.length - 1; S.follow = true;
+    renderAll();
+  }
+  function applyUpdate(u) {
+    let newHour = null;
+    for (const f of u.frames || []) {
+      if (!f) continue;
+      if (!S.frames.length || f.tick > S.frames[S.frames.length - 1].tick) { S.frames.push(f); newHour = f; }
+    }
+    if (u.events?.length) { const have = new Set(S.events.map((e) => e.id)); for (const e of u.events) if (!have.has(e.id)) S.events.push(e); S.events.sort((a, b) => a.id - b.id); rebuildRoles(); }
+    if (u.world) S.data.world = u.world;
+    if (u.cost) S.data.cost = u.cost;
+    if (u.economy) S.data.economy = u.economy;
+    if (u.angels) S.data.angels = u.angels;
+    if (u.relations) S.data.relations = u.relations;
+    if (S.follow) S.cur = S.frames.length - 1;
+    render();
+    if (newHour && !S.follow) toast(W().toastNew(newHour.day, hh(newHour.hour)));
+  }
+
+  // Live from the artifact's database: one document per finished hour, pushed while the town runs.
+  async function listenDb() {
+    if (!window.claude || !window.claude.use) return;
+    let db = null; try { db = await window.claude.use('db'); } catch (e) { db = null; }
+    if (!db) return;
+    const since = S.frames.length ? S.frames[S.frames.length - 1].tick : -1;
+    try {
+      db.collection('ticks').where('tick', '>', since).orderBy('tick').onSnapshot((snap) => {
+        const bundles = snap.docChanges().filter((c) => c.type !== 'removed').map((c) => c.doc.data()).sort((a, b) => a.tick - b.tick);
+        if (!bundles.length) return;
+        if (bundles.some((b) => b.tick > (S.frames[S.frames.length - 1]?.tick ?? -1))) S.lastLive = Date.now();
+        const last = bundles[bundles.length - 1];
+        applyUpdate({ frames: bundles.map((b) => b.frame), events: bundles.flatMap((b) => b.events || []), world: last.world, cost: last.cost, economy: last.economy, angels: last.angels, relations: last.relations });
+      }, () => { /* the feed is optional: the recording still works */ });
+    } catch (e) { /* ignore */ }
+  }
+  async function connectServer() {
+    const r = await fetch('/api/bootstrap'); if (!r.ok) throw new Error('bootstrap failed');
+    S.server = true; $('liveControls').hidden = false;
+    ingest(await r.json());
+    openSocket();
+  }
+  function openSocket() {
+    const sinceTick = S.frames.length ? S.frames[S.frames.length - 1].tick : -1;
+    const sinceEv = S.events.length ? S.events[S.events.length - 1].id : 0;
+    let ws; try { ws = new WebSocket(`${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws?since_tick=${sinceTick}&since_event=${sinceEv}`); } catch (e) { return; }
+    ws.onmessage = (m) => applyUpdate(JSON.parse(m.data));
+    ws.onclose = () => { $('statusText').textContent = W().reconnecting; setTimeout(openSocket, 2000); };
+    ws.onerror = () => { try { ws.close(); } catch (e) { /* ignore */ } };
+  }
+  async function control(action, value) {
+    try {
+      const r = await fetch('/api/control', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ action, value }) });
+      const j = await r.json(); if (j.ok) { S.data.world = j.world; renderClock(); toast(action === 'speed' ? W().toastSpeed(value) : action === 'pause' ? W().toastPause : W().toastResume); }
+    } catch (e) { toast(W().noServer); }
+  }
+
+  // ---------------------------------------------------------------- wiring
+  $('scrub').addEventListener('input', (e) => goTo(Number(e.target.value), { byUser: true }));
+  $('btnPrev').addEventListener('click', () => goTo(S.cur - 1, { byUser: true }));
+  $('btnNext').addEventListener('click', () => goTo(S.cur + 1, { byUser: true }));
+  $('btnLive').addEventListener('click', () => { S.follow = true; stopPlay(); goTo(S.frames.length - 1); });
+  function stopPlay() { S.playing = false; clearInterval(S.playTimer); S.playTimer = null; renderTimeline(); }
+  $('btnPlay').addEventListener('click', () => {
+    if (S.playing) return stopPlay();
+    if (S.cur >= S.frames.length - 1) S.cur = 0;
+    S.playing = true; S.follow = false;
+    S.playTimer = setInterval(() => { if (S.cur >= S.frames.length - 1) return stopPlay(); goTo(S.cur + 1); }, 1100);
+    renderTimeline();
+  });
+  $('btnPause').addEventListener('click', () => control(S.data.world.paused ? 'resume' : 'pause'));
+  $('speedSel').addEventListener('change', (e) => control('speed', Number(e.target.value)));
+  $('filters').addEventListener('click', (e) => {
+    const b = e.target.closest('button'); if (!b) return;
+    if (b.dataset.f === 'routine') S.routine = !S.routine; else S.filter = b.dataset.f;
+    renderFilters(); renderStory();
+  });
+  $('langBtn').addEventListener('click', () => { LANG = LANG === 'ru' ? 'en' : 'ru'; try { localStorage.setItem('asapville.lang', LANG); } catch (e) { /* ignore */ } renderAll(); });
+  document.addEventListener('keydown', (e) => {
+    if (e.target.matches('input, select, textarea')) return;
+    if (e.key === 'ArrowLeft') goTo(S.cur - 1, { byUser: true });
+    else if (e.key === 'ArrowRight') goTo(S.cur + 1, { byUser: true });
+    else if (e.key === 'Home') goTo(0, { byUser: true });
+    else if (e.key === 'End') { S.follow = true; goTo(S.frames.length - 1); }
+    else if (e.key === ' ') { e.preventDefault(); $('btnPlay').click(); }
+    else if (e.key === 'Escape' && S.selected != null) select(S.selected);
+  });
+  setInterval(() => { if (S.data && !S.server) renderClock(); }, 30000);
+
+  // ---------------------------------------------------------------- boot
+  try { const t = localStorage.getItem('asapville.tab'); if (TAB_KEYS.includes(t)) S.tab = t; } catch (e) { /* ignore */ }
+  const slot = $('asapville-data');
+  const embedded = slot && slot.textContent.trim();
+  if (embedded) {
+    ingest(JSON.parse(embedded));
+    openTab(S.tab);
+    listenDb();
+  } else {
+    connectServer().then(() => openTab(S.tab)).catch(() => { $('statusText').textContent = W().noServer; });
+  }
+  (async () => {
+    if (!window.claude || !window.claude.use) { $('askNote').textContent = W().ask.off; return; }
+    try { sampleFn = await window.claude.use('sample'); } catch (e) { sampleFn = null; }
+    if (!sampleFn) $('askNote').textContent = W().ask.off;
+  })();
+})();
+</script>
+</body>
+</html>

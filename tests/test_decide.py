@@ -29,9 +29,10 @@ def test_parse_rejects(bad):
 async def test_invalid_json_retries_once_then_hesitates(world, fake, sessions):
     fake.script("decide", *["not json at all"] * 10)  # every decider fails twice
     rep = await world.step()
-    assert rep.hesitations == rep.llm_calls // 2 > 0
+    decide_calls = sum(1 for r in fake.requests if r.purpose == "decide")
+    assert rep.hesitations == decide_calls // 2 > 0
     with sessions() as s:
-        anomalies = list(s.scalars(select(Anomaly)))
+        anomalies = list(s.scalars(select(Anomaly).where(Anomaly.source == "engine")))
         assert anomalies and all(a.kind == "json_parse_failure" for a in anomalies)
         retry = [r for r in fake.requests if r.purpose == "decide" and len(r.messages) == 3]
         assert retry and "invalid" in retry[0].messages[-1].content
@@ -42,7 +43,7 @@ async def test_retry_success_is_not_an_anomaly(world, fake, sessions):
     rep = await world.step()
     assert rep.hesitations == 0
     with sessions() as s:
-        assert s.scalars(select(Anomaly)).first() is None
+        assert s.scalars(select(Anomaly).where(Anomaly.source == "engine")).first() is None
 
 
 async def test_opus_requires_reason(gateway):
@@ -85,8 +86,8 @@ def test_anthropic_request_shape_caches_static_prefix():
 def test_anthropic_backend_needs_explicit_key(monkeypatch):
     from asapville.llm.client import AnthropicBackend
 
-    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
-    with pytest.raises(RuntimeError, match="ANTHROPIC_API_KEY"):
+    monkeypatch.delenv("ASAPVILLE_ANTHROPIC_KEY", raising=False)
+    with pytest.raises(RuntimeError, match="ASAPVILLE_ANTHROPIC_KEY"):
         AnthropicBackend()
 
 
@@ -95,7 +96,7 @@ async def test_anthropic_backend_parses_usage(monkeypatch):
 
     from asapville.llm.client import AnthropicBackend
 
-    monkeypatch.setenv("ANTHROPIC_API_KEY", "test-not-a-real-key")
+    monkeypatch.setenv("ASAPVILLE_ANTHROPIC_KEY", "test-not-a-real-key")
     monkeypatch.setenv("ANTHROPIC_BASE_URL", "http://host-proxy.invalid")
     backend = AnthropicBackend()
     assert str(backend.client.base_url).startswith("https://api.anthropic.com")
@@ -128,7 +129,7 @@ async def test_proxy_auth_sends_no_key_header(monkeypatch):
     except ImportError:  # older SDKs use httpx
         import httpx
 
-    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    monkeypatch.delenv("ASAPVILLE_ANTHROPIC_KEY", raising=False)
     monkeypatch.setenv("ANTHROPIC_AUTH_TOKEN", "ambient-token-must-not-be-used")
     seen = {}
 

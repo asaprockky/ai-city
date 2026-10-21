@@ -41,6 +41,8 @@ def model_for(subject: HasTier, models: ModelNames = _DEFAULT_MODELS) -> str:
         if isinstance(subject, AngelTask) and subject.needs_opus:
             return models.opus
         return models.sonnet
+    if getattr(subject, "lead", False):  # a main hero always thinks on the strong model
+        return models.sonnet
     if subject.tier in (NOTABLE, MANAGER):
         return models.sonnet
     return models.haiku

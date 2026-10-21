@@ -13,6 +13,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import random
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 
 from sqlalchemy import select
@@ -20,22 +21,32 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from asapville.agents.decide import DecideOutcome, decide
 from asapville.agents.persona import persona_block
+from asapville.agents.plan import plan_day
 from asapville.agents.schemas import ActionName, Decision, Personality
+from asapville.angels import fixer, judge, watcher
 from asapville.config import Settings
 from asapville.db.models import Agent, Anomaly, Event, Location, WorldState
 from asapville.llm.budget import NORMAL, PAUSED, SLOW
 from asapville.llm.client import LLMGateway
 from asapville.llm.routing import WORKER, effort_for, model_for, tier_for
-from asapville.world import actions
+from asapville.world import actions, democracy, economy, elections, feelings
 from asapville.world.actions import ActionResult, TickContext, arrive
 from asapville.world.clock import Clock, in_sleep_window
-from asapville.world.events import EventBus, emit, event_payload
+from asapville.world.events import EventBus, emit, event_payload, remember
 from asapville.world.needs import NeedsState, tick_needs
-from asapville.world.perception import build_perception
+from asapville.world.perception import build_perception, todays_plan
+from asapville.world.timeline import record_tick, tick_payload
 
 log = logging.getLogger("asapville.engine")
 
 WAKE_ENERGY = 70.0
+LASTING_IMPORTANCE = 7  # memories this important stay with a citizen beyond the last few hours
+LASTING_MEMORIES = 5
+ROUT_MOOD = 6.0  # what a day of pure routine costs in mood
+STARVING_AWAKE = 90.0  # nobody sleeps through this much hunger...
+WAKE_ENERGY_MIN = 10.0  # ...unless too spent to rise
+REFLEX_HUNGER = 60.0  # without an LLM turn, a body this hungry eats what it carries
+REFLEX_ENERGY = 15.0
 # Actions an agent keeps doing on its own when it doesn't get an LLM turn (slow mode / capped).
 CONTINUABLE = {ActionName.REST, ActionName.FORAGE, ActionName.WORK, ActionName.IDLE}
 
@@ -52,6 +63,9 @@ class TickReport:
     invalid_actions: int = 0
     deaths: list[str] = field(default_factory=list)
     events: int = 0
+    anomalies: int = 0
+    interventions: int = 0
+    improvised: int = 0
 
 
 def get_world_state(session: Session) -> WorldState:
@@ -72,6 +86,14 @@ class World:
         self._personas: dict[int, str] = {}
         with self.sessions() as s:
             gateway.guard.load(s)
+            ws = s.get(WorldState, 1)
+            if ws is not None:
+                from asapville.world.map import seed_locations
+
+                if seed_locations(s, settings.map):  # places added to config since the world began
+                    s.commit()
+            if ws is not None and economy.open_economy(s, settings, tick=ws.tick):
+                s.commit()
 
     # ------------------------------------------------------------------ helpers
     def persona_for(self, agent: Agent) -> str:
@@ -88,9 +110,42 @@ class World:
             return (tick + agent.id) % n == 0
         return True
 
-    @staticmethod
-    def _continue(agent: Agent) -> Decision:
-        """Habit: keep doing a continuable action, otherwise idle. No LLM call."""
+    def _food_for_sale_here(self, ctx: TickContext, agent: Agent) -> str | None:
+        """The most filling food the town shop where the agent stands sells, has and they can pay for."""
+        cfg = self.settings
+        here = ctx.locations.get(agent.location_id) if agent.location_id else None
+        if here is None:
+            return None
+        best: tuple[float, str] | None = None
+        for item in cfg.economy.shops.get(here.key, []):
+            spec = cfg.food.get(item)
+            price = economy.price_of(cfg, item, ctx.session)
+            if spec is None or spec.nutrition <= 0 or price is None or price > agent.money_cents:
+                continue
+            if item not in cfg.economy.unlimited and economy.stock_qty(ctx.session, here.id, item) <= 0:
+                continue
+            if best is None or spec.nutrition > best[0]:
+                best = (spec.nutrition, item)
+        return best[1] if best else None
+
+    def _continue(self, agent: Agent, ctx: TickContext | None = None) -> Decision:
+        """Reflex, then habit, when there is no LLM turn: a hungry body eats what it carries (or
+        buys food where it stands), an exhausted one rests; otherwise keep doing a continuable
+        action, or idle. No LLM call."""
+        food = self.settings.food
+        carried = [(food[k].nutrition, k) for k, v in (agent.inventory or {}).items()
+                   if v > 0 and k in food and food[k].nutrition > 0]
+        if agent.hunger >= REFLEX_HUNGER and carried:
+            item = max(carried)[1]
+            return Decision(thought="(hunger takes over)", action=ActionName.EAT,
+                            action_args={"item": item}, mood=agent.mood_label)
+        if agent.hunger >= REFLEX_HUNGER and ctx is not None:
+            item = self._food_for_sale_here(ctx, agent)
+            if item is not None:
+                return Decision(thought="(hunger takes over)", action=ActionName.BUY,
+                                action_args={"item": item}, mood=agent.mood_label)
+        if agent.energy <= REFLEX_ENERGY:
+            return Decision(thought="(too tired to think)", action=ActionName.REST, mood=agent.mood_label)
         try:
             last = ActionName(agent.last_action) if agent.last_action else ActionName.IDLE
         except ValueError:
@@ -112,6 +167,13 @@ class World:
                 arrive(ctx, a)  # arrived: may now fall asleep below
             in_window = in_sleep_window(ctx.time.hour, a.bedtime_hour, cfg.sleep.hours,
                                         cfg.clock.ticks_per_day)
+            if a.hunger >= STARVING_AWAKE and a.energy > WAKE_ENERGY_MIN and a.location_id is not None:
+                if a.asleep:  # hunger wakes a sleeper before it kills them
+                    a.asleep = False
+                    emit(ctx.session, tick=ctx.tick, kind="wake", actor=a, location_id=a.location_id,
+                         summary=f"{a.name} woke up, too hungry to sleep",
+                         actor_memory="Hunger woke me in the night; I have to eat.", importance=4)
+                continue
             if in_window and not a.asleep and a.location_id is not None:
                 a.asleep = True
                 where = "in my own bed" if a.location_id == a.home_id else "wherever I could, without a bed"
@@ -123,6 +185,67 @@ class World:
                 emit(ctx.session, tick=ctx.tick, kind="wake", actor=a, location_id=a.location_id,
                      summary=f"{a.name} woke up", actor_memory="I woke up.", importance=1)
 
+    async def _plan_mornings(self, ctx: TickContext, deciders: list[Agent], mode: str) -> int:
+        """Each citizen's first waking turn of a day starts with their own plan for it."""
+        if 0 <= ctx.time.hour < 5:
+            return 0  # plans are made in the morning
+        todo = [a for a in deciders if todays_plan(ctx, a) is None and self._gets_llm_turn(a, ctx.tick, mode)]
+        if not todo:
+            return 0
+        cfg = self.settings.llm
+
+        from asapville.db.models import Memory
+        from asapville.world.perception import routine
+
+        def lately(a: Agent) -> str | None:
+            counts, _ = routine(ctx, a)
+            return ", ".join(f"{k} {n}" for k, n in counts.items()) or None
+
+        def yesterday(a: Agent) -> str | None:
+            m = ctx.session.scalar(select(Memory).where(Memory.agent_id == a.id, Memory.kind == "plan",
+                                                        Memory.importance == 5)
+                                   .order_by(Memory.created_at_tick.desc()).limit(1))
+            return m.content if m else None
+
+        async def one(a: Agent):
+            # a day's plan is where a life's direction comes from: always the stronger model
+            return a, await plan_day(
+                gateway=self.gateway, agent_id=a.id, tier=a.tier,
+                model=(cfg.models.haiku if self.gateway.guard.agent_on_fallback(a.id) else cfg.models.sonnet),
+                effort=effort_for(a, cfg.effort), persona=self.persona_for(a),
+                perception=build_perception(ctx, a), tick=ctx.tick, max_tokens=cfg.max_output_tokens,
+                yesterday=yesterday(a), lately=lately(a))
+
+        made = 0
+        for a, reply in await asyncio.gather(*(one(a) for a in todo)):
+            if reply is None:
+                continue
+            made += 1
+            remember(ctx.session, a.id, ctx.tick, "plan", reply.plan, importance=5)
+            emit(ctx.session, tick=ctx.tick, kind="plan", actor=a, location_id=a.location_id,
+                 visibility="private", summary=f"{a.name} plans the day: {reply.plan}",
+                 data={"plan": reply.plan, "mood": reply.mood})
+        ctx.session.flush()
+        return made
+
+    def _lasting_memories(self, ctx: TickContext, agent: Agent) -> list[str]:
+        """The few most important things a citizen remembers from before the last hours: deals,
+        debts, betrayals, purchases. Without them every day starts from scratch."""
+        from asapville.db.models import Memory
+        from asapville.world.clock import Clock
+        from asapville.world.perception import RECENT_TICKS
+
+        rows = ctx.session.scalars(
+            select(Memory).where(Memory.agent_id == agent.id, Memory.importance >= LASTING_IMPORTANCE,
+                                 Memory.created_at_tick < ctx.tick - RECENT_TICKS)
+            .order_by(Memory.importance.desc(), Memory.created_at_tick.desc()).limit(LASTING_MEMORIES))
+        clock = Clock(self.settings.clock)
+        out = []
+        for m in sorted(rows, key=lambda m: m.created_at_tick):
+            t = clock.at(m.created_at_tick)
+            out.append(f"(day {t.day}, {t.hour:02d}:00) {m.content}")
+        return out
+
     async def _decide_all(self, ctx: TickContext, deciders: list[Agent],
                           mode: str) -> dict[int, DecideOutcome]:
         perceptions = {a.id: build_perception(ctx, a) for a in deciders}
@@ -130,11 +253,13 @@ class World:
 
         async def one(a: Agent) -> tuple[int, DecideOutcome]:
             if not self._gets_llm_turn(a, ctx.tick, mode):
-                return a.id, DecideOutcome(self._continue(a))
+                return a.id, DecideOutcome(self._continue(a, ctx))
             out = await decide(
                 gateway=self.gateway, agent_id=a.id, tier=a.tier,
-                model=model_for(a, cfg.models), effort=effort_for(a, cfg.effort),
-                persona=self.persona_for(a), perception=perceptions[a.id], memories=[],
+                model=(cfg.models.haiku if self.gateway.guard.agent_on_fallback(a.id)
+                       else model_for(a, cfg.models)), effort=effort_for(a, cfg.effort),
+                persona=self.persona_for(a), perception=perceptions[a.id],
+                memories=self._lasting_memories(ctx, a),
                 tick=ctx.tick, retries=cfg.json_retries, max_tokens=cfg.max_output_tokens,
             )
             return a.id, out
@@ -165,6 +290,7 @@ class World:
             error = actions.validate(ctx, a, d, perceived) if a.location_id else "You are on the road."
             a.last_thought = d.thought
             a.mood_label = d.mood[:64]
+            feelings.from_decision(ctx.session, a, d.feelings, ctx.tick, perceived)
             if error:
                 report.invalid_actions += 1
                 emit(ctx.session, tick=ctx.tick, kind="invalid_action", actor=a,
@@ -200,6 +326,7 @@ class World:
             st = outcome.state
             a.hunger, a.energy, a.social, a.health, a.mood = (
                 st.hunger, st.energy, st.social, st.health, st.mood)
+            feelings.hourly(a, ctx.tick)
             if outcome.collapsed and a.travel_ticks_left == 0:
                 a.asleep = True
                 emit(ctx.session, tick=ctx.tick, kind="collapse", actor=a, location_id=a.location_id,
@@ -218,8 +345,30 @@ class World:
                      data={"cause": outcome.cause_of_death})
 
     def _daily(self, ctx: TickContext, agents: list[Agent]) -> None:
+        from asapville.world import bank
+
+        bank.daily(ctx.session, self.settings, ctx.tick)
+        changed = economy.adjust_wages(ctx.session, self.settings, tick=ctx.tick)
+        if changed:
+            parts = [f"{job} {new / 100:.2f}/h (was {old / 100:.2f})" for job, (old, new) in changed.items()]
+            emit(ctx.session, tick=ctx.tick, kind="wages", visibility="public",
+                 summary="New wages: " + ", ".join(parts),
+                 data={"changes": {j: [o, n] for j, (o, n) in changed.items()},
+                       "text": "The town council sets today's wages: " + "; ".join(parts)
+                               + ". Jobs nobody does pay more each day; crowded ones pay less.",
+                       "author": "the town council"})
+        from asapville.world.perception import routine
+
         for a in agents:
-            new_tier = tier_for(a.role, a.money_cents, self.settings.tiers)
+            if a.alive and routine(ctx, a)[1]:  # the same days over and over wear a person down
+                a.mood = max(0.0, a.mood - ROUT_MOOD)
+                remember(ctx.session, a.id, ctx.tick, "reflection",
+                         "Another day of nothing but work, food and sleep. I want more from my life.",
+                         importance=6)
+        for a in agents:
+            owns = any(loc.owner_id == a.id and economy.is_business(self.settings, loc)
+                       for loc in ctx.locations.values())
+            new_tier = tier_for(a.role, a.money_cents, self.settings.tiers, owns_business=owns)
             if new_tier != a.tier:
                 old = a.tier
                 a.tier = new_tier
@@ -263,12 +412,31 @@ class World:
             deciders = [a for a in agents
                         if not a.asleep and a.travel_ticks_left == 0 and a.location_id is not None]
             calls_before = len(self.gateway.pending)
+            await self._plan_mornings(ctx, deciders, mode)
             outcomes = await self._decide_all(ctx, deciders, mode)
             report.llm_calls = len(self.gateway.pending) - calls_before
             results = self._execute(ctx, agents, outcomes, report)
+            if ctx.improvised:
+                report.improvised = len(ctx.improvised)
+                await judge.run(ctx, self.gateway, ctx.improvised)
             self._needs(ctx, agents, results, report)
+            democracy.close_due(s, ws.tick, self.settings)
+            elections.step(s, ws.tick)
+            if self.settings.angels.enabled:
+                report.anomalies = len(watcher.scan(ctx, agents))
+                pending = watcher.open_anomalies(s)
+                everyone_asleep = all(a.asleep or not a.alive for a in agents)
+                due = ws.tick % max(1, self.settings.angels.fixer_every) == 0
+                urgent = any(x.severity >= 3 for x in pending)  # a life at stake doesn't wait for dawn
+                if pending and (urgent or (due and not everyone_asleep)):
+                    fix = await fixer.run(ctx, self.gateway, pending, agents)
+                    report.interventions = sum(1 for r in fix.applied if r.applied)
+                    if fix.note:
+                        log.warning("fixer: %s", fix.note)
             if self.clock.is_new_day(ws.tick):
                 self._daily(ctx, agents)
+            snapshots = record_tick(s, ws.tick, agents)
+            economy.record_world_tick(s, ws.tick, ws, ctx.locations)
 
             ws.tick += 1
             self.gateway.flush(s)
@@ -277,15 +445,25 @@ class World:
                                         .order_by(Event.id)))
             report.events = len(new_events)
             for e in new_events:
-                self.bus.publish(event_payload(e))
+                self.bus.publish({"type": "event", **event_payload(e)})
+            self.bus.publish({
+                "type": "tick", "tick": report.tick, "label": t.label(), "hour": t.hour,
+                "day": t.day, "season": t.season, "weather": ws.weather, "mode": mode,
+                "spent_today": round(self.gateway.guard.spent_today, 4),
+                "treasury": ws.treasury_cents,
+                "agents": [tick_payload(row) for row in snapshots],
+            })
             return report
 
-    async def run(self, *, ticks: int | None = None, realtime: bool = True) -> list[TickReport]:
+    async def run(self, *, ticks: int | None = None, realtime: bool = True,
+                  after_step: Callable[[TickReport], Awaitable[None]] | None = None) -> list[TickReport]:
         reports: list[TickReport] = []
         done = 0
         while ticks is None or done < ticks:
             rep = await self.step()
             reports.append(rep)
+            if after_step is not None and not rep.paused:
+                await after_step(rep)
             if rep.paused:
                 if not realtime:
                     break

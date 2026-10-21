@@ -6,3 +6,5 @@ __pycache__/
 *.db
 *.db-journal
 .env
+!saves/*.db
+.asapville-news

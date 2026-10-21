@@ -1,5 +1,5 @@
 # Asapville world configuration. Every tunable lives here.
-# DB_URL and ANTHROPIC_API_KEY come from the environment, never from this file.
+# DB_URL and ASAPVILLE_ANTHROPIC_KEY come from the environment, never from this file.
 
 world:
   name: Asapville
@@ -14,7 +14,7 @@ clock:
 
 llm:
   backend: fake              # fake | anthropic
-  auth: env                  # env: ANTHROPIC_API_KEY | proxy: an egress proxy adds x-api-key
+  auth: env                  # env: ASAPVILLE_ANTHROPIC_KEY | proxy: an egress proxy adds x-api-key
   max_concurrency: 8         # semaphore for concurrent decide calls
   max_output_tokens: 2048     # includes adaptive thinking tokens
   json_retries: 1            # one retry with the parse error, then "hesitate"
@@ -35,8 +35,10 @@ llm:
     claude-haiku-5-5:  {input: 0.10, output: 0.50,  cache_read: 0.01, cache_write: 0.125}
 
 budget:
-  daily_usd: 5.00            # hard cap for all calls in one real (UTC) day
-  per_agent_daily_usd: 0.50  # hard cap per citizen per real day
+  daily_usd: 15.00           # hard cap for all calls in one real (UTC) day
+  per_agent_daily_usd: 1.00  # cap per citizen per real day on their usual model
+  fallback_agent_daily_usd: 1.50  # then they keep thinking on the cheap model up to this hard cap
+  lead_agent_daily_usd: 2.00  # main heroes always think on Sonnet, up to this cap
   angel_opus_monthly_usd: 10.00
   slow_mode_threshold: 0.90  # fraction of daily cap that triggers slow mode
   slow_mode:
@@ -65,6 +67,8 @@ needs:                       # all needs are 0..100
   health_regen: 0.5              # when fed and rested
   collapse_energy: 0.0
   rough_sleep_mood_penalty: 10.0
+  boredom_mood: 8.0              # mood lost eating the same food three times running
+  variety_mood: 5.0              # mood gained eating something not had lately
 
 sleep:
   hours: 7
@@ -76,6 +80,97 @@ food:                        # nutrition = hunger reduced per item
   berries: {nutrition: 15}
   fish: {nutrition: 30}
   vegetables: {nutrition: 20}
+  stew: {nutrition: 45}        # a hot meal at the tavern, eaten at the counter
+  treatment: {nutrition: 0, health: 30}   # an hour with the clinic's nurse
+  eggs: {nutrition: 12}        # from the farm's hens and cows (flour from the mill, fish from the river)
+  milk: {nutrition: 10}
+  # dishes: anyone can cook them (cook) at home or in a shop or business they own, then eat or sell
+  soup:          {nutrition: 30, mood: 3}
+  omelette:      {nutrition: 35, mood: 4}
+  porridge:      {nutrition: 28, mood: 2}
+  pancakes:      {nutrition: 25, mood: 7}
+  fish_pie:      {nutrition: 38, mood: 6}
+  grilled_fish:  {nutrition: 40, mood: 5}
+  berry_tart:    {nutrition: 25, mood: 8}
+  cheese:        {nutrition: 30, mood: 4}
+  fish_hotpot:   {nutrition: 35, mood: 5}
+
+recipes:                       # ingredients -> portions; one hour at a kitchen
+  soup:         {uses: {vegetables: 2}, makes: 2}
+  omelette:     {uses: {eggs: 2}, makes: 1}
+  porridge:     {uses: {grain: 1, milk: 1}, makes: 2}
+  pancakes:     {uses: {flour: 1, eggs: 1, milk: 1}, makes: 3}
+  fish_pie:     {uses: {fish: 1, flour: 1}, makes: 2}
+  grilled_fish: {uses: {fish: 1}, makes: 1}
+  berry_tart:   {uses: {flour: 1, berries: 2}, makes: 2}
+  cheese:       {uses: {milk: 3}, makes: 1}
+  fish_hotpot:  {uses: {fish: 1, vegetables: 1}, makes: 2}
+
+economy:
+  treasury_cents: 2000000      # 20,000 asaps in AsapBank: pays wages, takes what shops earn
+  prices:                      # cents per unit on the shelf (100 cents = 1 asap)
+    bread: 300
+    grain: 100                   # what the mill pays the farm per sack
+    flour: 200                   # what the bakery pays the mill per sack
+    vegetables: 150
+    berries: 80
+    fish: 200
+    eggs: 80
+    milk: 70
+    stew: 500
+    treatment: 800
+  buyback: 0.6                 # the market pays 60% of the shelf price when citizens sell
+  shops:                       # where things are sold
+    bakery: [bread, flour]
+    market: [vegetables, berries, fish, eggs, milk]
+    farm: [vegetables, eggs, milk, grain]  # the farm gate
+    tavern: [stew]
+    clinic: [treatment]
+  served: [stew, treatment]    # used on the spot, never carried
+  unlimited: [stew, treatment] # the tavern kitchen and the clinic never run dry (the safety net)
+  jobs:                        # take one with `apply` at the workplace; `work` there for wages
+    farmer:    {workplace: farm,   wage_cents: 250, makes: {grain: 3, vegetables: 3}, deliver: {vegetables: market},
+                keep: {vegetables: 1}}  # one stays at the farm gate, for whoever works the fields
+    miller:    {workplace: mill,   wage_cents: 300, uses: {grain: 3}, source: farm, makes: {flour: 3}, deliver: {flour: bakery}}
+    baker:     {workplace: bakery, wage_cents: 300, uses: {flour: 2}, source: bakery, makes: {bread: 4}}
+    quarryman: {workplace: quarry, wage_cents: 350, makes: {stone: 2}}
+    herder:    {workplace: farm,   wage_cents: 250, makes: {eggs: 4, milk: 4}, deliver: {eggs: market, milk: market},
+                keep: {eggs: 1, milk: 1}}  # hens and cows; a share stays at the farm gate
+    fisher:    {workplace: river,  wage_cents: 250, makes: {fish: 3}, deliver: {fish: market}}
+  stock_start:                 # seeded once, the day the shops open
+    bakery: {bread: 24, flour: 6}
+    market: {vegetables: 20}
+    farm: {grain: 12}
+  work_energy_cost: 5
+  property_price_cents: 30000  # an empty shop costs 300 asaps, paid to the town fund
+  shelf_cap: 40                # a shelf with 40 of an item takes no more: no buyer, no work, no wage
+  sales_tax: 0.10              # 10% of every sale by a citizen's business or stall goes to the town
+  income_tax: 0.05             # 5% of every wage goes to the town
+  business_prices:             # the town sells its businesses too; the buyer keeps the takings,
+    farm: 40000                # pays the wages and sets wages and prices
+    mill: 40000
+    bakery: 60000
+    quarry: 20000
+    market: 60000              # (the tavern and the clinic stay the town's: the safety net)
+  notice_ticks: 24             # a notice stays on the town board for a day
+
+bank:                          # AsapBank, the town's bank (its vault is the town fund)
+  deposit_rate: 0.005          # savings earn 0.5% a day
+  loan_rate: 0.02              # loans cost 2% a day
+  loan_days: 7                 # and are due a week after they are taken
+  min_credit_cents: 2000       # anyone with a job can borrow 20 asaps
+  income_multiple: 2.0         # credit = 2x the wages earned in the last 3 days
+  collateral_share: 0.5        #   + half the price of the businesses you own (the bank's security)
+
+angels:                        # the simulation's guardians (never citizens)
+  enabled: true
+  allow: [notice, give_food]   # inform, and save a life at the last moment; never decide for them
+                               # (also possible: restock, grant)
+  fixer_every: 3               # at most one Fixer call every N ticks
+  max_restock: 50
+  max_grant_cents: 5000
+  max_food: 5
+  max_tokens: 2048
 
 forage:                      # free food costs time + energy and is never guaranteed
   forest: {item: berries, chance: 0.55, max_qty: 3, energy_cost: 6}
@@ -101,17 +196,20 @@ map:
     - {key: bank,       name: "AsapBank",      kind: bank,       x: 10, y: 8,  capacity: 20}
     - {key: town_hall,  name: "Town Hall",     kind: town_hall,  x: 8,  y: 10, capacity: 40}
     - {key: church,     name: "Chapel of the Hill", kind: church, x: 8, y: 7, capacity: 80}
-    - {key: clinic,     name: "Clinic",        kind: clinic,     x: 12, y: 8,  capacity: 12}
+    - {key: clinic,     name: "Clinic",        kind: clinic,     x: 12, y: 8,  capacity: 16}
     - {key: tavern,     name: "The Crooked Lantern", kind: tavern, x: 11, y: 12, capacity: 40}
-    - {key: bakery,     name: "Bakery",        kind: workplace,  x: 13, y: 11, capacity: 8}
-    - {key: mill,       name: "Mill",          kind: workplace,  x: 16, y: 13, capacity: 8}
+    - {key: bakery,     name: "Bakery",        kind: workplace,  x: 13, y: 11, capacity: 20}
+    - {key: mill,       name: "Mill",          kind: workplace,  x: 16, y: 13, capacity: 12}
     - {key: farm,       name: "Greenfield Farm", kind: farm,     x: 17, y: 16, capacity: 30}
     - {key: forest,     name: "Pinewood Forest", kind: forest,   x: 2,  y: 3,  capacity: 500}
     - {key: quarry,     name: "Grey Quarry",   kind: quarry,     x: 3,  y: 16, capacity: 30}
     - {key: river,      name: "Silt River Bank", kind: river,    x: 18, y: 5,  capacity: 200}
     - {key: jail,       name: "Jail",          kind: jail,       x: 9,  y: 12, capacity: 6}
+    # empty premises anyone can buy from the town (buy_property); only the owner trades there
+    - {key: well_shop,  name: "The Empty Shop by the Well", kind: shop, x: 9, y: 9, capacity: 12}
+    - {key: corner_shop, name: "The Corner Shop", kind: shop,   x: 14, y: 9,  capacity: 12}
   home_plots:                # one home per plot, laid out in a residential block
-    count: 12
+    count: 40
     origin: {x: 4, y: 9}
     columns: 4
     spacing: 1

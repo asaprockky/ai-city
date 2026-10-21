@@ -1,7 +1,7 @@
 """LLM gateway: budget check -> backend call -> cost & token accounting.
 
 Every LLM call in the simulation goes through `LLMGateway.call`. The Anthropic
-backend reads ANTHROPIC_API_KEY from the environment (the SDK does this itself);
+backend reads ASAPVILLE_ANTHROPIC_KEY from the environment;
 the key is never logged or stored.
 """
 
@@ -48,10 +48,10 @@ class AnthropicBackend:
                 api_key="injected-by-proxy", base_url=base_url,
                 default_headers={"X-Api-Key": anthropic.omit})
             return
-        api_key = os.environ.get("ANTHROPIC_API_KEY")
+        api_key = os.environ.get("ASAPVILLE_ANTHROPIC_KEY")
         if not api_key:
             raise RuntimeError(
-                "ANTHROPIC_API_KEY is not set; the anthropic backend needs it "
+                "ASAPVILLE_ANTHROPIC_KEY is not set; the anthropic backend needs it "
                 "(or set llm.auth=proxy / ASAPVILLE_LLM_AUTH=proxy if a proxy adds the key)")
         self.client = anthropic.AsyncAnthropic(api_key=api_key, base_url=base_url)
 

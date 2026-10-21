@@ -15,7 +15,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from asapville.config import BudgetCfg
-from asapville.db.models import LLMCall
+from asapville.db.models import Agent, LLMCall
 
 log = logging.getLogger("asapville.budget")
 
@@ -34,19 +34,22 @@ class BudgetExceeded(RuntimeError):
 
 class BudgetGuard:
     def __init__(self, cfg: BudgetCfg, today: Callable[[], str] = utc_today,
-                 opus_model: str = "claude-opus-5-5") -> None:
+                 opus_model: str = "claude-opus-5-5", cheap_model: str = "claude-haiku-5-5") -> None:
         self.cfg = cfg
         self._today = today
         self.opus_model = opus_model
+        self.cheap_model = cheap_model
         self.day = today()
         self.spent_today = 0.0
         self.spent_by_agent: dict[int, float] = defaultdict(float)
         self.opus_month = 0.0
+        self.leads: set[int] = set()  # main heroes: no cheap fallback, a cap of their own
 
     # -- state -------------------------------------------------------------
     def load(self, session: Session) -> None:
         """Rebuild counters from llm_calls (so restarts don't reset the cap)."""
         self.day = self._today()
+        self.leads = set(session.scalars(select(Agent.id).where(Agent.lead.is_(True))))
         self.spent_today = float(session.scalar(
             select(func.coalesce(func.sum(LLMCall.cost_usd), 0.0)).where(LLMCall.real_day == self.day)
         ) or 0.0)
@@ -104,7 +107,12 @@ class BudgetGuard:
             log.error("DAILY BUDGET EXHAUSTED: $%.4f of $%.2f spent on %s",
                       self.spent_today, self.cfg.daily_usd, self.day)
             raise BudgetExceeded("daily", f"${self.spent_today:.4f} >= ${self.cfg.daily_usd:.2f}")
-        if agent_id is not None and self.spent_by_agent[agent_id] >= self.cfg.per_agent_daily_usd:
+        if agent_id in self.leads and self.spent_by_agent[agent_id] >= self.cfg.lead_agent_daily_usd:
+            raise BudgetExceeded("agent", f"lead {agent_id} spent ${self.spent_by_agent[agent_id]:.4f} today")
+        if agent_id is not None and agent_id not in self.leads and \
+                self.spent_by_agent[agent_id] >= self.cfg.per_agent_daily_usd and (
+                model != self.cheap_model
+                or self.spent_by_agent[agent_id] >= self.cfg.fallback_agent_daily_usd):
             raise BudgetExceeded("agent", f"agent {agent_id} spent "
                                  f"${self.spent_by_agent[agent_id]:.4f} today")
         if (angel_role is not None and model == self.opus_model
@@ -112,5 +120,14 @@ class BudgetGuard:
             raise BudgetExceeded("opus_monthly", f"${self.opus_month:.4f} this month")
 
     def agent_capped(self, agent_id: int) -> bool:
+        """No more thinking today, not even on the cheap model."""
         self._roll_day()
-        return self.spent_by_agent[agent_id] >= self.cfg.per_agent_daily_usd
+        if agent_id in self.leads:
+            return self.spent_by_agent[agent_id] >= self.cfg.lead_agent_daily_usd
+        return self.spent_by_agent[agent_id] >= max(self.cfg.per_agent_daily_usd,
+                                                    self.cfg.fallback_agent_daily_usd)
+
+    def agent_on_fallback(self, agent_id: int) -> bool:
+        """Past their usual cap: they think on the cheap model for the rest of the day."""
+        self._roll_day()
+        return agent_id not in self.leads and self.spent_by_agent[agent_id] >= self.cfg.per_agent_daily_usd
