@@ -16,7 +16,7 @@ from sqlalchemy.orm import Session
 
 from asapville.agents.schemas import ActionName, Decision
 from asapville.config import Settings
-from asapville.db.models import Agent, Location, WorldState
+from asapville.db.models import Agent, Location, Stall, WorldState
 from asapville.world import needs as needs_rules
 from asapville.world.clock import WorldTime
 from asapville.world.events import emit, remember
@@ -1441,9 +1441,14 @@ class Repay:
 
 
 # --------------------------------------------------------------------------- cooking
-def has_kitchen(agent: Agent, here: Location | None) -> bool:
-    """A citizen cooks at home, or in a shop or business of their own."""
-    return here is not None and (here.id == agent.home_id or here.owner_id == agent.id)
+def has_kitchen(session: Session, agent: Agent, here: Location | None) -> bool:
+    """A citizen cooks at home, in a shop or business of their own, or over a pot at their stall."""
+    if here is None:
+        return False
+    if here.id == agent.home_id or here.owner_id == agent.id:
+        return True
+    return session.scalar(select(Stall.id).where(Stall.owner_id == agent.id,
+                                                 Stall.location_id == here.id).limit(1)) is not None
 
 
 def cookable(ctx: TickContext, agent: Agent) -> list[str]:
@@ -1452,7 +1457,8 @@ def cookable(ctx: TickContext, agent: Agent) -> list[str]:
             if all(inv.get(i, 0) >= q for i, q in r.uses.items())]
 
 
-@register(ActionName.COOK, 'cook {"dish": "<dish>"}  -- at home, or in a shop or business you own: turn '
+@register(ActionName.COOK, 'cook {"dish": "<dish>"}  -- at home, at your own stall, or in a shop or business '
+                           'you own: turn '
                            'ingredients you carry into a dish (eat it, give it, or sell it at your stall)')
 class Cook:
     @staticmethod
@@ -1461,8 +1467,8 @@ class Cook:
         recipe = ctx.settings.recipes.get(dish)
         if recipe is None:
             return f"Nobody knows how to cook '{dish}'. Dishes: {', '.join(ctx.settings.recipes)}."
-        if not has_kitchen(agent, _here(ctx, agent)):
-            return "You need a kitchen: your home, or a shop or business you own."
+        if not has_kitchen(ctx.session, agent, _here(ctx, agent)):
+            return "You need a kitchen: your home, your own stall, or a shop or business you own."
         inv = agent.inventory or {}
         missing = [f"{q} {i}" for i, q in recipe.uses.items() if inv.get(i, 0) < q]
         if missing:

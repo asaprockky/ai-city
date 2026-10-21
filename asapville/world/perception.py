@@ -55,7 +55,7 @@ def _kitchen(ctx: TickContext, agent: Agent, here) -> str | None:
 
     cfg = ctx.settings
     can = cookable(ctx, agent)
-    if has_kitchen(agent, here):
+    if has_kitchen(ctx.session, agent, here):
         menu = "; ".join(f"{d.replace('_', ' ')} ({', '.join(f'{q} {i}' for i, q in r.uses.items())} -> "
                          f"{r.makes})" for d, r in cfg.recipes.items())
         now = f" With what you carry you can cook now: {', '.join(can)}." if can else ""
@@ -63,7 +63,8 @@ def _kitchen(ctx: TickContext, agent: Agent, here) -> str | None:
                 "Market, the farm gate and the Bakery; dishes can be eaten, given, or sold at a stall "
                 "you open (open_stall), at the price you choose.")
     if can:
-        return (f"With what you carry you could cook {', '.join(can)} at home or in a shop you own.")
+        return (f"With what you carry you could cook {', '.join(can)} at home, at your stall or in a shop "
+                "you own.")
     return None
 
 

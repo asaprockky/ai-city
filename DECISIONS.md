@@ -317,3 +317,8 @@ First live hours: nearly every feeling read "overwhelming", because a citizen na
 feeling each hour kept stacking it. Now naming it again only keeps it alive; only events make a
 feeling grow. Self-named feelings start at most at 75, the words are mild/strong/deep/overwhelming
 (85+), and a feeling may be about anyone the citizen knows, not only those beside them.
+
+## Cooking at your own stall
+Dell lost a day: he runs a bread counter at the Town Hall and wanted to make soup there, but only
+a home or an owned business counted as a kitchen. A street cook with a pot is ordinary, so a
+citizen may now cook where they have a stall of their own.

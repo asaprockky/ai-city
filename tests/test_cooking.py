@@ -44,6 +44,9 @@ async def test_cook_pancakes_at_home_and_sell_them(world, sessions, settings):
         # a small business: a stall of pancakes
         a.location_id = ctx.by_key["square"].id
         assert _do(ctx, a, ActionName.OPEN_STALL, name="Morning Pancakes", item="pancakes", price=2.5) is None
+        # a stall holder can cook right there over a pot
+        a.inventory = {**(a.inventory or {}), "flour": 1, "eggs": 1, "milk": 1}
+        assert _do(ctx, a, ActionName.COOK, dish="pancakes") is None
 
 
 async def test_herders_and_fishers_stock_the_market(world, sessions, settings):
