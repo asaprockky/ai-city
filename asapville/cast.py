@@ -14,7 +14,7 @@ import json
 import re
 from pathlib import Path
 
-from pydantic import BaseModel, Field, ValidationError
+from pydantic import BaseModel, ConfigDict, Field, ValidationError
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -26,6 +26,7 @@ from asapville.llm.routing import ANGEL
 from asapville.llm.types import ChatMessage, LLMRequest
 from asapville.world import economy, elections, feelings
 
+BATCH = 6  # citizens per profile call
 PROFILES = Path(__file__).resolve().parent.parent / "saves" / "cast.json"
 ROLES_RU = {"baker": "пекарь", "farmer": "фермер", "miller": "мельник", "herder": "пастух",
             "fisher": "рыбак", "quarryman": "каменотёс", "unemployed": "без работы"}
@@ -41,12 +42,14 @@ Write, in Russian, short and vivid:
 - secret: their secret, one sentence (the other citizens do not know it);
 - voice: how they talk, one short line;
 - remember_by: one memorable detail to recognise them by (a habit, an item, a look).
-Use only what is in the card. Reply with ONLY a JSON object:
+Use only what is in the card; for quotes inside the text use «» only. Reply with ONLY a JSON object:
 {"profiles": [{"name": "<exact name as given>", "ru_name": "", "who": "", "character": "", \
 "wants": "", "secret": "", "voice": "", "remember_by": ""}]}"""
 
 
 class Profile(BaseModel):
+    model_config = ConfigDict(extra="forbid")  # structured output wants closed objects
+
     name: str
     ru_name: str = ""
     who: str = ""
@@ -58,6 +61,8 @@ class Profile(BaseModel):
 
 
 class Profiles(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     profiles: list[Profile] = Field(default_factory=list)
 
 
@@ -83,12 +88,14 @@ async def write_profiles(session: Session, settings: Settings, gateway: LLMGatew
     """Portraits for everyone who has none yet (or everyone, with `redo`), saved to `path`."""
     known = {} if redo else load_profiles(path)
     missing = [a for a in session.scalars(select(Agent).order_by(Agent.id)) if a.name not in known]
-    if missing:
-        ws = session.get(WorldState, 1)
-        tick = ws.tick if ws else 0
+    ws = session.get(WorldState, 1)
+    tick = ws.tick if ws else 0
+    for i in range(0, len(missing), BATCH):  # a few at a time, so every reply stays whole
+        group = missing[i:i + BATCH]
         req = LLMRequest(purpose="cast", model=settings.llm.models.sonnet, tier=ANGEL, effort=None,
-                         system_rules=PROFILE_RULES, angel_role="reporter", max_tokens=9000,
-                         messages=[ChatMessage(role="user", content="\n\n".join(_card(a) for a in missing)
+                         system_rules=PROFILE_RULES, angel_role="reporter", max_tokens=6000,
+                         json_schema=Profiles.model_json_schema(),
+                         messages=[ChatMessage(role="user", content="\n\n".join(_card(a) for a in group)
                                                + "\n\nWrite the profiles. Reply with only the JSON.")],
                          context={"tick": tick})
         result = await gateway.call(req, tick=tick)
