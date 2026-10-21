@@ -154,19 +154,25 @@ def compose_personality(seed: SeedCard, portrait: SelfPortrait) -> Personality:
 
 
 class _Subject:
-    def __init__(self, tier: int) -> None:
+    def __init__(self, tier: int, lead: bool = False) -> None:
         self.tier = tier
+        self.lead = lead  # a main hero is written by the strong model
 
 
 async def write_self(gateway: LLMGateway, settings: Settings, seed: SeedCard, *, tier: int,
                      seed_index: int, tick: int, retries: int = 1,
-                     taken_names: set[str] | None = None) -> SelfPortrait:
+                     taken_names: set[str] | None = None, brief: str | None = None,
+                     name: str | None = None, lead: bool = False) -> SelfPortrait:
     """The agent's own model (per its tier) writes its self-portrait from the seed card."""
-    subject = _Subject(tier)
+    subject = _Subject(tier, lead)
     taken = {n.casefold() for n in (taken_names or set())}
     content = ("Your seed card:\n" + describe_seed(seed) + "\n\nRaw values (0-1):\n"
                + seed.model_dump_json(include={"big_five", "dark_traits"}))
-    if taken_names:
+    if brief:
+        content += f"\n\nWho you are (the world made you so; build your portrait on it):\n{brief}"
+    if name:
+        content += f"\n\nYour name is {name}. Use exactly this name."
+    if taken_names and not name:
         content += "\n\nNames already taken in town (choose a different one): " + ", ".join(
             sorted(taken_names))
     messages = [ChatMessage(role="user", content=content)]
@@ -184,7 +190,9 @@ async def write_self(gateway: LLMGateway, settings: Settings, seed: SeedCard, *,
         try:
             start, end = text.find("{"), text.rfind("}")
             portrait = SelfPortrait.model_validate(json.loads(text[start:end + 1]))
-            if portrait.name.casefold() in taken:
+            if name:
+                portrait.name = name
+            elif portrait.name.casefold() in taken:
                 raise ValueError(f"the name {portrait.name!r} is already taken")
             return portrait
         except (ValueError, ValidationError) as exc:
@@ -198,7 +206,8 @@ async def write_self(gateway: LLMGateway, settings: Settings, seed: SeedCard, *,
 
 async def birth_agent(session: Session, gateway: LLMGateway, settings: Settings,
                       rng: random.Random, *, seed_index: int, home: Location | None,
-                      tick: int = 0, seed: SeedCard | None = None) -> Agent:
+                      tick: int = 0, seed: SeedCard | None = None, brief: str | None = None,
+                      name: str | None = None, lead: bool = False) -> Agent:
     seed = seed or roll_seed_card(rng, settings)
     lo, hi = WEALTH_CENTS[seed.wealth_bracket]
     blo, bhi = WEALTH_BREAD[seed.wealth_bracket]
@@ -207,7 +216,8 @@ async def birth_agent(session: Session, gateway: LLMGateway, settings: Settings,
     tier = tier_for(seed.starting_role, money, settings.tiers)
     taken = set(session.scalars(select(Agent.name)))
     portrait = await write_self(gateway, settings, seed, tier=tier, seed_index=seed_index,
-                                tick=tick, retries=settings.llm.json_retries, taken_names=taken)
+                                tick=tick, retries=settings.llm.json_retries, taken_names=taken,
+                                brief=brief, name=name, lead=lead)
     personality = compose_personality(seed, portrait)
     mac, ip = _unique_identity(session, rng)
     agent = Agent(

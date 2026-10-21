@@ -209,7 +209,7 @@ map:
     - {key: well_shop,  name: "The Empty Shop by the Well", kind: shop, x: 9, y: 9, capacity: 12}
     - {key: corner_shop, name: "The Corner Shop", kind: shop,   x: 14, y: 9,  capacity: 12}
   home_plots:                # one home per plot, laid out in a residential block
-    count: 32
+    count: 40
     origin: {x: 4, y: 9}
     columns: 4
     spacing: 1

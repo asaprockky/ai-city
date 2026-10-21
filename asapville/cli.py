@@ -225,10 +225,10 @@ async def serve(settings: Settings, sessions: sessionmaker[Session], gateway: LL
 
 async def arrive(settings: Settings, sessions: sessionmaker[Session], gateway: LLMGateway, *,
                  preset: str | None = None, works_for: str | None = None,
-                 advance_cents: int = 4000, lead: bool = False) -> Agent:
+                 advance_cents: int = 4000, lead: bool = False, name: str | None = None) -> Agent:
     """A newcomer is born (seed card rolled, or a preset), gets a free house if any, and arrives."""
     from asapville.agents.birth import roll_seed_card
-    from asapville.agents.presets import PRESETS
+    from asapville.agents.presets import BRIEFS, PRESETS
     from asapville.world.events import emit, remember
 
     if preset is not None and preset not in PRESETS:
@@ -243,9 +243,12 @@ async def arrive(settings: Settings, sessions: sessionmaker[Session], gateway: L
         homes = s.scalars(select(Location).where(Location.kind == "home").order_by(Location.id))
         home = next((loc for loc in homes if loc.owner_id is None), None)
         agent = await birth_agent(s, gateway, settings, rng, seed_index=n, home=home, tick=ws.tick,
-                                  seed=seed)
+                                  seed=seed, brief=BRIEFS.get(preset or ""), name=name, lead=lead)
         if home is not None:
             home.owner_id = agent.id
+        else:  # no free house: they step off the road onto the square and look for a bed
+            square = s.scalar(select(Location).where(Location.key == "square"))
+            agent.location_id = square.id if square else None
         agent.lead = lead
         emit(s, tick=ws.tick, kind="arrival", actor=agent, location_id=agent.location_id,
              visibility="public",
@@ -354,6 +357,7 @@ def main(argv: list[str] | None = None) -> int:
     p_arr.add_argument("--advance", type=float, default=40.0, help="asaps the patron already paid them")
     p_arr.add_argument("--count", type=int, default=1, help="how many newcomers arrive")
     p_arr.add_argument("--lead", action="store_true", help="make them main heroes (always the strong model)")
+    p_arr.add_argument("--name", help="the newcomer's name, instead of one they choose")
     p_exp = sub.add_parser("export", help="write a self-contained replay page of the town")
     p_exp.add_argument("--out", default="asapville.html")
     p_por = sub.add_parser("portraits", help="draw manga portraits (Gemini) for citizens who have none")
@@ -429,7 +433,7 @@ def main(argv: list[str] | None = None) -> int:
         for _ in range(args.count):
             agent = asyncio.run(arrive(settings, sessions, gateway, preset=args.preset,
                                        works_for=args.works_for, advance_cents=round(args.advance * 100),
-                                       lead=args.lead))
+                                       lead=args.lead, name=args.name))
             print(f"{agent.name} ({agent.role}) arrived in {settings.world.name}")
         return 0
     if args.cmd == "portraits":

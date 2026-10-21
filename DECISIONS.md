@@ -342,3 +342,12 @@ With thirty citizens the channel filled up: every proposal, candidacy and new st
 and the bulletin ran to two or three messages. Now a flash is only for what changes the town for
 good (a death, a business bought, a law passed, a secret deal, a new hero, election results and
 bank defaults), at most two per chunk; the bulletin is 5-7 bullets under 3500 characters, one message.
+
+## A new hero from the owner's brief; prices the council sees
+The owner sent a character for a new main hero: Iosif Vardanyan, a cold, patient strategist who
+wants control and loyalty. Presets can now carry a brief (`BRIEFS`) that the newcomer's own model
+builds its portrait on, `arrive --name` fixes the name, and a hero is born on the strong model. The
+brief describes the man, not any real person. A newcomer with no free house starts on the square
+(before, they had no place at all and could not act); house plots go to 40.
+The angel that writes the council's notices saw only the configured prices and kept posting
+"bread 3.00" while Corwin sold at 1.50; it now sees each shelf's real price.

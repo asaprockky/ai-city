@@ -118,7 +118,13 @@ def town_status(ctx: TickContext, agents: list[Agent]) -> str:
         sells = cfg.economy.shops.get(key)
         tail = f" (sells {', '.join(sells)})" if sells else ""
         lines.append(f"  - {key} ({loc.name}): {goods}{tail}")
-    lines.append("Prices: " + ", ".join(f"{k} {v / 100:.2f}" for k, v in cfg.economy.prices.items()))
+    shop_prices = []
+    for key, items in cfg.economy.shops.items():  # the price on each shelf, owners' own prices included
+        priced = [f"{i} {(economy.price_of(cfg, i, s, at=key) or 0) / 100:.2f}" for i in items
+                  if i not in cfg.economy.unlimited]
+        if priced:
+            shop_prices.append(f"{key}: {', '.join(priced)}")
+    lines.append("Shelf prices now: " + "; ".join(shop_prices))
     lines.append("Jobs (job: place, wage/h, who):")
     for name, job in cfg.economy.jobs.items():
         who = ", ".join(a.name for a in economy.workers_in(s, name)) or "nobody"
